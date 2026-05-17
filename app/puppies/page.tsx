@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, CSSProperties } from 'react'
-import { motion, useScroll, useTransform, useInView, AnimatePresence } from 'framer-motion'
+import { motion, useInView, AnimatePresence } from 'framer-motion'
 
 // ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
@@ -405,13 +405,172 @@ function ContactModal({ onClose }: { onClose: () => void }) {
 
 // ─── PAGE ─────────────────────────────────────────────────────────────────────
 
+// ─── KEN BURNS SLIDESHOW ─────────────────────────────────────────────────────
+
+const HERO_IMAGES = Array.from({ length: 28 }, (_, i) => `/puppies/hero${i + 1}.jpg`)
+
+const KB_ANIMATIONS = [
+  { from: 'scale(1.08) translate(-2%, -1%)',  to: 'scale(1.0) translate(0%, 0%)' },
+  { from: 'scale(1.0) translate(0%, 0%)',    to: 'scale(1.08) translate(2%, 1%)' },
+  { from: 'scale(1.06) translate(2%, -1%)',  to: 'scale(1.0) translate(-1%, 1%)' },
+  { from: 'scale(1.0) translate(-1%, 1%)',   to: 'scale(1.07) translate(1%, -1%)' },
+  { from: 'scale(1.05) translate(0%, 2%)',   to: 'scale(1.0) translate(0%, -1%)' },
+]
+
+function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
+  const [current, setCurrent] = useState(0)
+  const [prev, setPrev] = useState<number | null>(null)
+  const [fading, setFading] = useState(false)
+  const INTERVAL = 7000
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setPrev(current)
+      setFading(true)
+      setCurrent(c => (c + 1) % HERO_IMAGES.length)
+      setTimeout(() => { setPrev(null); setFading(false) }, 1400)
+    }, INTERVAL)
+    return () => clearInterval(id)
+  }, [current])
+
+  const kb = (idx: number) => KB_ANIMATIONS[idx % KB_ANIMATIONS.length]
+
+  return (
+    <section className="relative h-screen flex items-center justify-center overflow-hidden">
+      {/* Previous image — fades out */}
+      {prev !== null && (
+        <div
+          className="absolute inset-0"
+          style={{ opacity: fading ? 0 : 1, transition: 'opacity 1.4s ease-in-out', zIndex: 1 }}
+        >
+          <img
+            src={HERO_IMAGES[prev]}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ transform: kb(prev).to }}
+          />
+        </div>
+      )}
+
+      {/* Current image — Ken Burns zoom */}
+      <div className="absolute inset-0" style={{ zIndex: 2 }}>
+        <img
+          key={current}
+          src={HERO_IMAGES[current]}
+          alt="Silver Lab Puppies"
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            animation: `kenburns ${INTERVAL + 1400}ms ease-in-out forwards`,
+            animationDelay: '0ms',
+          }}
+          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+        />
+        <style>{`
+          @keyframes kenburns {
+            from { transform: ${kb(current).from}; }
+            to   { transform: ${kb(current).to}; }
+          }
+        `}</style>
+      </div>
+
+      {/* Cinematic overlays */}
+      <div className="absolute inset-0 bg-black/50" style={{ zIndex: 3 }} />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40" style={{ zIndex: 3 }} />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-transparent" style={{ zIndex: 3 }} />
+
+      {/* Hero content */}
+      <motion.div
+        style={{ zIndex: 10 }}
+        className="relative text-center max-w-4xl mx-auto px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.8 }}
+          className="flex items-center justify-center gap-3 mb-8"
+        >
+          <div className="h-px w-12 bg-amber-500/50" />
+          <span className="text-amber-400/90 text-xs font-bold tracking-[0.4em] uppercase">
+            AKC Registered · {CONFIG.location}
+          </span>
+          <div className="h-px w-12 bg-amber-500/50" />
+        </motion.div>
+
+        <motion.h1
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35, duration: 1, ease: [0.22, 1, 0.36, 1] }}
+          className="text-6xl sm:text-8xl font-black tracking-tight leading-none mb-6"
+        >
+          Silver Lab
+          <br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-slate-200 via-amber-200 to-slate-300">
+            Puppies
+          </span>
+        </motion.h1>
+
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.55, duration: 0.8 }}
+          className="text-slate-300 text-xl max-w-xl mx-auto mb-10 leading-relaxed"
+        >
+          Health-tested. Champion bloodlines. Raised in our home with love.<br />
+          <span className="text-slate-400">Arriving {CONFIG.expectedDate}.</span>
+        </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7, duration: 0.7 }}
+          className="flex flex-col sm:flex-row items-center justify-center gap-3"
+        >
+          <button
+            onClick={onReserve}
+            className="group px-10 py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-full transition-all duration-300 text-base tracking-wide shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-[1.02]"
+          >
+            Reserve a Puppy
+            <span className="ml-2 group-hover:translate-x-1 inline-block transition-transform">→</span>
+          </button>
+          <a
+            href="#live"
+            className="px-10 py-4 border border-white/20 hover:border-white/40 text-slate-200 hover:text-white font-semibold rounded-full transition-all duration-300 backdrop-blur-sm bg-white/[0.05] hover:bg-white/[0.10]"
+          >
+            Watch Live 🎥
+          </a>
+        </motion.div>
+      </motion.div>
+
+      {/* Scroll hint */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.5, duration: 1 }}
+        className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
+        style={{ zIndex: 10 }}
+      >
+        <span className="text-white/40 text-xs tracking-[0.3em] uppercase">Scroll</span>
+        <motion.div
+          animate={{ y: [0, 6, 0] }}
+          transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+          className="w-px h-8 bg-gradient-to-b from-white/30 to-transparent"
+        />
+      </motion.div>
+
+      {/* Image counter dots */}
+      <div className="absolute bottom-10 right-8 flex gap-1.5" style={{ zIndex: 10 }}>
+        {HERO_IMAGES.slice(0, 8).map((_, i) => (
+          <div key={i} className="w-1 h-1 rounded-full transition-all duration-500"
+            style={{ background: i === current % 8 ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.2)' }}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export default function PuppiesPage() {
   const [contactOpen, setContactOpen] = useState(false)
   const [tab, setTab] = useState<'all' | 'M' | 'F'>('all')
-  const heroRef = useRef(null)
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] })
-  const heroY = useTransform(scrollYProgress, [0, 1], ['0%', '30%'])
-  const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0])
 
   const available = CONFIG.puppies.filter(p => p.status === 'available').length
   const filtered = CONFIG.puppies.filter(p => tab === 'all' || p.sex === tab)
@@ -420,110 +579,9 @@ export default function PuppiesPage() {
     <div className="min-h-screen bg-[#070809] text-white overflow-x-hidden">
 
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
-      <section ref={heroRef} className="relative h-screen flex items-center justify-center overflow-hidden">
+      <KenBurnsHero onReserve={() => setContactOpen(true)} />
 
-        {/* deep atmospheric background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#050607] via-[#0a0d12] to-[#070809]" />
 
-        {/* radial glow */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_40%,_rgba(148,163,184,0.07)_0%,_transparent_70%)]" />
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-500/5 rounded-full blur-3xl" />
-
-        {/* giant background word */}
-        <motion.div
-          style={{ y: heroY, opacity: heroOpacity }}
-          className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
-        >
-          <span className="text-[20vw] font-black text-white/[0.02] tracking-tighter whitespace-nowrap">
-            SILVER
-          </span>
-        </motion.div>
-
-        {/* horizontal lines */}
-        <div className="absolute inset-0 pointer-events-none">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="absolute w-full border-t border-white/[0.02]" style={{ top: `${(i + 1) * (100 / 7)}%` }} />
-          ))}
-        </div>
-
-        {/* hero content */}
-        <motion.div
-          style={{ opacity: heroOpacity }}
-          className="relative z-10 text-center max-w-4xl mx-auto px-6"
-        >
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.8 }}
-            className="flex items-center justify-center gap-3 mb-8"
-          >
-            <div className="h-px w-12 bg-amber-500/50" />
-            <span className="text-amber-500/80 text-xs font-bold tracking-[0.4em] uppercase">
-              AKC Registered · {CONFIG.location}
-            </span>
-            <div className="h-px w-12 bg-amber-500/50" />
-          </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35, duration: 1, ease: [0.22, 1, 0.36, 1] }}
-            className="text-6xl sm:text-8xl font-black tracking-tight leading-none mb-6"
-          >
-            Silver Lab
-            <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-slate-200 via-amber-200 to-slate-300">
-              Puppies
-            </span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.55, duration: 0.8 }}
-            className="text-slate-400 text-xl max-w-xl mx-auto mb-10 leading-relaxed"
-          >
-            Health-tested. Champion bloodlines. Raised in our home with love.<br />
-            <span className="text-slate-500">Arriving {CONFIG.expectedDate}.</span>
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7, duration: 0.7 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3"
-          >
-            <button
-              onClick={() => setContactOpen(true)}
-              className="group px-10 py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-full transition-all duration-300 text-base tracking-wide shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-[1.02]"
-            >
-              Reserve a Puppy
-              <span className="ml-2 group-hover:translate-x-1 inline-block transition-transform">→</span>
-            </button>
-            <a
-              href="#live"
-              className="px-10 py-4 border border-white/10 hover:border-white/25 text-slate-300 hover:text-white font-semibold rounded-full transition-all duration-300 backdrop-blur-sm bg-white/[0.03] hover:bg-white/[0.07]"
-            >
-              Watch Live 🎥
-            </a>
-          </motion.div>
-        </motion.div>
-
-        {/* scroll hint */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.5, duration: 1 }}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
-        >
-          <span className="text-slate-700 text-xs tracking-[0.3em] uppercase">Scroll</span>
-          <motion.div
-            animate={{ y: [0, 6, 0] }}
-            transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
-            className="w-px h-8 bg-gradient-to-b from-slate-600 to-transparent"
-          />
-        </motion.div>
-      </section>
 
       {/* ── STATS TICKER ─────────────────────────────────────────────────── */}
       <div className="border-y border-white/[0.05] py-4 overflow-hidden bg-white/[0.01]">
