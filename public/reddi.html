@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reddi Industries — Wichita's Service Company</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red: #E8192C;
+      --red-dark: #b01020;
+      --black: #0a0a0a;
+      --dark: #111111;
+      --dark2: #1a1a1a;
+      --dark3: #222222;
+      --gray: #888;
+      --light: #f5f5f5;
+      --white: #ffffff;
+      --font-display: 'Bebas Neue', sans-serif;
+      --font-body: 'Inter', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--black);
+      color: var(--white);
+      font-family: var(--font-body);
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 20px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%);
+      backdrop-filter: blur(0px);
+      transition: background 0.3s, backdrop-filter 0.3s;
+    }
+    nav.scrolled {
+      background: rgba(10,10,10,0.96);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .nav-logo {
+      font-family: var(--font-display);
+      font-size: 32px;
+      letter-spacing: 2px;
+      color: var(--white);
+      text-decoration: none;
+    }
+    .nav-logo span { color: var(--red); }
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: rgba(255,255,255,0.75);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--white); }
+    .nav-cta {
+      background: var(--red);
+      color: var(--white) !important;
+      padding: 10px 22px;
+      border-radius: 4px;
+      font-weight: 600 !important;
+      transition: background 0.2s !important;
+    }
+    .nav-cta:hover { background: var(--red-dark) !important; color: var(--white) !important; }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative;
+      height: 100vh;
+      min-height: 700px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    /* Slideshow backgrounds */
+    .hero-slides {
+      position: absolute;
+      inset: 0;
+    }
+    .hero-slide {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      opacity: 0;
+      transition: opacity 1.4s ease;
+      animation: kenburns 10s ease-in-out infinite alternate;
+    }
+    .hero-slide.active { opacity: 1; }
+    .hero-slide:nth-child(1) {
+      background-image: url('https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=1920&q=85&fit=crop');
+      animation-name: kenburns-1;
+    }
+    .hero-slide:nth-child(2) {
+      background-image: url('https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=85&fit=crop');
+      animation-name: kenburns-2;
+    }
+    .hero-slide:nth-child(3) {
+      background-image: url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1920&q=85&fit=crop');
+      animation-name: kenburns-3;
+    }
+    @keyframes kenburns-1 {
+      0%   { transform: scale(1.0) translate(0, 0); }
+      100% { transform: scale(1.08) translate(-2%, -1%); }
+    }
+    @keyframes kenburns-2 {
+      0%   { transform: scale(1.08) translate(2%, 1%); }
+      100% { transform: scale(1.0) translate(0, 0); }
+    }
+    @keyframes kenburns-3 {
+      0%   { transform: scale(1.0) translate(-1%, 2%); }
+      100% { transform: scale(1.1) translate(1%, 0); }
+    }
+
+    /* cinematic color grade overlay */
+    .hero-grade {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(to right, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.3) 60%, rgba(0,0,0,0.15) 100%),
+        linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0.95) 100%);
+      z-index: 1;
+    }
+    /* red cinematic tint on left edge */
+    .hero-grade::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(232,25,44,0.2) 0%, transparent 45%);
+    }
+    /* film grain */
+    .hero-grade::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
+    /* slide indicator dots */
+    .hero-dots {
+      position: absolute;
+      bottom: 48px;
+      right: 48px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+    }
+    .hero-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.3);
+      cursor: pointer;
+      transition: background 0.3s, transform 0.3s;
+    }
+    .hero-dot.active {
+      background: var(--red);
+      transform: scale(1.4);
+    }
+
+    /* slide progress bar */
+    .hero-progress {
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 3px;
+      background: var(--red);
+      z-index: 10;
+      width: 0%;
+      transition: width linear;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 5;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 48px;
+      padding-top: 80px;
+    }
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 24px;
+      opacity: 0;
+      transform: translateY(10px);
+      animation: heroFadeUp 0.8s 0.3s forwards;
+    }
+    .hero-eyebrow::before {
+      content: '';
+      display: block;
+      width: 32px;
+      height: 2px;
+      background: var(--red);
+    }
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: clamp(80px, 11vw, 160px);
+      line-height: 0.92;
+      letter-spacing: 1px;
+      margin-bottom: 28px;
+      max-width: 900px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: heroFadeUp 0.9s 0.5s forwards;
+    }
+    .hero-title .line2 { color: var(--red); }
+    .hero-sub {
+      font-size: 18px;
+      font-weight: 300;
+      color: rgba(255,255,255,0.7);
+      max-width: 520px;
+      line-height: 1.65;
+      margin-bottom: 48px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: heroFadeUp 0.9s 0.75s forwards;
+    }
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: heroFadeUp 0.9s 0.95s forwards;
+    }
+    @keyframes heroFadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--red);
+      color: var(--white);
+      padding: 18px 36px;
+      border-radius: 4px;
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      letter-spacing: 0.03em;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .btn-primary:hover { background: var(--red-dark); transform: translateY(-2px); }
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--white);
+      padding: 18px 36px;
+      border-radius: 4px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.3);
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .btn-ghost:hover { border-color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.07); }
+    .hero-phone {
+      margin-top: 56px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      opacity: 0;
+      animation: heroFadeUp 0.9s 1.1s forwards;
+    }
+    .hero-phone-icon {
+      width: 48px; height: 48px;
+      background: rgba(232,25,44,0.15);
+      border: 1px solid rgba(232,25,44,0.4);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .hero-phone-text { font-size: 13px; color: rgba(255,255,255,0.5); }
+    .hero-phone-number { font-size: 24px; font-weight: 700; color: var(--white); letter-spacing: 0.02em; }
+
+    /* slide label bottom-left */
+    .hero-slide-label {
+      position: absolute;
+      bottom: 48px;
+      left: 48px;
+      z-index: 10;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .hero-slide-label::before {
+      content: '';
+      display: block;
+      width: 24px;
+      height: 1px;
+      background: rgba(255,255,255,0.3);
+    }
+
+    /* scroll indicator */
+    .scroll-indicator {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: rgba(255,255,255,0.35);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      animation: bounce 2s infinite;
+    }
+    .scroll-indicator svg { width: 20px; opacity: 0.4; }
+    @keyframes bounce {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(6px); }
+    }
+
+    /* ── TRUST BAR ── */
+    .trust-bar {
+      background: var(--red);
+      padding: 18px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 48px;
+      flex-wrap: wrap;
+    }
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.9);
+      white-space: nowrap;
+    }
+    .trust-item svg { width: 18px; opacity: 0.85; }
+    .trust-divider {
+      width: 1px; height: 20px;
+      background: rgba(255,255,255,0.25);
+    }
+
+    /* ── SECTION SHARED ── */
+    section { position: relative; }
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-family: var(--font-display);
+      font-size: clamp(42px, 5vw, 72px);
+      line-height: 1;
+      letter-spacing: 0.5px;
+      margin-bottom: 20px;
+    }
+    .section-sub {
+      font-size: 17px;
+      color: rgba(255,255,255,0.55);
+      line-height: 1.7;
+      max-width: 520px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 48px;
+    }
+
+    /* ── ABOUT STRIP ── */
+    .about-strip {
+      padding: 100px 0;
+      background: var(--dark);
+    }
+    .about-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+    .about-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      margin-top: 48px;
+    }
+    .stat-card {
+      background: var(--dark2);
+      padding: 32px;
+    }
+    .stat-number {
+      font-family: var(--font-display);
+      font-size: 56px;
+      color: var(--red);
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .stat-label {
+      font-size: 13px;
+      color: rgba(255,255,255,0.5);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .about-img-wrap {
+      position: relative;
+    }
+    .about-img {
+      width: 100%;
+      aspect-ratio: 4/3;
+      object-fit: cover;
+      display: block;
+    }
+    .about-img-accent {
+      position: absolute;
+      bottom: -20px;
+      right: -20px;
+      width: 120px;
+      height: 120px;
+      background: var(--red);
+      z-index: -1;
+    }
+    .about-badge {
+      position: absolute;
+      top: 24px;
+      left: -24px;
+      background: var(--black);
+      border: 2px solid var(--red);
+      padding: 16px 20px;
+      text-align: center;
+    }
+    .about-badge-num {
+      font-family: var(--font-display);
+      font-size: 36px;
+      color: var(--red);
+      line-height: 1;
+    }
+    .about-badge-text {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.6);
+      margin-top: 2px;
+    }
+
+    /* ── SERVICES ── */
+    .services {
+      padding: 100px 0;
+      background: var(--black);
+    }
+    .services-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 60px;
+    }
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+    }
+    .service-card {
+      position: relative;
+      background: var(--dark2);
+      padding: 36px 28px;
+      overflow: hidden;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--white);
+      display: block;
+      transition: background 0.25s;
+      group: true;
+    }
+    .service-card::before {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0;
+      width: 100%; height: 3px;
+      background: var(--red);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.3s ease;
+    }
+    .service-card:hover::before { transform: scaleX(1); }
+    .service-card:hover { background: var(--dark3); }
+    .service-card:hover .service-arrow { opacity: 1; transform: translateX(0); }
+    .service-number {
+      font-family: var(--font-display);
+      font-size: 48px;
+      color: rgba(255,255,255,0.06);
+      line-height: 1;
+      margin-bottom: 16px;
+      transition: color 0.25s;
+    }
+    .service-card:hover .service-number { color: rgba(232,25,44,0.12); }
+    .service-icon {
+      font-size: 28px;
+      margin-bottom: 16px;
+      display: block;
+    }
+    .service-name {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      letter-spacing: 0.01em;
+    }
+    .service-desc {
+      font-size: 13px;
+      color: rgba(255,255,255,0.45);
+      line-height: 1.6;
+    }
+    .service-arrow {
+      margin-top: 20px;
+      font-size: 20px;
+      color: var(--red);
+      opacity: 0;
+      transform: translateX(-8px);
+      transition: opacity 0.2s, transform 0.2s;
+      display: inline-block;
+    }
+
+    /* ── EMERGENCY BAND ── */
+    .emergency-band {
+      background: var(--red);
+      padding: 72px 0;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .emergency-band::before {
+      content: 'EMERGENCY';
+      position: absolute;
+      font-family: var(--font-display);
+      font-size: 220px;
+      color: rgba(0,0,0,0.08);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      white-space: nowrap;
+      pointer-events: none;
+      letter-spacing: 10px;
+    }
+    .emergency-band h2 {
+      font-family: var(--font-display);
+      font-size: clamp(36px, 5vw, 64px);
+      margin-bottom: 16px;
+      position: relative;
+    }
+    .emergency-band p {
+      font-size: 17px;
+      opacity: 0.85;
+      margin-bottom: 36px;
+      position: relative;
+    }
+    .emergency-band .btn-white {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--white);
+      color: var(--red);
+      padding: 16px 36px;
+      border-radius: 4px;
+      font-size: 17px;
+      font-weight: 800;
+      text-decoration: none;
+      letter-spacing: 0.02em;
+      position: relative;
+      transition: transform 0.15s;
+    }
+    .emergency-band .btn-white:hover { transform: scale(1.02); }
+
+    /* ── DIVISIONS ── */
+    .divisions {
+      padding: 100px 0;
+      background: var(--dark);
+    }
+    .divisions-intro {
+      text-align: center;
+      margin-bottom: 72px;
+    }
+    .divisions-intro .section-sub { margin: 0 auto; }
+    .divisions-scroll {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 2px;
+    }
+    .division-pill {
+      background: var(--dark2);
+      padding: 28px 20px;
+      text-align: center;
+      text-decoration: none;
+      color: var(--white);
+      transition: background 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .division-pill:hover { background: var(--red); }
+    .division-pill-icon { font-size: 28px; }
+    .division-pill-name {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* ── TESTIMONIAL ── */
+    .testimonial-section {
+      padding: 100px 0;
+      background: var(--black);
+    }
+    .testimonial-inner {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 80px;
+      align-items: center;
+    }
+    .testimonial-left .section-title { font-size: clamp(36px, 4vw, 56px); }
+    .testimonials-stack { display: flex; flex-direction: column; gap: 24px; }
+    .testimonial-card {
+      background: var(--dark2);
+      border-left: 3px solid var(--red);
+      padding: 28px 32px;
+    }
+    .testimonial-quote {
+      font-size: 16px;
+      line-height: 1.7;
+      color: rgba(255,255,255,0.8);
+      margin-bottom: 16px;
+      font-style: italic;
+    }
+    .testimonial-author {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--red);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .stars { color: #f59e0b; font-size: 14px; margin-bottom: 10px; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--dark);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 72px 0 40px;
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 48px;
+      margin-bottom: 56px;
+    }
+    .footer-brand .nav-logo { display: block; margin-bottom: 16px; }
+    .footer-tagline {
+      font-size: 14px;
+      color: rgba(255,255,255,0.4);
+      line-height: 1.7;
+      max-width: 280px;
+    }
+    .footer-phone-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 20px;
+      color: var(--red);
+      font-weight: 700;
+      font-size: 18px;
+      text-decoration: none;
+    }
+    .footer-heading {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 20px;
+    }
+    .footer-links { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .footer-links a {
+      color: rgba(255,255,255,0.55);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--white); }
+    .footer-bottom {
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding-top: 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .footer-copy { font-size: 13px; color: rgba(255,255,255,0.25); }
+
+    /* ── ANIMATIONS ── */
+    .fade-up {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .fade-up.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .fade-up:nth-child(2) { transition-delay: 0.1s; }
+    .fade-up:nth-child(3) { transition-delay: 0.2s; }
+    .fade-up:nth-child(4) { transition-delay: 0.3s; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1024px) {
+      .services-grid { grid-template-columns: repeat(3, 1fr); }
+      .divisions-scroll { grid-template-columns: repeat(4, 1fr); }
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 768px) {
+      nav { padding: 16px 24px; }
+      .nav-links { display: none; }
+      .hero-content { padding: 0 24px; padding-top: 100px; }
+      .trust-bar { gap: 20px; padding: 16px 24px; }
+      .trust-divider { display: none; }
+      .container { padding: 0 24px; }
+      .about-inner { grid-template-columns: 1fr; }
+      .about-img-wrap { display: none; }
+      .services-grid { grid-template-columns: repeat(2, 1fr); }
+      .services-header { flex-direction: column; align-items: flex-start; gap: 20px; }
+      .divisions-scroll { grid-template-columns: repeat(3, 1fr); }
+      .testimonial-inner { grid-template-columns: 1fr; }
+      .footer-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav id="nav">
+    <a href="#" class="nav-logo">REDDI<span>.</span></a>
+    <ul class="nav-links">
+      <li><a href="#services">Services</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="#divisions">Divisions</a></li>
+      <li><a href="tel:3168582083" class="nav-cta">📞 316-858-2083</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <!-- Slideshow -->
+    <div class="hero-slides">
+      <div class="hero-slide active"></div>
+      <div class="hero-slide"></div>
+      <div class="hero-slide"></div>
+    </div>
+    <!-- Grade / overlay -->
+    <div class="hero-grade"></div>
+    <!-- Progress bar -->
+    <div class="hero-progress" id="heroProgress"></div>
+
+    <div class="hero-content">
+      <div class="hero-eyebrow">Wichita's Most Trusted — Since 1957</div>
+      <h1 class="hero-title" id="heroTitle">
+        WE KEEP<br>
+        <span class="line2">WICHITA</span><br>
+        RUNNING.
+      </h1>
+      <p class="hero-sub" id="heroSub">
+        From a leaking pipe at midnight to a full commercial renovation — Reddi has 12 divisions, one number, and 60+ years of getting it done.
+      </p>
+      <div class="hero-actions">
+        <a href="tel:3168582083" class="btn-primary">
+          Get Service Now →
+        </a>
+        <a href="#services" class="btn-ghost">
+          Explore Services
+        </a>
+      </div>
+      <div class="hero-phone">
+        <div class="hero-phone-icon">📞</div>
+        <div>
+          <div class="hero-phone-text">Available 24/7 — Call Anytime</div>
+          <div class="hero-phone-number">316-858-2083</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide label -->
+    <div class="hero-slide-label" id="heroSlideLabel">Home Services</div>
+
+    <!-- Dots -->
+    <div class="hero-dots">
+      <div class="hero-dot active" onclick="goSlide(0)"></div>
+      <div class="hero-dot" onclick="goSlide(1)"></div>
+      <div class="hero-dot" onclick="goSlide(2)"></div>
+    </div>
+  </section>
+
+  <!-- TRUST BAR -->
+  <div class="trust-bar">
+    <div class="trust-item">✓ 60+ Years in Business</div>
+    <div class="trust-divider"></div>
+    <div class="trust-item">✓ Locally Owned & Operated</div>
+    <div class="trust-divider"></div>
+    <div class="trust-item">✓ Licensed & Insured</div>
+    <div class="trust-divider"></div>
+    <div class="trust-item">✓ Upfront Pricing</div>
+    <div class="trust-divider"></div>
+    <div class="trust-item">✓ 24/7 Emergency Service</div>
+    <div class="trust-divider"></div>
+    <div class="trust-item">✓ Warrantied Work</div>
+  </div>
+
+  <!-- ABOUT -->
+  <section class="about-strip" id="about">
+    <div class="container">
+      <div class="about-inner">
+        <div>
+          <div class="section-label fade-up">Our Story</div>
+          <h2 class="section-title fade-up">Built on<br>Wichita's<br>Trust.</h2>
+          <p class="section-sub fade-up">
+            For over six decades, Reddi has been the name Wichita families and businesses call first. Locally owned and operated, we combine the reach of a multi-division company with the accountability of a neighbor who stands behind their work.
+          </p>
+          <div class="about-stats">
+            <div class="stat-card fade-up">
+              <div class="stat-number">60+</div>
+              <div class="stat-label">Years Serving Wichita</div>
+            </div>
+            <div class="stat-card fade-up">
+              <div class="stat-number">12</div>
+              <div class="stat-label">Service Divisions</div>
+            </div>
+            <div class="stat-card fade-up">
+              <div class="stat-number">24/7</div>
+              <div class="stat-label">Emergency Response</div>
+            </div>
+            <div class="stat-card fade-up">
+              <div class="stat-number">1</div>
+              <div class="stat-label">Number to Call</div>
+            </div>
+          </div>
+        </div>
+        <div class="about-img-wrap">
+          <img
+            src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80&fit=crop"
+            alt="Reddi technician at work"
+            class="about-img"
+          />
+          <div class="about-img-accent"></div>
+          <div class="about-badge">
+            <div class="about-badge-num">A+</div>
+            <div class="about-badge-text">BBB Rating</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SERVICES -->
+  <section class="services" id="services">
+    <div class="container">
+      <div class="services-header">
+        <div>
+          <div class="section-label">What We Do</div>
+          <h2 class="section-title">One Call.<br>Every Job.</h2>
+        </div>
+        <p class="section-sub" style="max-width:340px;">
+          Residential or commercial, routine or urgent — we have a team ready for it.
+        </p>
+      </div>
+      <div class="services-grid">
+        <a href="/plumbing" class="service-card">
+          <div class="service-number">01</div>
+          <span class="service-icon">🔧</span>
+          <div class="service-name">Plumbing</div>
+          <div class="service-desc">Reddi Root'r — skilled plumbers, no hidden costs, done right the first time.</div>
+          <span class="service-arrow">→</span>
+        </a>
+        <a href="/hvac" class="service-card">
+          <div class="service-number">02</div>
+          <span class="service-icon">❄️</span>
+          <div class="service-name">HVAC</div>
+          <div class="service-desc">All makes and models. Furnace, AC, and everything between.</div>
+          <span class="service-arrow">→</span>
+        </a>
+        <a href="/electrical" class="service-card">
+          <div class="service-number">03</div>
+          <span class="service-icon">⚡</span>
+          <div class="service-name">Electrical</div>
+          <div class="service-desc">Wiring, lighting, and electrical services for homes and businesses.</div>
+          <span class="service-arrow">→</span>
+        </a>
+        <a href="/garage-doors" class="service-card">
+          <div class="service-number">04</div>
+          <span class="service-icon">🏠</span>
+          <div class="service-name">Garage Doors</div>
+          <div class="service-desc">Installation, repair, openers — residential and commercial.</div>
+          <span class="service-arrow">→</span>
+        </a>
+        <a href="/fencing" class="service-card">
+          <div class="service-number">05</div>
+          <span class="service-icon"><svg xmlns="http://www.w3.org/2000/svg" width="36" height="30" viewBox="0 0 36 30" fill="white" style="display:inline-block;vertical-align:middle"><rect x="0" y="13" width="36" height="3.5" rx="1"/><rect x="0" y="21" width="36" height="3.5" rx="1"/><path d="M1 28V11L4.5 5 8 11V28H1Z"/><path d="M10 28V11L13.5 5 17 11V28H10Z"/><path d="M19 28V11L22.5 5 26 11V28H19Z"/><path d="M28 28V11L31.5 5 35 11V28H28Z"/></svg></span>
+          <div class="service-name">Fencing</div>
+          <div class="service-desc">Full-service fencing contractor. Call for an estimate today.</div>
+          <span class="service-arrow">→</span>
+        </a>
+        <a href="/sprinklers" class="service-card">
+          <div class="service-number">06</div>
+          <span class="service-icon">💧</span>
+          <div class="service-name">Sprinklers</div>
+          <div class="service-desc">All brands, full irrigation service and repairs.</div>
+          <span class="service-arrow">→</span>
+        </a>
+        <a href="/lawn-care" class="service-card">
+          <div class="service-number">07</div>
+          <span class="service-icon"><svg xmlns="http://www.w3.org/2000/svg" width="38" height="30" viewBox="0 0 38 30" fill="white" style="display:inline-block;vertical-align:middle"><!-- body --><rect x="8" y="12" width="22" height="10" rx="2"/><!-- engine block --><rect x="22" y="8" width="8" height="6" rx="1"/><!-- handle --><path d="M28 8 L35 2" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/><!-- blade housing --><rect x="6" y="21" width="26" height="3" rx="1.5"/><!-- wheels --><circle cx="10" cy="26" r="3.5" fill="none" stroke="white" stroke-width="2"/><circle cx="28" cy="26" r="3.5" fill="none" stroke="white" stroke-width="2"/><!-- exhaust --><rect x="9" y="7" width="3" height="6" rx="1"/></svg></span>
+          <div class="service-name">Lawn Care</div>
+          <div class="service-desc">Year-round mowing, edging, seeding, and weed control.</div>
+          <span class="service-arrow">→</span>
+        </a>
+        <a href="/appliance-repair" class="service-card">
+          <div class="service-number">08</div>
+          <span class="service-icon">🍽️</span>
+          <div class="service-name">Appliance Repair</div>
+          <div class="service-desc">Factory authorized in-home repair for all major brands.</div>
+          <span class="service-arrow">→</span>
+        </a>
+        <a href="/excavation-utility" class="service-card">
+          <div class="service-number">09</div>
+          <span class="service-icon">🚜</span>
+          <div class="service-name">Excavation</div>
+          <div class="service-desc">Traditional, hydro, and directional boring throughout Kansas.</div>
+          <span class="service-arrow">→</span>
+        </a>
+        <a href="/exteriors-baths" class="service-card">
+          <div class="service-number">10</div>
+          <span class="service-icon">🏘️</span>
+          <div class="service-name">Roofing & Exteriors</div>
+          <div class="service-desc">Roofing, siding, windows, gutters, and bath remodeling.</div>
+          <span class="service-arrow">→</span>
+        </a>
+        <a href="/environmental" class="service-card">
+          <div class="service-number">11</div>
+          <span class="service-icon">♻️</span>
+          <div class="service-name">Environmental</div>
+          <div class="service-desc">Commercial waste removal, grease traps, stormwater management.</div>
+          <span class="service-arrow">→</span>
+        </a>
+        <a href="/flooring" class="service-card">
+          <div class="service-number">12</div>
+          <span class="service-icon">🪵</span>
+          <div class="service-name">Flooring</div>
+          <div class="service-desc">Hardwood, LVP, polished concrete, epoxy, and sports flooring.</div>
+          <span class="service-arrow">→</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- EMERGENCY BAND -->
+  <div class="emergency-band">
+    <h2>Need Help Right Now?</h2>
+    <p>We don't close. 24/7 emergency service across all divisions.</p>
+    <a href="tel:3168582083" class="btn-white">📞 Call 316-858-2083</a>
+  </div>
+
+  <!-- TESTIMONIALS -->
+  <section class="testimonial-section">
+    <div class="container">
+      <div class="testimonial-inner">
+        <div class="testimonial-left">
+          <div class="section-label">What Wichita Says</div>
+          <h2 class="section-title">60 Years of<br>Standing<br>Behind Our<br>Work.</h2>
+          <p style="font-size:14px; color:rgba(255,255,255,0.4); margin-top:20px;">Trusted by thousands of Wichita families and businesses.</p>
+        </div>
+        <div class="testimonials-stack">
+          <div class="testimonial-card fade-up">
+            <div class="stars">★★★★★</div>
+            <p class="testimonial-quote">"Called at 11pm with a burst pipe. Reddi had a plumber at my door within the hour. Professional, fast, and the price was exactly what they quoted. I won't use anyone else."</p>
+            <div class="testimonial-author">— Sarah M., Wichita Homeowner</div>
+          </div>
+          <div class="testimonial-card fade-up">
+            <div class="stars">★★★★★</div>
+            <p class="testimonial-quote">"We've used Reddi for HVAC, electrical, and lawn care on our commercial properties. Having one company I can trust for everything saves us so much time. They always show up."</p>
+            <div class="testimonial-author">— James K., Commercial Property Manager</div>
+          </div>
+          <div class="testimonial-card fade-up">
+            <div class="stars">★★★★★</div>
+            <p class="testimonial-quote">"Third generation using Reddi. My grandparents used them, my parents used them, and now I do. That kind of track record says everything."</p>
+            <div class="testimonial-author">— Mike T., Wichita Resident</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="#" class="nav-logo">REDDI<span style="color:var(--red)">.</span></a>
+          <p class="footer-tagline">Locally owned and operated for 60+ years. Wichita's comprehensive home and commercial service company.</p>
+          <a href="tel:3168582083" class="footer-phone-link">📞 316-858-2083</a>
+        </div>
+        <div>
+          <div class="footer-heading">Services</div>
+          <ul class="footer-links">
+            <li><a href="/plumbing">Plumbing</a></li>
+            <li><a href="/hvac">HVAC</a></li>
+            <li><a href="/electrical">Electrical</a></li>
+            <li><a href="/garage-doors">Garage Doors</a></li>
+            <li><a href="/fencing">Fencing</a></li>
+            <li><a href="/sprinklers">Sprinklers</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="footer-heading">More Services</div>
+          <ul class="footer-links">
+            <li><a href="/lawn-care">Lawn Care</a></li>
+            <li><a href="/appliance-repair">Appliance Repair</a></li>
+            <li><a href="/excavation-utility">Excavation</a></li>
+            <li><a href="/exteriors-baths">Roofing & Exteriors</a></li>
+            <li><a href="/environmental">Environmental</a></li>
+            <li><a href="/flooring">Flooring</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="footer-heading">Company</div>
+          <ul class="footer-links">
+            <li><a href="#">About Reddi</a></li>
+            <li><a href="#">Careers</a></li>
+            <li><a href="#">Financing</a></li>
+            <li><a href="#">Service Areas</a></li>
+            <li><a href="#">Contact</a></li>
+          </ul>
+          <div style="margin-top:28px;">
+            <div class="footer-heading">Service Area</div>
+            <p style="font-size:13px; color:rgba(255,255,255,0.4); line-height:1.6;">Wichita, KS and surrounding areas throughout Kansas.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="footer-copy">© 2024 Reddi Industries. All rights reserved.</div>
+        <div class="footer-copy">Wichita, Kansas · Licensed & Insured</div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Nav scroll effect
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 60);
+    });
+
+    // Fade-up on scroll
+    const fadeEls = document.querySelectorAll('.fade-up');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          observer.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    fadeEls.forEach(el => observer.observe(el));
+
+    // ── HERO SLIDESHOW ──
+    const slides = document.querySelectorAll('.hero-slide');
+    const dots = document.querySelectorAll('.hero-dot');
+    const progressBar = document.getElementById('heroProgress');
+    const slideLabel = document.getElementById('heroSlideLabel');
+
+    const slideData = [
+      { label: 'Plumbing & Home Repair' },
+      { label: 'HVAC & Electrical Services' },
+      { label: 'Commercial & Residential' },
+    ];
+
+    let current = 0;
+    let timer = null;
+    const DURATION = 6000;
+
+    function goSlide(idx) {
+      slides[current].classList.remove('active');
+      dots[current].classList.remove('active');
+      current = idx;
+      slides[current].classList.add('active');
+      dots[current].classList.add('active');
+      slideLabel.textContent = slideData[current].label;
+      // reset progress
+      progressBar.style.transition = 'none';
+      progressBar.style.width = '0%';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          progressBar.style.transition = `width ${DURATION}ms linear`;
+          progressBar.style.width = '100%';
+        });
+      });
+      clearInterval(timer);
+      timer = setInterval(nextSlide, DURATION);
+    }
+
+    function nextSlide() {
+      goSlide((current + 1) % slides.length);
+    }
+
+    // kick off
+    goSlide(0);
+  </script>
+</body>
+</html>
