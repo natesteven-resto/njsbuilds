@@ -407,7 +407,11 @@ function ContactModal({ onClose }: { onClose: () => void }) {
 
 // ─── KEN BURNS SLIDESHOW ─────────────────────────────────────────────────────
 
-const HERO_IMAGES = Array.from({ length: 26 }, (_, i) => `/puppies/hero${i + 2}.jpg`)
+const HERO_IMAGES = [
+  '/puppies/hero3.jpg',
+  '/puppies/hero2.jpg',
+  ...Array.from({ length: 24 }, (_, i) => `/puppies/hero${i + 4}.jpg`),
+]
 
 const KB_ANIMATIONS = [
   { from: 'scale(1.08) translate(-2%, -1%)',  to: 'scale(1.0) translate(0%, 0%)' },
