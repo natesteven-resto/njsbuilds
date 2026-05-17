@@ -663,8 +663,8 @@ function SkillCard({
   return (
     <div style={{
       borderRadius: 12,
-      border: `1px solid ${passed ? accentColor + '60' : unlocked ? '#3a2e1e' : '#2a2015'}`,
-      background: passed ? accentColor + '08' : unlocked ? '#1e1508' : '#160f05',
+      border: `1px solid ${passed ? accentColor + '60' : unlocked ? '#1e2530' : '#1a1f27'}`,
+      background: passed ? accentColor + '08' : unlocked ? '#141920' : '#141920',
       marginBottom: 10,
       overflow: 'hidden',
       opacity: unlocked ? 1 : 0.45,
@@ -689,7 +689,7 @@ function SkillCard({
         <span style={{ fontSize: 22 }}>{skill.emoji}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
-            color: passed ? accentColor : unlocked ? '#f0e6d3' : '#6b5840',
+            color: passed ? accentColor : unlocked ? '#F1F3F5' : '#6B7280',
             fontWeight: 600,
             fontSize: 15,
             marginBottom: 2,
@@ -699,7 +699,7 @@ function SkillCard({
           </div>
           {/* mini progress */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ flex: 1, height: 3, background: '#2a1f10', borderRadius: 99, overflow: 'hidden' }}>
+            <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${(checkedCount / skill.criteria.length) * 100}%`,
@@ -708,7 +708,7 @@ function SkillCard({
                 transition: 'width 0.3s ease',
               }}/>
             </div>
-            <span style={{ color: '#6b5840', fontSize: 11, whiteSpace: 'nowrap' }}>
+            <span style={{ color: '#6B7280', fontSize: 11, whiteSpace: 'nowrap' }}>
               {checkedCount}/{skill.criteria.length}
             </span>
           </div>
@@ -722,7 +722,7 @@ function SkillCard({
       {open && unlocked && !passed && (
         <div style={{ padding: '0 16px 16px' }}>
           {/* Description */}
-          <p style={{ color: '#b09070', fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
+          <p style={{ color: '#8892a4', fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
             {skill.description}
           </p>
 
@@ -737,7 +737,7 @@ function SkillCard({
             <div style={{ color: accentColor, fontSize: 11, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               🪙 Kelsier's Tip
             </div>
-            <p style={{ color: '#d4b887', fontSize: 13, lineHeight: 1.5, margin: 0 }}>
+            <p style={{ color: '#c8d4e0', fontSize: 13, lineHeight: 1.5, margin: 0 }}>
               {skill.tip}
             </p>
           </div>
@@ -753,7 +753,7 @@ function SkillCard({
                   gap: 10,
                   padding: '8px 0',
                   cursor: 'pointer',
-                  borderBottom: '1px solid #2a1f10',
+                  borderBottom: '1px solid rgba(255,255,255,0.08)',
                 }}
               >
                 <div
@@ -762,7 +762,7 @@ function SkillCard({
                     width: 20,
                     height: 20,
                     borderRadius: 5,
-                    border: `2px solid ${checked[c.id] ? accentColor : '#4a3520'}`,
+                    border: `2px solid ${checked[c.id] ? accentColor : 'rgba(255,255,255,0.15)'}`,
                     background: checked[c.id] ? accentColor : 'transparent',
                     flexShrink: 0,
                     marginTop: 1,
@@ -774,7 +774,7 @@ function SkillCard({
                   }}
                 >
                   {checked[c.id] && (
-                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#0a0600" strokeWidth="2.5" strokeLinecap="round">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#07090D" strokeWidth="2.5" strokeLinecap="round">
                       <polyline points="2 6 5 9 10 3"/>
                     </svg>
                   )}
@@ -782,7 +782,7 @@ function SkillCard({
                 <span
                   onClick={() => onToggle(c.id)}
                   style={{
-                    color: checked[c.id] ? '#6b5840' : '#d4c4a0',
+                    color: checked[c.id] ? '#6B7280' : '#c0ccd8',
                     fontSize: 13,
                     lineHeight: 1.4,
                     textDecoration: checked[c.id] ? 'line-through' : 'none',
@@ -805,7 +805,7 @@ function SkillCard({
                 background: accentColor,
                 border: 'none',
                 borderRadius: 8,
-                color: '#0a0600',
+                color: '#07090D',
                 fontWeight: 700,
                 fontSize: 14,
                 cursor: 'pointer',
@@ -817,7 +817,7 @@ function SkillCard({
           )}
 
           {!allChecked && (
-            <div style={{ color: '#5a4530', fontSize: 12, textAlign: 'center' }}>
+            <div style={{ color: '#4a5568', fontSize: 12, textAlign: 'center' }}>
               Complete all criteria above to unlock "Pass Skill"
             </div>
           )}
@@ -859,8 +859,8 @@ function PhaseCard({
   return (
     <div style={{
       borderRadius: 16,
-      border: `1px solid ${complete ? phase.accentColor + '80' : unlocked ? phase.accentColor + '35' : '#2a1f10'}`,
-      background: complete ? phase.accentColor + '06' : unlocked ? '#1a1108' : '#130e05',
+      border: `1px solid ${complete ? phase.accentColor + '80' : unlocked ? phase.accentColor + '35' : 'rgba(255,255,255,0.08)'}`,
+      background: complete ? phase.accentColor + '06' : unlocked ? '#141920' : '#0f1318',
       marginBottom: 12,
       overflow: 'hidden',
       opacity: unlocked ? 1 : 0.5,
@@ -885,7 +885,7 @@ function PhaseCard({
             width: 48,
             height: 48,
             borderRadius: 12,
-            background: complete ? phase.accentColor : unlocked ? phase.accentColor + '20' : '#2a1f10',
+            background: complete ? phase.accentColor : unlocked ? phase.accentColor + '20' : 'rgba(255,255,255,0.08)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -900,7 +900,7 @@ function PhaseCard({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <span style={{
-                color: complete ? phase.accentColor : unlocked ? '#f0e6d3' : '#5a4530',
+                color: complete ? phase.accentColor : unlocked ? '#F1F3F5' : '#4a5568',
                 fontWeight: 700,
                 fontSize: 16,
               }}>
@@ -918,12 +918,12 @@ function PhaseCard({
                 {phase.ageRange}
               </span>
             </div>
-            <div style={{ color: '#6b5840', fontSize: 12 }}>{phase.dateRange} · {phase.subtitle}</div>
+            <div style={{ color: '#6B7280', fontSize: 12 }}>{phase.dateRange} · {phase.subtitle}</div>
           </div>
 
           {/* Progress */}
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <div style={{ color: complete ? phase.accentColor : '#8a7050', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+            <div style={{ color: complete ? phase.accentColor : '#6B7280', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
               {passedCount}/{phase.skills.length}
             </div>
             {unlocked && <ChevronIcon open={open} />}
@@ -932,7 +932,7 @@ function PhaseCard({
 
         {/* Phase progress bar */}
         {unlocked && (
-          <div style={{ marginTop: 12, height: 4, background: '#2a1f10', borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{ marginTop: 12, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
             <div style={{
               height: '100%',
               width: `${pct}%`,
@@ -1025,14 +1025,14 @@ export default function TrainingPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#0d0803',
-      color: '#f0e6d3',
+      background: '#07090D',
+      color: '#F1F3F5',
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
     }}>
       {/* ── HEADER ── */}
       <div style={{
-        background: 'linear-gradient(180deg, #1a0f05 0%, #0d0803 100%)',
-        borderBottom: '1px solid #2a1f10',
+        background: 'linear-gradient(180deg, #0d1117 0%, #07090D 100%)',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
         padding: '32px 20px 24px',
       }}>
         <div style={{ maxWidth: 680, margin: '0 auto' }}>
@@ -1066,10 +1066,10 @@ export default function TrainingPage() {
                       if (e.key === 'Escape') setEditingName(false)
                     }}
                     style={{
-                      background: '#1e1508',
+                      background: '#141920',
                       border: '1px solid #c67c2e',
                       borderRadius: 8,
-                      color: '#f0e6d3',
+                      color: '#F1F3F5',
                       fontSize: 22,
                       fontWeight: 700,
                       padding: '4px 10px',
@@ -1089,16 +1089,16 @@ export default function TrainingPage() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#f0e6d3' }}>
+                  <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#F1F3F5' }}>
                     {state.dogName}
                   </h1>
                   <button
                     onClick={() => { setTempName(state.dogName); setEditingName(true) }}
                     style={{
                       background: 'none',
-                      border: '1px solid #3a2e1e',
+                      border: '1px solid #1e2530',
                       borderRadius: 6,
-                      color: '#6b5840',
+                      color: '#6B7280',
                       fontSize: 11,
                       padding: '2px 8px',
                       cursor: 'pointer',
@@ -1120,7 +1120,7 @@ export default function TrainingPage() {
                 }}>
                   {getDogAge()}
                 </span>
-                <span style={{ color: '#6b5840', fontSize: 12 }}>
+                <span style={{ color: '#6B7280', fontSize: 12 }}>
                   Vizsla · Born May 20, 2026 · Training started May 22
                 </span>
               </div>
@@ -1129,20 +1129,20 @@ export default function TrainingPage() {
 
           {/* Overall progress */}
           <div style={{
-            background: '#1a1108',
-            border: '1px solid #2a1f10',
+            background: '#141920',
+            border: '1px solid rgba(255,255,255,0.08)',
             borderRadius: 12,
             padding: '16px 18px',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-              <span style={{ color: '#8a7050', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <span style={{ color: '#6B7280', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 Overall Progress
               </span>
               <span style={{ color: '#c67c2e', fontWeight: 700, fontSize: 13 }}>
                 {passedCount} / {totalSkills} skills passed · {overallPct}%
               </span>
             </div>
-            <div style={{ height: 6, background: '#2a1f10', borderRadius: 99, overflow: 'hidden' }}>
+            <div style={{ height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${overallPct}%`,
@@ -1152,8 +1152,8 @@ export default function TrainingPage() {
               }}/>
             </div>
             {activePhase && (
-              <div style={{ marginTop: 10, color: '#6b5840', fontSize: 12 }}>
-                Currently working: <span style={{ color: '#d4b887' }}>{activePhase.title}</span> · {activePhase.dateRange}
+              <div style={{ marginTop: 10, color: '#6B7280', fontSize: 12 }}>
+                Currently working: <span style={{ color: '#c8d4e0' }}>{activePhase.title}</span> · {activePhase.dateRange}
               </div>
             )}
           </div>
@@ -1166,9 +1166,9 @@ export default function TrainingPage() {
               { icon: '📋', label: 'Sequential Skill Unlock' },
             ].map(pill => (
               <span key={pill.label} style={{
-                background: '#1e1508',
-                border: '1px solid #2a1f10',
-                color: '#8a7050',
+                background: '#141920',
+                border: '1px solid rgba(255,255,255,0.08)',
+                color: '#6B7280',
                 fontSize: 11,
                 padding: '4px 10px',
                 borderRadius: 99,
@@ -1183,7 +1183,7 @@ export default function TrainingPage() {
       {/* ── HOW THIS WORKS ── */}
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 20px 0' }}>
         <div style={{
-          background: '#1a1108',
+          background: '#141920',
           border: '1px solid #2d200e',
           borderRadius: 12,
           padding: '14px 16px',
@@ -1194,7 +1194,7 @@ export default function TrainingPage() {
         }}>
           <span style={{ fontSize: 20, flexShrink: 0 }}>📋</span>
           <div>
-            <div style={{ color: '#d4b887', fontWeight: 600, fontSize: 13, marginBottom: 4 }}>How This Works</div>
+            <div style={{ color: '#c8d4e0', fontWeight: 600, fontSize: 13, marginBottom: 4 }}>How This Works</div>
             <div style={{ color: '#7a6040', fontSize: 12, lineHeight: 1.6 }}>
               Skills unlock sequentially — you can't move to the next until the current one is passed. Check off each criterion as you nail it, then hit <strong style={{ color: '#c67c2e' }}>Mark as Passed</strong> to unlock the next skill. Phases unlock when all skills in the previous phase are passed. Progress saves automatically.
             </div>
