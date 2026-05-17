@@ -269,14 +269,31 @@ function FAQItem({ q, a, index }: { q: string; a: string; index: number }) {
 // ─── CONTACT MODAL ────────────────────────────────────────────────────────────
 
 function ContactModal({ onClose }: { onClose: () => void }) {
-  const [form, setForm] = useState({ name: '', phone: '', email: '', message: '' })
+  const [form, setForm] = useState({
+    firstName: '', lastName: '', email: '', phone: '',
+    sexPref: 'Either', colorPref: 'No preference', notes: ''
+  })
   const [sent, setSent] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    console.log('Inquiry:', form)
-    setSent(true)
-    setTimeout(() => onClose(), 3000)
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/puppies/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!res.ok) throw new Error('Failed')
+      setSent(true)
+      setTimeout(() => onClose(), 4000)
+    } catch {
+      setError('Something went wrong. Please try again or call us directly.')
+    }
+    setLoading(false)
   }
 
   return (
@@ -292,13 +309,13 @@ function ContactModal({ onClose }: { onClose: () => void }) {
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.92, opacity: 0, y: 20 }}
         transition={{ ease: [0.22, 1, 0.36, 1], duration: 0.4 }}
-        className="bg-slate-950 border border-white/10 rounded-3xl p-8 w-full max-w-md shadow-2xl"
+        className="bg-slate-950 border border-white/10 rounded-3xl p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
       >
         {sent ? (
           <div className="text-center py-10">
-            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', bounce: 0.5 }} className="text-5xl mb-5">✅</motion.div>
-            <h3 className="text-2xl font-black mb-2">Message Received</h3>
-            <p className="text-slate-500">We&apos;ll be in touch soon.</p>
+            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', bounce: 0.5 }} className="text-5xl mb-5">🐾</motion.div>
+            <h3 className="text-2xl font-black mb-2">You&apos;re on the list!</h3>
+            <p className="text-slate-500">We&apos;ll reach out once the puppies arrive. Thank you!</p>
           </div>
         ) : (
           <>
@@ -310,33 +327,73 @@ function ContactModal({ onClose }: { onClose: () => void }) {
               <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full border border-white/10 text-slate-400 hover:text-white hover:border-white/30 transition-all text-xl">×</button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-3">
-              {[
-                { key: 'name', label: 'Your name', type: 'text', required: true },
-                { key: 'phone', label: 'Phone number', type: 'tel', required: true },
-                { key: 'email', label: 'Email (optional)', type: 'email', required: false },
-              ].map(f => (
+              <div className="grid grid-cols-2 gap-3">
                 <input
-                  key={f.key}
-                  required={f.required}
-                  type={f.type}
-                  placeholder={f.label}
-                  value={form[f.key as keyof typeof form]}
-                  onChange={e => setForm(s => ({ ...s, [f.key]: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] transition-all"
+                  required
+                  type="text"
+                  placeholder="First name *"
+                  value={form.firstName}
+                  onChange={e => setForm(s => ({ ...s, firstName: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 transition-all"
                 />
-              ))}
+                <input
+                  type="text"
+                  placeholder="Last name"
+                  value={form.lastName}
+                  onChange={e => setForm(s => ({ ...s, lastName: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 transition-all"
+                />
+              </div>
+              <input
+                required
+                type="email"
+                placeholder="Email *"
+                value={form.email}
+                onChange={e => setForm(s => ({ ...s, email: e.target.value }))}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 transition-all"
+              />
+              <input
+                type="tel"
+                placeholder="Phone number"
+                value={form.phone}
+                onChange={e => setForm(s => ({ ...s, phone: e.target.value }))}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 transition-all"
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <select
+                  value={form.sexPref}
+                  onChange={e => setForm(s => ({ ...s, sexPref: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-amber-500/50 transition-all"
+                >
+                  <option value="Either">Either sex</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+                <select
+                  value={form.colorPref}
+                  onChange={e => setForm(s => ({ ...s, colorPref: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-amber-500/50 transition-all"
+                >
+                  <option value="No preference">Any color</option>
+                  <option value="Silver">Silver</option>
+                  <option value="Charcoal">Charcoal</option>
+                  <option value="Champagne">Champagne</option>
+                </select>
+              </div>
               <textarea
                 rows={3}
-                placeholder="Any preferences? (male/female, color, questions…)"
-                value={form.message}
-                onChange={e => setForm(s => ({ ...s, message: e.target.value }))}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] transition-all resize-none"
+                placeholder="Any questions or notes? (optional)"
+                value={form.notes}
+                onChange={e => setForm(s => ({ ...s, notes: e.target.value }))}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 transition-all resize-none"
               />
+              {error && <p className="text-red-400 text-sm">{error}</p>}
               <button
                 type="submit"
-                className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl transition-colors text-base tracking-wide mt-2"
+                disabled={loading}
+                className="w-full py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-slate-950 font-black rounded-xl transition-colors text-base tracking-wide mt-2"
               >
-                Send Inquiry
+                {loading ? 'Submitting...' : 'Reserve My Spot →'}
               </button>
             </form>
           </>
