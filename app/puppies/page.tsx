@@ -6,11 +6,11 @@ import { motion, useInView, AnimatePresence } from 'framer-motion'
 // ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
 const CONFIG = {
-  momName: 'Luna',
+  momName: 'Sage',
   momAge: '3 years',
   momWeight: '62 lbs',
   momDescription:
-    'A stunning charcoal-silver Labrador with an incredibly gentle disposition. Luna is OFA-certified for hips, elbows, and eyes. She loves water, is highly trainable, and adores children.',
+    'A stunning charcoal-silver Labrador with an incredibly gentle disposition. Sage is OFA-certified for hips, elbows, and eyes. She loves water, is highly trainable, and adores children.',
 
   dadName: 'Duke',
   dadRegistration: 'AKC Registered',
