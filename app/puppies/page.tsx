@@ -417,61 +417,69 @@ const KB_ANIMATIONS = [
   { from: 'scale(1.05) translate(0%, 2%)',   to: 'scale(1.0) translate(0%, -1%)' },
 ]
 
+const SLIDE_DURATION = 7000
+const FADE_DURATION = 2000
+
 function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
-  const [current, setCurrent] = useState(0)
-  const [prev, setPrev] = useState<number | null>(null)
-  const [fading, setFading] = useState(false)
-  const INTERVAL = 7000
+  const [index, setIndex] = useState(0)
+  const [nextIndex, setNextIndex] = useState(1)
+  const [transitioning, setTransitioning] = useState(false)
 
   useEffect(() => {
     const id = setInterval(() => {
-      setPrev(current)
-      setFading(true)
-      setCurrent(c => (c + 1) % HERO_IMAGES.length)
-      setTimeout(() => { setPrev(null); setFading(false) }, 1400)
-    }, INTERVAL)
+      setNextIndex(i => (i + 1) % HERO_IMAGES.length)
+      setTransitioning(true)
+      setTimeout(() => {
+        setIndex(i => (i + 1) % HERO_IMAGES.length)
+        setTransitioning(false)
+      }, FADE_DURATION)
+    }, SLIDE_DURATION)
     return () => clearInterval(id)
-  }, [current])
+  }, [])
 
   const kb = (idx: number) => KB_ANIMATIONS[idx % KB_ANIMATIONS.length]
 
   return (
     <section className="relative h-screen flex items-center justify-center overflow-hidden">
-      {/* Previous image — fades out */}
-      {prev !== null && (
-        <div
-          className="absolute inset-0"
-          style={{ opacity: fading ? 0 : 1, transition: 'opacity 1.4s ease-in-out', zIndex: 1 }}
-        >
-          <img
-            src={HERO_IMAGES[prev]}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover"
-            style={{ transform: kb(prev).to }}
-          />
-        </div>
-      )}
-
-      {/* Current image — Ken Burns zoom */}
-      <div className="absolute inset-0" style={{ zIndex: 2 }}>
+      {/* Base image — always visible, Ken Burns */}
+      <div className="absolute inset-0" style={{ zIndex: 1 }}>
         <img
-          key={current}
-          src={HERO_IMAGES[current]}
+          key={`base-${index}`}
+          src={HERO_IMAGES[index]}
           alt="Silver Lab Puppies"
           className="absolute inset-0 w-full h-full object-cover"
-          style={{
-            animation: `kenburns ${INTERVAL + 1400}ms ease-in-out forwards`,
-            animationDelay: '0ms',
-          }}
+          style={{ animation: `kenburns-${index % KB_ANIMATIONS.length} ${SLIDE_DURATION + FADE_DURATION}ms ease-in-out forwards` }}
           onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
         />
-        <style>{`
-          @keyframes kenburns {
-            from { transform: ${kb(current).from}; }
-            to   { transform: ${kb(current).to}; }
-          }
-        `}</style>
       </div>
+
+      {/* Next image — fades in on top */}
+      <div
+        className="absolute inset-0"
+        style={{
+          zIndex: 2,
+          opacity: transitioning ? 1 : 0,
+          transition: `opacity ${FADE_DURATION}ms ease-in-out`,
+        }}
+      >
+        <img
+          key={`next-${nextIndex}`}
+          src={HERO_IMAGES[nextIndex]}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ animation: `kenburns-${nextIndex % KB_ANIMATIONS.length} ${SLIDE_DURATION + FADE_DURATION}ms ease-in-out forwards` }}
+          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+        />
+      </div>
+
+      <style>{`
+        ${KB_ANIMATIONS.map((kb, i) => `
+          @keyframes kenburns-${i} {
+            from { transform: ${kb.from}; }
+            to   { transform: ${kb.to}; }
+          }
+        `).join('')}
+      `}</style>
 
       {/* Cinematic overlays */}
       <div className="absolute inset-0 bg-black/50" style={{ zIndex: 3 }} />
