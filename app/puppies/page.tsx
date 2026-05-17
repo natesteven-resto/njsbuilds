@@ -572,7 +572,7 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
       <div className="absolute bottom-10 right-8 flex gap-1.5" style={{ zIndex: 10 }}>
         {HERO_IMAGES.slice(0, 8).map((_, i) => (
           <div key={i} className="w-1 h-1 rounded-full transition-all duration-500"
-            style={{ background: i === current % 8 ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.2)' }}
+            style={{ background: i === index % 8 ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.2)' }}
           />
         ))}
       </div>
