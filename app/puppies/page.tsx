@@ -444,14 +444,14 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
   const kb = (idx: number) => KB_ANIMATIONS[idx % KB_ANIMATIONS.length]
 
   return (
-    <section className="relative h-screen flex items-center justify-center overflow-hidden">
+    <section className="relative h-screen flex items-start justify-center overflow-hidden">
       {/* Base image — always visible, Ken Burns */}
       <div className="absolute inset-0" style={{ zIndex: 1 }}>
         <img
           key={`base-${index}`}
           src={HERO_IMAGES[index]}
           alt="Silver Lab Puppies"
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover object-[center_65%]"
           style={{ animation: `kenburns-${index % KB_ANIMATIONS.length} ${SLIDE_DURATION + FADE_DURATION}ms ease-in-out forwards` }}
           onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
         />
@@ -470,7 +470,7 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
           key={`next-${nextIndex}`}
           src={HERO_IMAGES[nextIndex]}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover object-[center_65%]"
           style={{ animation: `kenburns-${nextIndex % KB_ANIMATIONS.length} ${SLIDE_DURATION + FADE_DURATION}ms ease-in-out forwards` }}
           onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
         />
@@ -493,7 +493,7 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
       {/* Hero content */}
       <motion.div
         style={{ zIndex: 10 }}
-        className="relative text-center max-w-4xl mx-auto px-6">
+        className="relative text-center max-w-4xl mx-auto px-6 pt-[12vh]">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
