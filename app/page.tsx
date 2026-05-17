@@ -22,6 +22,12 @@ const projects = [
     desc: 'Personal fitness tracker and workout log.',
   },
   {
+    href: '/training',
+    emoji: '🐕',
+    title: 'Dog Training',
+    desc: 'Phase-based training tracker for the new pup.',
+  },
+  {
     href: '/bc.html',
     emoji: '📋',
     title: 'BC',
