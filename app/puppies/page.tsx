@@ -690,7 +690,7 @@ export default function PuppiesPage() {
               }} />
 
               {/* Two-photo layout */}
-              <div className="relative grid grid-cols-2 h-full" style={{ minHeight: '520px' }}>
+              <div className="relative grid grid-cols-2 gap-1.5 h-full" style={{ minHeight: '520px' }}>
 
                 {/* ── SAGE — left side ── */}
                 <div className="relative overflow-hidden">
@@ -727,7 +727,7 @@ export default function PuppiesPage() {
                     src="/puppies/duke/duke_hero.jpg"
                     alt="Duke"
                     className="absolute inset-0 w-full h-full object-cover"
-                    style={{ filter: 'brightness(0.75) contrast(1.08)', objectPosition: '50% 35%' }}
+                    style={{ filter: 'brightness(0.75) contrast(1.08)', objectPosition: '50% 48%' }}
                   />
                   {/* Vignette: outer RIGHT edge + top + bottom only */}
                   <div className="absolute inset-0" style={{
