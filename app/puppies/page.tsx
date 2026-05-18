@@ -800,8 +800,7 @@ export default function PuppiesPage() {
               { icon: '🏆', title: 'AKC Registered', desc: 'Full AKC registration included with every puppy.' },
               { icon: '🏡', title: 'Home Raised', desc: 'Raised in our home from day one — exposed to children, sounds, and real life.' },
               { icon: '💉', title: 'Vet Checked & Vaccinated', desc: 'Age-appropriate vaccinations, deworming, and vet check before going home.' },
-              { icon: '🤝', title: 'Lifetime Support', desc: "Questions about training, health, or food — we're always a call away." },
-              { icon: '📦', title: 'Full Puppy Pack', desc: "Starter food, vet records, AKC paperwork, and a blanket with mom's scent." },
+
             ].map(({ icon, title, desc }, i) => (
               <Reveal key={title} delay={i * 0.05}>
                 <div className="group bg-white/[0.02] hover:bg-white/[0.04] border border-white/[0.06] hover:border-white/[0.12] rounded-2xl p-6 transition-all duration-300 h-full">
