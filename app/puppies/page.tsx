@@ -19,7 +19,7 @@ const CONFIG = {
 
   expectedDate: 'May 30, 2026',
   litterSize: '8–10 puppies',
-  colors: ['Silver', 'Charcoal', 'Champagne'],
+  colors: ['Silver', 'Charcoal'],
   price: '$1,800',
   depositAmount: '$300',
   location: 'Kansas',
@@ -33,11 +33,11 @@ const CONFIG = {
     { id: 1, sex: 'M', color: 'Silver',    status: 'available' as const, name: '' },
     { id: 2, sex: 'M', color: 'Silver',    status: 'available' as const, name: '' },
     { id: 3, sex: 'M', color: 'Charcoal',  status: 'available' as const, name: '' },
-    { id: 4, sex: 'M', color: 'Champagne', status: 'available' as const, name: '' },
+    { id: 4, sex: 'M', color: 'Silver',    status: 'available' as const, name: '' },
     { id: 5, sex: 'F', color: 'Silver',    status: 'available' as const, name: '' },
     { id: 6, sex: 'F', color: 'Silver',    status: 'available' as const, name: '' },
     { id: 7, sex: 'F', color: 'Charcoal',  status: 'available' as const, name: '' },
-    { id: 8, sex: 'F', color: 'Champagne', status: 'available' as const, name: '' },
+    { id: 8, sex: 'F', color: 'Charcoal',  status: 'available' as const, name: '' },
   ],
 }
 
@@ -48,13 +48,13 @@ type Status = 'available' | 'reserved' | 'sold'
 const colorDot: Record<string, string> = {
   Silver: 'bg-slate-300',
   Charcoal: 'bg-slate-500',
-  Champagne: 'bg-amber-200',
+
 }
 
 const colorGlow: Record<string, string> = {
   Silver: 'shadow-slate-400/20',
   Charcoal: 'shadow-slate-600/20',
-  Champagne: 'shadow-amber-300/20',
+
 }
 
 function statusInfo(s: Status) {
@@ -377,7 +377,6 @@ function ContactModal({ onClose }: { onClose: () => void }) {
                   <option value="No preference">Any color</option>
                   <option value="Silver">Silver</option>
                   <option value="Charcoal">Charcoal</option>
-                  <option value="Champagne">Champagne</option>
                 </select>
               </div>
               <textarea
