@@ -727,7 +727,7 @@ export default function PuppiesPage() {
                     src="/puppies/duke/duke_hero.jpg"
                     alt="Duke"
                     className="absolute inset-0 w-full h-full object-cover"
-                    style={{ filter: 'brightness(0.75) contrast(1.08)', transform: 'scaleX(-1)', objectPosition: '50% 45%' }}
+                    style={{ filter: 'brightness(0.75) contrast(1.08)', objectPosition: '50% 40%' }}
                   />
                   {/* Vignette: outer RIGHT edge + top + bottom only */}
                   <div className="absolute inset-0" style={{
@@ -751,14 +751,7 @@ export default function PuppiesPage() {
 
               </div>{/* end grid */}
 
-              {/* Center VS divider */}
-              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-3" style={{ zIndex: 20 }}>
-                <div className="h-24 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent" />
-                <div className="w-10 h-10 rounded-full bg-[#040506] border border-white/10 flex items-center justify-center">
-                  <span className="text-white/30 text-xs font-black tracking-wider">×</span>
-                </div>
-                <div className="h-24 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent" />
-              </div>
+
 
               {/* Bottom description strip */}
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent pt-32" style={{ zIndex: 10, pointerEvents: 'none' }} />
