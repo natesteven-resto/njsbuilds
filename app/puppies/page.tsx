@@ -706,19 +706,7 @@ export default function PuppiesPage() {
                     background: 'linear-gradient(to right, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.8) 100%)'
                   }} />
 
-                  {/* Name overlay */}
-                  <div className="absolute bottom-0 left-0 right-0 p-8">
-                    <p className="text-rose-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Mother</p>
-                    <h3 className="text-white font-black tracking-tight" style={{ fontSize: 'clamp(2.5rem, 5vw, 4rem)', lineHeight: 1 }}>
-                      {CONFIG.momName}
-                    </h3>
-                    <p className="text-slate-400 text-sm mt-2">{CONFIG.momAge} · {CONFIG.momWeight}</p>
-                    <div className="flex flex-wrap gap-2 mt-4">
-                      {['OFA Hips', 'OFA Elbows', 'CAER Eyes'].map(c => (
-                        <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.06] border border-white/[0.08] rounded-full text-slate-400">{c}</span>
-                      ))}
-                    </div>
-                  </div>
+
                 </div>
 
                 {/* ── DUKE — right side ── */}
@@ -734,31 +722,41 @@ export default function PuppiesPage() {
                     background: 'linear-gradient(to left, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.8) 100%)'
                   }} />
 
-                  {/* Name overlay */}
-                  <div className="absolute bottom-0 left-0 right-0 p-8 text-right">
-                    <p className="text-sky-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Father</p>
-                    <h3 className="text-white font-black tracking-tight" style={{ fontSize: 'clamp(2.5rem, 5vw, 4rem)', lineHeight: 1 }}>
-                      {CONFIG.dadName}
-                    </h3>
-                    <p className="text-slate-400 text-sm mt-2">{CONFIG.dadRegistration}</p>
-                    <div className="flex flex-wrap gap-2 mt-4 justify-end">
-                      {['OFA Excellent', 'Clear Elbows', 'CAER Clear'].map(c => (
-                        <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.06] border border-white/[0.08] rounded-full text-slate-400">{c}</span>
-                      ))}
-                    </div>
-                  </div>
+
                 </div>
 
               </div>{/* end grid */}
 
 
 
-              {/* Bottom description strip */}
-              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent pt-32" style={{ zIndex: 10, pointerEvents: 'none' }} />
             </div>
 
-            {/* Descriptions below poster */}
-            <div className="grid sm:grid-cols-2 gap-6 mt-6">
+            {/* Name strip below photos */}
+            <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+              <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-xl px-6 py-4">
+                <p className="text-rose-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Mother</p>
+                <h3 className="text-white font-black tracking-tight" style={{ fontSize: 'clamp(1.8rem, 3vw, 2.8rem)', lineHeight: 1 }}>{CONFIG.momName}</h3>
+                <p className="text-slate-500 text-sm mt-1.5">{CONFIG.momAge} · {CONFIG.momWeight}</p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {['OFA Hips', 'OFA Elbows', 'CAER Eyes'].map(c => (
+                    <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">{c}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-xl px-6 py-4 text-right">
+                <p className="text-sky-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Father</p>
+                <h3 className="text-white font-black tracking-tight" style={{ fontSize: 'clamp(1.8rem, 3vw, 2.8rem)', lineHeight: 1 }}>{CONFIG.dadName}</h3>
+                <p className="text-slate-500 text-sm mt-1.5">{CONFIG.dadRegistration}</p>
+                <div className="flex flex-wrap gap-2 mt-3 justify-end">
+                  {['OFA Excellent', 'Clear Elbows', 'CAER Clear'].map(c => (
+                    <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">{c}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Descriptions below name strip */}
+            <div className="grid sm:grid-cols-2 gap-6 mt-4">
               <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6">
                 <p className="text-slate-400 text-sm leading-relaxed">{CONFIG.momDescription}</p>
               </div>
