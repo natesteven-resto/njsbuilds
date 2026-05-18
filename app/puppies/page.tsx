@@ -10,7 +10,7 @@ const CONFIG = {
   momAge: '3 years',
   momWeight: '62 lbs',
   momDescription:
-    'A stunning charcoal-silver Labrador with an incredibly gentle disposition. Sage is OFA-certified for hips, elbows, and eyes. She loves water, is highly trainable, and adores children.',
+    'A stunning charcoal-silver Labrador with an incredibly gentle disposition. She loves water, is highly trainable, and adores children.',
 
   dadName: 'Duke',
   dadRegistration: 'AKC Registered',
@@ -522,7 +522,7 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
           transition={{ delay: 0.55, duration: 0.8 }}
           className="text-slate-300 text-base sm:text-xl max-w-xl mx-auto mb-10 leading-relaxed"
         >
-          Health-tested. Family raised. OFA-certified parents.<br />
+          Family raised. AKC registered.<br />
           <span className="text-slate-400">Arriving {CONFIG.expectedDate}.</span>
         </motion.p>
 
@@ -668,7 +668,7 @@ export default function PuppiesPage() {
           <Reveal className="mb-14">
             <p className="text-slate-600 text-xs tracking-[0.3em] uppercase mb-2">Bloodline</p>
             <h2 className="text-4xl font-black tracking-tight">Meet the Parents</h2>
-            <p className="text-slate-500 mt-2">Health-tested. Temperament-tested. Raised in our home.</p>
+            <p className="text-slate-500 mt-2">AKC registered. Raised in our home.</p>
           </Reveal>
         </div>
 
@@ -798,7 +798,7 @@ export default function PuppiesPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { icon: '🏆', title: 'AKC Registered', desc: 'Full AKC registration included with every puppy.' },
-              { icon: '🩺', title: '2-Year Health Guarantee', desc: 'We guarantee against genetic defects for 2 years. OFA-certified parents.' },
+              { icon: '🩺', title: '2-Year Health Guarantee', desc: 'We guarantee against genetic defects for 2 years.' },
               { icon: '🏡', title: 'Home Raised', desc: 'Raised in our home from day one — exposed to children, sounds, and real life.' },
               { icon: '💉', title: 'Vet Checked & Vaccinated', desc: 'Age-appropriate vaccinations, deworming, and vet check before going home.' },
               { icon: '🤝', title: 'Lifetime Support', desc: "Questions about training, health, or food — we're always a call away." },
