@@ -798,7 +798,6 @@ export default function PuppiesPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { icon: '🏆', title: 'AKC Registered', desc: 'Full AKC registration included with every puppy.' },
-              { icon: '🩺', title: '2-Year Health Guarantee', desc: 'We guarantee against genetic defects for 2 years.' },
               { icon: '🏡', title: 'Home Raised', desc: 'Raised in our home from day one — exposed to children, sounds, and real life.' },
               { icon: '💉', title: 'Vet Checked & Vaccinated', desc: 'Age-appropriate vaccinations, deworming, and vet check before going home.' },
               { icon: '🤝', title: 'Lifetime Support', desc: "Questions about training, health, or food — we're always a call away." },
