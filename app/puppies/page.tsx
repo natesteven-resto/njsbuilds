@@ -671,74 +671,63 @@ export default function PuppiesPage() {
           </Reveal>
         </div>
 
-        {/* MMA Poster */}
+        {/* Parent Cards */}
         <Reveal delay={0.1}>
           <div className="relative mx-auto max-w-6xl px-4">
-            {/* Two-photo layout */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-              {/* ── SAGE — left side ── */}
-              <div className="relative rounded-3xl overflow-hidden" style={{ height: 'clamp(260px, 60vw, 520px)' }}>
-                <img
-                  src="/puppies/sage/sage_hero.jpg"
-                  alt="Sage"
-                  className="w-full h-full object-cover"
-                  style={{ filter: 'brightness(0.75) contrast(1.08)', transform: 'scaleX(-1)', objectPosition: '50% 30%' }}
-                />
-                {/* Vignette: outer LEFT edge + top + bottom */}
-                <div className="absolute inset-0" style={{
-                  background: 'linear-gradient(to right, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.75) 100%)'
-                }} />
-              </div>
-
-              {/* ── DUKE — right side ── */}
-              <div className="relative rounded-3xl overflow-hidden" style={{ height: 'clamp(260px, 60vw, 520px)' }}>
-                <img
-                  src="/puppies/duke/duke_hero.jpg"
-                  alt="Duke"
-                  className="w-full h-full object-cover"
-                  style={{ filter: 'brightness(0.75) contrast(1.08)', objectPosition: '50% 48%' }}
-                />
-                {/* Vignette: outer RIGHT edge + top + bottom */}
-                <div className="absolute inset-0" style={{
-                  background: 'linear-gradient(to left, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.75) 100%)'
-                }} />
-              </div>
-
-            </div>
-
-            {/* Name strip below photos */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-1.5">
-              <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-xl px-6 py-4">
-                <p className="text-rose-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Mother</p>
-                <h3 className="text-white font-black tracking-tight" style={{ fontSize: 'clamp(1.8rem, 3vw, 2.8rem)', lineHeight: 1 }}>{CONFIG.momName}</h3>
-                <p className="text-slate-500 text-sm mt-1.5">{CONFIG.momAge} · {CONFIG.momWeight}</p>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {['OFA Hips', 'OFA Elbows', 'CAER Eyes'].map(c => (
-                    <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">{c}</span>
-                  ))}
+              {/* ── SAGE ── */}
+              <div className="flex flex-col">
+                <div className="relative rounded-t-3xl overflow-hidden" style={{ height: 'clamp(300px, 75vw, 520px)' }}>
+                  <img
+                    src="/puppies/sage/sage_hero.jpg"
+                    alt="Sage"
+                    className="w-full h-full object-cover"
+                    style={{ filter: 'brightness(0.75) contrast(1.08)', transform: 'scaleX(-1)', objectPosition: '50% 30%' }}
+                  />
+                  <div className="absolute inset-0" style={{
+                    background: 'linear-gradient(to right, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.75) 100%)'
+                  }} />
+                </div>
+                <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-3xl px-6 py-5">
+                  <p className="text-rose-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Mother</p>
+                  <h3 className="text-white font-black tracking-tight text-3xl" style={{ lineHeight: 1 }}>{CONFIG.momName}</h3>
+                  <p className="text-slate-500 text-sm mt-1.5">{CONFIG.momAge} · {CONFIG.momWeight}</p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {['OFA Hips', 'OFA Elbows', 'CAER Eyes'].map(c => (
+                      <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">{c}</span>
+                    ))}
+                  </div>
+                  <p className="text-slate-500 text-sm leading-relaxed mt-4">{CONFIG.momDescription}</p>
                 </div>
               </div>
-              <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-xl px-6 py-4 sm:text-right">
-                <p className="text-sky-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Father</p>
-                <h3 className="text-white font-black tracking-tight" style={{ fontSize: 'clamp(1.8rem, 3vw, 2.8rem)', lineHeight: 1 }}>{CONFIG.dadName}</h3>
-                <p className="text-slate-500 text-sm mt-1.5">{CONFIG.dadRegistration}</p>
-                <div className="flex flex-wrap gap-2 mt-3 sm:justify-end">
-                  {['OFA Excellent', 'Clear Elbows', 'CAER Clear'].map(c => (
-                    <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">{c}</span>
-                  ))}
+
+              {/* ── DUKE ── */}
+              <div className="flex flex-col">
+                <div className="relative rounded-t-3xl overflow-hidden" style={{ height: 'clamp(300px, 75vw, 520px)' }}>
+                  <img
+                    src="/puppies/duke/duke_hero.jpg"
+                    alt="Duke"
+                    className="w-full h-full object-cover"
+                    style={{ filter: 'brightness(0.75) contrast(1.08)', objectPosition: '50% 48%' }}
+                  />
+                  <div className="absolute inset-0" style={{
+                    background: 'linear-gradient(to left, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.75) 100%)'
+                  }} />
+                </div>
+                <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-3xl px-6 py-5">
+                  <p className="text-sky-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Father</p>
+                  <h3 className="text-white font-black tracking-tight text-3xl" style={{ lineHeight: 1 }}>{CONFIG.dadName}</h3>
+                  <p className="text-slate-500 text-sm mt-1.5">{CONFIG.dadRegistration}</p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {['OFA Excellent', 'Clear Elbows', 'CAER Clear'].map(c => (
+                      <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">{c}</span>
+                    ))}
+                  </div>
+                  <p className="text-slate-500 text-sm leading-relaxed mt-4">{CONFIG.dadDescription}</p>
                 </div>
               </div>
-            </div>
 
-            {/* Descriptions below name strip */}
-            <div className="grid sm:grid-cols-2 gap-6 mt-4">
-              <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6">
-                <p className="text-slate-400 text-sm leading-relaxed">{CONFIG.momDescription}</p>
-              </div>
-              <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6">
-                <p className="text-slate-400 text-sm leading-relaxed">{CONFIG.dadDescription}</p>
-              </div>
             </div>
           </div>
         </Reveal>
