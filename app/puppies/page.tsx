@@ -15,7 +15,7 @@ const CONFIG = {
   dadName: 'Duke',
   dadRegistration: 'AKC Registered',
   dadDescription:
-    'An AKC-registered silver Labrador with champion bloodlines. OFA Excellent hips, clear elbows and eyes. 85 lbs of pure Labrador personality.',
+    'An AKC-registered silver Labrador with OFA Excellent hips, clear elbows and eyes. 85 lbs of pure Labrador personality — bold, athletic, and incredibly gentle.',
 
   expectedDate: 'May 30, 2026',
   litterSize: '8–10 puppies',
@@ -407,11 +407,7 @@ function ContactModal({ onClose }: { onClose: () => void }) {
 
 // ─── KEN BURNS SLIDESHOW ─────────────────────────────────────────────────────
 
-const HERO_IMAGES = [
-  '/puppies/hero3.jpg',
-  '/puppies/hero2.jpg',
-  ...Array.from({ length: 24 }, (_, i) => `/puppies/hero${i + 4}.jpg`),
-]
+const HERO_IMAGES = Array.from({ length: 14 }, (_, i) => `/puppies/hero${i + 1}.jpg`)
 
 const KB_ANIMATIONS = [
   { from: 'scale(1.08) translate(-2%, -1%)',  to: 'scale(1.0) translate(0%, 0%)' },
@@ -526,7 +522,7 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
           transition={{ delay: 0.55, duration: 0.8 }}
           className="text-slate-300 text-xl max-w-xl mx-auto mb-10 leading-relaxed"
         >
-          Health-tested. Champion bloodlines. Raised in our home with love.<br />
+          Health-tested. Family raised. OFA-certified parents.<br />
           <span className="text-slate-400">Arriving {CONFIG.expectedDate}.</span>
         </motion.p>
 
@@ -665,69 +661,128 @@ export default function PuppiesPage() {
         </div>
       </section>
 
-      {/* ── PARENTS ──────────────────────────────────────────────────────── */}
-      <section className="py-24 relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent" />
-        <div className="max-w-5xl mx-auto px-6 relative">
+      {/* ── PARENTS — MMA POSTER ─────────────────────────────────────────── */}
+      <section className="py-24 relative overflow-hidden">
+        {/* Section header */}
+        <div className="max-w-5xl mx-auto px-6 relative z-10">
           <Reveal className="mb-14">
             <p className="text-slate-600 text-xs tracking-[0.3em] uppercase mb-2">Bloodline</p>
             <h2 className="text-4xl font-black tracking-tight">Meet the Parents</h2>
             <p className="text-slate-500 mt-2">Health-tested. Temperament-tested. Raised in our home.</p>
           </Reveal>
+        </div>
 
-          <div className="grid sm:grid-cols-2 gap-6">
-            {[
-              {
-                role: 'Mother',
-                roleColor: 'text-rose-400',
-                name: CONFIG.momName,
-                sub: `${CONFIG.momAge} · ${CONFIG.momWeight}`,
-                desc: CONFIG.momDescription,
-                certs: ['OFA Hips', 'OFA Elbows', 'CAER Eyes'],
-                delay: 0,
-              },
-              {
-                role: 'Father',
-                roleColor: 'text-sky-400',
-                name: CONFIG.dadName,
-                sub: CONFIG.dadRegistration,
-                desc: CONFIG.dadDescription,
-                certs: ['OFA Excellent', 'Clear Elbows', 'CAER Clear'],
-                delay: 0.1,
-              },
-            ].map(parent => (
-              <Reveal key={parent.name} delay={parent.delay}>
-                <div className="group relative bg-white/[0.02] hover:bg-white/[0.04] border border-white/[0.06] hover:border-white/[0.14] rounded-3xl p-7 transition-all duration-500 overflow-hidden">
-                  {/* glow */}
-                  <div className="absolute -top-20 -right-20 w-48 h-48 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 bg-amber-500/5" />
+        {/* MMA Poster */}
+        <Reveal delay={0.1}>
+          <div className="relative mx-auto max-w-6xl px-4">
+            <div
+              className="relative rounded-3xl overflow-hidden border border-white/[0.06]"
+              style={{ minHeight: '520px' }}
+            >
+              {/* Dark radial vignette background */}
+              <div className="absolute inset-0 bg-[#040506]" />
+              <div className="absolute inset-0" style={{
+                background: 'radial-gradient(ellipse 60% 80% at 50% 50%, rgba(20,25,35,0.6) 0%, #040506 70%)'
+              }} />
+              {/* Subtle texture lines */}
+              <div className="absolute inset-0 opacity-[0.015]" style={{
+                backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,255,255,1) 40px, rgba(255,255,255,1) 41px)',
+              }} />
 
-                  {/* photo placeholder */}
-                  <div className="w-full h-52 rounded-2xl bg-white/[0.03] border border-white/[0.05] flex items-center justify-center mb-6 overflow-hidden">
-                    <span className="text-6xl opacity-20">🐕</span>
-                  </div>
+              {/* Two-photo layout */}
+              <div className="relative grid grid-cols-2 h-full" style={{ minHeight: '520px' }}>
 
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <span className={`text-xs font-black uppercase tracking-[0.25em] ${parent.roleColor}`}>{parent.role}</span>
-                      <h3 className="text-2xl font-black mt-1">{parent.name}</h3>
-                      <p className="text-slate-600 text-sm mt-0.5">{parent.sub}</p>
+                {/* ── SAGE — left side ── */}
+                <div className="relative overflow-hidden">
+                  {/* Photo */}
+                  <img
+                    src="/puppies/sage/sage1.jpg"
+                    alt="Sage"
+                    className="absolute inset-0 w-full h-full object-cover object-top"
+                    style={{ filter: 'brightness(0.7) contrast(1.05)' }}
+                  />
+                  {/* Vignette edges: top, outer left, bottom */}
+                  <div className="absolute inset-0" style={{
+                    background: 'linear-gradient(to right, rgba(4,5,6,0.5) 0%, transparent 50%), linear-gradient(to bottom, rgba(4,5,6,0.6) 0%, transparent 30%, rgba(4,5,6,0.85) 100%), linear-gradient(to top, rgba(4,5,6,0.4) 0%, transparent 40%)'
+                  }} />
+                  {/* Center fade toward middle divider */}
+                  <div className="absolute inset-0" style={{
+                    background: 'linear-gradient(to right, transparent 40%, rgba(4,5,6,0.95) 100%)'
+                  }} />
+
+                  {/* Name overlay */}
+                  <div className="absolute bottom-0 left-0 right-0 p-8">
+                    <p className="text-rose-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Mother</p>
+                    <h3 className="text-white font-black tracking-tight" style={{ fontSize: 'clamp(2.5rem, 5vw, 4rem)', lineHeight: 1 }}>
+                      {CONFIG.momName}
+                    </h3>
+                    <p className="text-slate-400 text-sm mt-2">{CONFIG.momAge} · {CONFIG.momWeight}</p>
+                    <div className="flex flex-wrap gap-2 mt-4">
+                      {['OFA Hips', 'OFA Elbows', 'CAER Eyes'].map(c => (
+                        <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.06] border border-white/[0.08] rounded-full text-slate-400">{c}</span>
+                      ))}
                     </div>
                   </div>
+                </div>
 
-                  <p className="text-slate-400 text-sm leading-relaxed mb-5">{parent.desc}</p>
+                {/* ── DUKE — right side ── */}
+                <div className="relative overflow-hidden">
+                  <img
+                    src="/puppies/duke/duke1.jpg"
+                    alt="Duke"
+                    className="absolute inset-0 w-full h-full object-cover object-top"
+                    style={{ filter: 'brightness(0.7) contrast(1.05)', transform: 'scaleX(-1)' }}
+                  />
+                  {/* Vignette edges */}
+                  <div className="absolute inset-0" style={{
+                    background: 'linear-gradient(to left, rgba(4,5,6,0.5) 0%, transparent 50%), linear-gradient(to bottom, rgba(4,5,6,0.6) 0%, transparent 30%, rgba(4,5,6,0.85) 100%)'
+                  }} />
+                  {/* Center fade toward middle divider */}
+                  <div className="absolute inset-0" style={{
+                    background: 'linear-gradient(to left, transparent 40%, rgba(4,5,6,0.95) 100%)'
+                  }} />
 
-                  <div className="flex flex-wrap gap-2">
-                    {parent.certs.map(c => (
-                      <span key={c} className="text-xs px-3 py-1.5 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">
-                        {c}
-                      </span>
-                    ))}
+                  {/* Name overlay */}
+                  <div className="absolute bottom-0 left-0 right-0 p-8 text-right">
+                    <p className="text-sky-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Father</p>
+                    <h3 className="text-white font-black tracking-tight" style={{ fontSize: 'clamp(2.5rem, 5vw, 4rem)', lineHeight: 1 }}>
+                      {CONFIG.dadName}
+                    </h3>
+                    <p className="text-slate-400 text-sm mt-2">{CONFIG.dadRegistration}</p>
+                    <div className="flex flex-wrap gap-2 mt-4 justify-end">
+                      {['OFA Excellent', 'Clear Elbows', 'CAER Clear'].map(c => (
+                        <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.06] border border-white/[0.08] rounded-full text-slate-400">{c}</span>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </Reveal>
-            ))}
+
+              </div>{/* end grid */}
+
+              {/* Center VS divider */}
+              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-3" style={{ zIndex: 20 }}>
+                <div className="h-24 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent" />
+                <div className="w-10 h-10 rounded-full bg-[#040506] border border-white/10 flex items-center justify-center">
+                  <span className="text-white/30 text-xs font-black tracking-wider">×</span>
+                </div>
+                <div className="h-24 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent" />
+              </div>
+
+              {/* Bottom description strip */}
+              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent pt-32" style={{ zIndex: 10, pointerEvents: 'none' }} />
+            </div>
+
+            {/* Descriptions below poster */}
+            <div className="grid sm:grid-cols-2 gap-6 mt-6">
+              <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6">
+                <p className="text-slate-400 text-sm leading-relaxed">{CONFIG.momDescription}</p>
+              </div>
+              <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6">
+                <p className="text-slate-400 text-sm leading-relaxed">{CONFIG.dadDescription}</p>
+              </div>
+            </div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* ── AVAILABILITY ─────────────────────────────────────────────────── */}
@@ -782,7 +837,7 @@ export default function PuppiesPage() {
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { icon: '🏆', title: 'AKC Registered', desc: 'Full AKC registration included. Champion bloodlines on both sides.' },
+              { icon: '🏆', title: 'AKC Registered', desc: 'Full AKC registration included with every puppy.' },
               { icon: '🩺', title: '2-Year Health Guarantee', desc: 'We guarantee against genetic defects for 2 years. OFA-certified parents.' },
               { icon: '🏡', title: 'Home Raised', desc: 'Raised in our home from day one — exposed to children, sounds, and real life.' },
               { icon: '💉', title: 'Vet Checked & Vaccinated', desc: 'Age-appropriate vaccinations, deworming, and vet check before going home.' },
