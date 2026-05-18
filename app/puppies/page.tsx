@@ -675,59 +675,36 @@ export default function PuppiesPage() {
         {/* MMA Poster */}
         <Reveal delay={0.1}>
           <div className="relative mx-auto max-w-6xl px-4">
-            <div
-              className="relative rounded-3xl overflow-hidden border border-white/[0.06]"
-              style={{ minHeight: '520px' }}
-            >
-              {/* Dark radial vignette background */}
-              <div className="absolute inset-0 bg-[#040506]" />
-              <div className="absolute inset-0" style={{
-                background: 'radial-gradient(ellipse 60% 80% at 50% 50%, rgba(20,25,35,0.6) 0%, #040506 70%)'
-              }} />
-              {/* Subtle texture lines */}
-              <div className="absolute inset-0 opacity-[0.015]" style={{
-                backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,255,255,1) 40px, rgba(255,255,255,1) 41px)',
-              }} />
+            {/* Two-photo layout */}
+            <div className="grid grid-cols-2 gap-1.5">
 
-              {/* Two-photo layout */}
-              <div className="relative grid grid-cols-2 gap-1.5 h-full" style={{ minHeight: '520px' }}>
+              {/* ── SAGE — left side ── */}
+              <div className="relative rounded-3xl overflow-hidden" style={{ height: '520px' }}>
+                <img
+                  src="/puppies/sage/sage_hero.jpg"
+                  alt="Sage"
+                  className="w-full h-full object-cover"
+                  style={{ filter: 'brightness(0.75) contrast(1.08)', transform: 'scaleX(-1)', objectPosition: '50% 30%' }}
+                />
+                {/* Vignette: outer LEFT edge + top + bottom */}
+                <div className="absolute inset-0" style={{
+                  background: 'linear-gradient(to right, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.75) 100%)'
+                }} />
+              </div>
 
-                {/* ── SAGE — left side ── */}
-                <div className="relative overflow-hidden" style={{ minHeight: '520px' }}>
-                  {/* Photo */}
-                  <img
-                    src="/puppies/sage/sage_hero.jpg"
-                    alt="Sage"
-                    className="absolute inset-0 w-full h-full object-cover"
-                    style={{ filter: 'brightness(0.75) contrast(1.08)', transform: 'scaleX(-1)', objectPosition: '50% 30%' }}
-                  />
-                  {/* Vignette: outer LEFT edge + top + bottom only */}
-                  <div className="absolute inset-0" style={{
-                    background: 'linear-gradient(to right, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.8) 100%)'
-                  }} />
-
-
-                </div>
-
-                {/* ── DUKE — right side ── */}
-                <div className="relative overflow-hidden" style={{ minHeight: '520px' }}>
-                  <img
-                    src="/puppies/duke/duke_hero.jpg"
-                    alt="Duke"
-                    className="absolute inset-0 w-full h-full object-cover"
-                    style={{ filter: 'brightness(0.75) contrast(1.08)', objectPosition: '50% 48%' }}
-                  />
-                  {/* Vignette: outer RIGHT edge + top + bottom only */}
-                  <div className="absolute inset-0" style={{
-                    background: 'linear-gradient(to left, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.8) 100%)'
-                  }} />
-
-
-                </div>
-
-              </div>{/* end grid */}
-
-
+              {/* ── DUKE — right side ── */}
+              <div className="relative rounded-3xl overflow-hidden" style={{ height: '520px' }}>
+                <img
+                  src="/puppies/duke/duke_hero.jpg"
+                  alt="Duke"
+                  className="w-full h-full object-cover"
+                  style={{ filter: 'brightness(0.75) contrast(1.08)', objectPosition: '50% 48%' }}
+                />
+                {/* Vignette: outer RIGHT edge + top + bottom */}
+                <div className="absolute inset-0" style={{
+                  background: 'linear-gradient(to left, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.75) 100%)'
+                }} />
+              </div>
 
             </div>
 
