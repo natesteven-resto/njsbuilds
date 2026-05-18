@@ -696,10 +696,10 @@ export default function PuppiesPage() {
                 <div className="relative overflow-hidden">
                   {/* Photo */}
                   <img
-                    src="/puppies/sage/sage1.jpg"
+                    src="/puppies/sage/sage_hero.jpg"
                     alt="Sage"
-                    className="absolute inset-0 w-full h-full object-cover object-top"
-                    style={{ filter: 'brightness(0.7) contrast(1.05)' }}
+                    className="absolute inset-0 w-full h-full object-cover object-center"
+                    style={{ filter: 'brightness(0.75) contrast(1.08)', transform: 'scaleX(-1)' }}
                   />
                   {/* Vignette edges: top, outer left, bottom */}
                   <div className="absolute inset-0" style={{
@@ -728,10 +728,10 @@ export default function PuppiesPage() {
                 {/* ── DUKE — right side ── */}
                 <div className="relative overflow-hidden">
                   <img
-                    src="/puppies/duke/duke1.jpg"
+                    src="/puppies/duke/duke_hero.jpg"
                     alt="Duke"
-                    className="absolute inset-0 w-full h-full object-cover object-top"
-                    style={{ filter: 'brightness(0.7) contrast(1.05)', transform: 'scaleX(-1)' }}
+                    className="absolute inset-0 w-full h-full object-cover object-center"
+                    style={{ filter: 'brightness(0.75) contrast(1.08)', transform: 'scaleX(-1)' }}
                   />
                   {/* Vignette edges */}
                   <div className="absolute inset-0" style={{
