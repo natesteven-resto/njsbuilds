@@ -440,7 +440,7 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
   const kb = (idx: number) => KB_ANIMATIONS[idx % KB_ANIMATIONS.length]
 
   return (
-    <section className="relative h-screen flex items-start justify-center overflow-hidden">
+    <section className="relative flex items-center justify-center overflow-hidden" style={{ minHeight: '100svh' }}>
       {/* Base image — always visible, Ken Burns */}
       <div className="absolute inset-0" style={{ zIndex: 1 }}>
         <img
@@ -489,7 +489,7 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
       {/* Hero content */}
       <motion.div
         style={{ zIndex: 10 }}
-        className="relative text-center max-w-4xl mx-auto px-6 pt-[12vh]">
+        className="relative text-center max-w-4xl mx-auto px-4 sm:px-6 py-8">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -507,7 +507,7 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35, duration: 1, ease: [0.22, 1, 0.36, 1] }}
-          className="text-6xl sm:text-8xl font-black tracking-tight leading-none mb-6"
+          className="text-5xl sm:text-8xl font-black tracking-tight leading-none mb-6"
         >
           Silver Lab
           <br />
@@ -520,7 +520,7 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.55, duration: 0.8 }}
-          className="text-slate-300 text-xl max-w-xl mx-auto mb-10 leading-relaxed"
+          className="text-slate-300 text-base sm:text-xl max-w-xl mx-auto mb-10 leading-relaxed"
         >
           Health-tested. Family raised. OFA-certified parents.<br />
           <span className="text-slate-400">Arriving {CONFIG.expectedDate}.</span>
@@ -534,14 +534,14 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
         >
           <button
             onClick={onReserve}
-            className="group px-10 py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-full transition-all duration-300 text-base tracking-wide shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-[1.02]"
+            className="group w-full sm:w-auto px-10 py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-full transition-all duration-300 text-base tracking-wide shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-[1.02]"
           >
             Reserve a Puppy
             <span className="ml-2 group-hover:translate-x-1 inline-block transition-transform">→</span>
           </button>
           <a
             href="#live"
-            className="px-10 py-4 border border-white/20 hover:border-white/40 text-slate-200 hover:text-white font-semibold rounded-full transition-all duration-300 backdrop-blur-sm bg-white/[0.05] hover:bg-white/[0.10]"
+            className="w-full sm:w-auto px-10 py-4 border border-white/20 hover:border-white/40 text-slate-200 hover:text-white font-semibold rounded-full transition-all duration-300 backdrop-blur-sm bg-white/[0.05] hover:bg-white/[0.10]"
           >
             Watch Live 🎥
           </a>
@@ -676,10 +676,10 @@ export default function PuppiesPage() {
         <Reveal delay={0.1}>
           <div className="relative mx-auto max-w-6xl px-4">
             {/* Two-photo layout */}
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
 
               {/* ── SAGE — left side ── */}
-              <div className="relative rounded-3xl overflow-hidden" style={{ height: '520px' }}>
+              <div className="relative rounded-3xl overflow-hidden" style={{ height: 'clamp(260px, 60vw, 520px)' }}>
                 <img
                   src="/puppies/sage/sage_hero.jpg"
                   alt="Sage"
@@ -693,7 +693,7 @@ export default function PuppiesPage() {
               </div>
 
               {/* ── DUKE — right side ── */}
-              <div className="relative rounded-3xl overflow-hidden" style={{ height: '520px' }}>
+              <div className="relative rounded-3xl overflow-hidden" style={{ height: 'clamp(260px, 60vw, 520px)' }}>
                 <img
                   src="/puppies/duke/duke_hero.jpg"
                   alt="Duke"
@@ -709,7 +709,7 @@ export default function PuppiesPage() {
             </div>
 
             {/* Name strip below photos */}
-            <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-1.5">
               <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-xl px-6 py-4">
                 <p className="text-rose-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Mother</p>
                 <h3 className="text-white font-black tracking-tight" style={{ fontSize: 'clamp(1.8rem, 3vw, 2.8rem)', lineHeight: 1 }}>{CONFIG.momName}</h3>
@@ -720,11 +720,11 @@ export default function PuppiesPage() {
                   ))}
                 </div>
               </div>
-              <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-xl px-6 py-4 text-right">
+              <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-xl px-6 py-4 sm:text-right">
                 <p className="text-sky-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Father</p>
                 <h3 className="text-white font-black tracking-tight" style={{ fontSize: 'clamp(1.8rem, 3vw, 2.8rem)', lineHeight: 1 }}>{CONFIG.dadName}</h3>
                 <p className="text-slate-500 text-sm mt-1.5">{CONFIG.dadRegistration}</p>
-                <div className="flex flex-wrap gap-2 mt-3 justify-end">
+                <div className="flex flex-wrap gap-2 mt-3 sm:justify-end">
                   {['OFA Excellent', 'Clear Elbows', 'CAER Clear'].map(c => (
                     <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">{c}</span>
                   ))}
