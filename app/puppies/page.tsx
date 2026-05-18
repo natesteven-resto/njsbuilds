@@ -698,16 +698,12 @@ export default function PuppiesPage() {
                   <img
                     src="/puppies/sage/sage_hero.jpg"
                     alt="Sage"
-                    className="absolute inset-0 w-full h-full object-cover object-center"
-                    style={{ filter: 'brightness(0.75) contrast(1.08)', transform: 'scaleX(-1)' }}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    style={{ filter: 'brightness(0.75) contrast(1.08)', transform: 'scaleX(-1)', objectPosition: '50% 30%' }}
                   />
-                  {/* Vignette edges: top, outer left, bottom */}
+                  {/* Vignette: outer LEFT edge + top + bottom only */}
                   <div className="absolute inset-0" style={{
-                    background: 'linear-gradient(to right, rgba(4,5,6,0.5) 0%, transparent 50%), linear-gradient(to bottom, rgba(4,5,6,0.6) 0%, transparent 30%, rgba(4,5,6,0.85) 100%), linear-gradient(to top, rgba(4,5,6,0.4) 0%, transparent 40%)'
-                  }} />
-                  {/* Center fade toward middle divider */}
-                  <div className="absolute inset-0" style={{
-                    background: 'linear-gradient(to right, transparent 40%, rgba(4,5,6,0.95) 100%)'
+                    background: 'linear-gradient(to right, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.8) 100%)'
                   }} />
 
                   {/* Name overlay */}
@@ -730,16 +726,12 @@ export default function PuppiesPage() {
                   <img
                     src="/puppies/duke/duke_hero.jpg"
                     alt="Duke"
-                    className="absolute inset-0 w-full h-full object-cover object-center"
-                    style={{ filter: 'brightness(0.75) contrast(1.08)', transform: 'scaleX(-1)' }}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    style={{ filter: 'brightness(0.75) contrast(1.08)', transform: 'scaleX(-1)', objectPosition: '50% 45%' }}
                   />
-                  {/* Vignette edges */}
+                  {/* Vignette: outer RIGHT edge + top + bottom only */}
                   <div className="absolute inset-0" style={{
-                    background: 'linear-gradient(to left, rgba(4,5,6,0.5) 0%, transparent 50%), linear-gradient(to bottom, rgba(4,5,6,0.6) 0%, transparent 30%, rgba(4,5,6,0.85) 100%)'
-                  }} />
-                  {/* Center fade toward middle divider */}
-                  <div className="absolute inset-0" style={{
-                    background: 'linear-gradient(to left, transparent 40%, rgba(4,5,6,0.95) 100%)'
+                    background: 'linear-gradient(to left, rgba(4,5,6,0.92) 0%, transparent 55%), linear-gradient(to bottom, rgba(4,5,6,0.55) 0%, transparent 25%, rgba(4,5,6,0.8) 100%)'
                   }} />
 
                   {/* Name overlay */}
