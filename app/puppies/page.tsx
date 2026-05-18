@@ -727,7 +727,7 @@ export default function PuppiesPage() {
                     src="/puppies/duke/duke_hero.jpg"
                     alt="Duke"
                     className="absolute inset-0 w-full h-full object-cover"
-                    style={{ filter: 'brightness(0.75) contrast(1.08)', objectPosition: '50% 22%' }}
+                    style={{ filter: 'brightness(0.75) contrast(1.08)', objectPosition: '50% 35%' }}
                   />
                   {/* Vignette: outer RIGHT edge + top + bottom only */}
                   <div className="absolute inset-0" style={{
