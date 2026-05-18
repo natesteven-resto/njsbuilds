@@ -693,7 +693,7 @@ export default function PuppiesPage() {
               <div className="relative grid grid-cols-2 gap-1.5 h-full" style={{ minHeight: '520px' }}>
 
                 {/* ── SAGE — left side ── */}
-                <div className="relative overflow-hidden">
+                <div className="relative overflow-hidden" style={{ minHeight: '520px' }}>
                   {/* Photo */}
                   <img
                     src="/puppies/sage/sage_hero.jpg"
@@ -710,7 +710,7 @@ export default function PuppiesPage() {
                 </div>
 
                 {/* ── DUKE — right side ── */}
-                <div className="relative overflow-hidden">
+                <div className="relative overflow-hidden" style={{ minHeight: '520px' }}>
                   <img
                     src="/puppies/duke/duke_hero.jpg"
                     alt="Duke"
