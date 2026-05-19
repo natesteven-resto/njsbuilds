@@ -6,14 +6,14 @@ import { motion, useInView, AnimatePresence } from 'framer-motion'
 // ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
 const CONFIG = {
-  momName: "Steven's Sage",
+  momName: 'Sage',
   momAge: '6 years',
   momWeight: '62 lbs',
   momAKC: 'SS14491101',
   momDescription:
     'A stunning charcoal-silver Labrador with an incredibly gentle disposition. She loves water, is highly trainable, and adores children.',
 
-  dadName: "Steven's Duke III",
+  dadName: 'Duke',
   dadRegistration: 'AKC #SS23912504',
   dadDescription:
     'An AKC-registered silver Labrador. 85 lbs of pure Labrador personality — bold, athletic, and incredibly gentle.',
