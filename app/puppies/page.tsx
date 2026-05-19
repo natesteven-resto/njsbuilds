@@ -456,7 +456,7 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
           className="text-slate-300 text-base sm:text-xl max-w-xl mx-auto mb-10 leading-relaxed"
         >
           Family raised. AKC registered.<br />
-          <span className="text-slate-400">Arriving {CONFIG.expectedDate}.</span>
+          <span className="text-slate-400">New Litter Incoming — Estimating {CONFIG.expectedDate}.</span>
         </motion.p>
 
         <motion.div
@@ -536,7 +536,7 @@ export default function PuppiesPage() {
                 `✦ ~${CONFIG.estimatedPuppies} Puppies Expected`,
                 `✦ ${CONFIG.location}`,
                 `✦ 24/7 Live Puppy Cam`,
-                `✦ Arriving ${CONFIG.expectedDate}`,
+                `✦ New Litter Incoming — Estimating ${CONFIG.expectedDate}`,
               ].map(item => <span key={item}>{item}</span>)}
             </div>
           ))}
