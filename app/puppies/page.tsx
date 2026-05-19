@@ -6,16 +6,17 @@ import { motion, useInView, AnimatePresence } from 'framer-motion'
 // ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
 const CONFIG = {
-  momName: 'Sage',
-  momAge: '3 years',
+  momName: "Steven's Sage",
+  momAge: '6 years',
   momWeight: '62 lbs',
+  momAKC: 'SS14491101',
   momDescription:
     'A stunning charcoal-silver Labrador with an incredibly gentle disposition. She loves water, is highly trainable, and adores children.',
 
-  dadName: 'Duke',
-  dadRegistration: 'AKC Registered',
+  dadName: "Steven's Duke III",
+  dadRegistration: 'AKC #SS23912504',
   dadDescription:
-    'An AKC-registered silver Labrador with OFA Excellent hips, clear elbows and eyes. 85 lbs of pure Labrador personality — bold, athletic, and incredibly gentle.',
+    'An AKC-registered silver Labrador. 85 lbs of pure Labrador personality — bold, athletic, and incredibly gentle.',
 
   expectedDate: 'May 30, 2026',
   litterSize: '~8 puppies (estimated)',
@@ -622,7 +623,7 @@ export default function PuppiesPage() {
                 <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-3xl px-6 py-5">
                   <p className="text-rose-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Mother</p>
                   <h3 className="text-white font-black tracking-tight text-3xl" style={{ lineHeight: 1 }}>{CONFIG.momName}</h3>
-                  <p className="text-slate-500 text-sm mt-1.5">{CONFIG.momAge} · {CONFIG.momWeight}</p>
+                  <p className="text-slate-500 text-sm mt-1.5">{CONFIG.momAge} · {CONFIG.momWeight} · AKC #{CONFIG.momAKC}</p>
                   <div className="flex flex-wrap gap-2 mt-3">
                     {['OFA Hips', 'OFA Elbows', 'CAER Eyes'].map(c => (
                       <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">{c}</span>
@@ -648,7 +649,7 @@ export default function PuppiesPage() {
                 <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-3xl px-6 py-5">
                   <p className="text-sky-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Father</p>
                   <h3 className="text-white font-black tracking-tight text-3xl" style={{ lineHeight: 1 }}>{CONFIG.dadName}</h3>
-                  <p className="text-slate-500 text-sm mt-1.5">{CONFIG.dadRegistration}</p>
+                  <p className="text-slate-500 text-sm mt-1.5">{CONFIG.dadRegistration} · Born Dec 2020</p>
                   <div className="flex flex-wrap gap-2 mt-3">
                     {['OFA Excellent', 'Clear Elbows', 'CAER Clear'].map(c => (
                       <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">{c}</span>
