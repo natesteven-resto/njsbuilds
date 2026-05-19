@@ -18,7 +18,8 @@ const CONFIG = {
     'An AKC-registered silver Labrador with OFA Excellent hips, clear elbows and eyes. 85 lbs of pure Labrador personality — bold, athletic, and incredibly gentle.',
 
   expectedDate: 'May 30, 2026',
-  litterSize: '8–10 puppies',
+  litterSize: '~8 puppies (estimated)',
+  estimatedPuppies: 8,
   colors: ['Silver', 'Charcoal'],
   price: '$1,800',
   depositAmount: '$300',
@@ -29,39 +30,12 @@ const CONFIG = {
   streamType: 'youtube' as 'youtube' | 'twitch' | 'none',
   youtubeVideoId: '',
 
-  puppies: [
-    { id: 1, sex: 'M', color: 'Silver',    status: 'available' as const, name: '' },
-    { id: 2, sex: 'M', color: 'Silver',    status: 'available' as const, name: '' },
-    { id: 3, sex: 'M', color: 'Charcoal',  status: 'available' as const, name: '' },
-    { id: 4, sex: 'M', color: 'Silver',    status: 'available' as const, name: '' },
-    { id: 5, sex: 'F', color: 'Silver',    status: 'available' as const, name: '' },
-    { id: 6, sex: 'F', color: 'Silver',    status: 'available' as const, name: '' },
-    { id: 7, sex: 'F', color: 'Charcoal',  status: 'available' as const, name: '' },
-    { id: 8, sex: 'F', color: 'Charcoal',  status: 'available' as const, name: '' },
-  ],
+
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
-type Status = 'available' | 'reserved' | 'sold'
 
-const colorDot: Record<string, string> = {
-  Silver: 'bg-slate-300',
-  Charcoal: 'bg-slate-500',
-
-}
-
-const colorGlow: Record<string, string> = {
-  Silver: 'shadow-slate-400/20',
-  Charcoal: 'shadow-slate-600/20',
-
-}
-
-function statusInfo(s: Status) {
-  if (s === 'available') return { label: 'Available', cls: 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' }
-  if (s === 'reserved')  return { label: 'Reserved',  cls: 'text-amber-400  border-amber-500/40  bg-amber-500/10'  }
-  return                        { label: 'Sold',       cls: 'text-red-400    border-red-500/40    bg-red-500/10'    }
-}
 
 // ─── REUSABLE REVEAL ──────────────────────────────────────────────────────────
 
@@ -187,46 +161,6 @@ function StreamEmbed() {
   )
 }
 
-// ─── PUPPY CARD ───────────────────────────────────────────────────────────────
-
-function PuppyCard({ puppy, index }: { puppy: typeof CONFIG.puppies[0]; index: number }) {
-  const { label, cls } = statusInfo(puppy.status)
-  const dot = colorDot[puppy.color] ?? 'bg-slate-400'
-  const glow = colorGlow[puppy.color] ?? ''
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.6, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -4 }}
-      className={`group relative bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] hover:border-white/20 rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300 shadow-xl ${glow}`}
-    >
-      {/* color swatch */}
-      <div className={`w-full h-24 rounded-xl ${dot} opacity-20 group-hover:opacity-30 transition-opacity`} />
-
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-white font-bold text-lg leading-none">
-            {puppy.name || `Puppy ${puppy.id}`}
-          </p>
-          <p className="text-slate-500 text-sm mt-1">{puppy.sex === 'M' ? 'Male' : 'Female'} · {puppy.color}</p>
-        </div>
-        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${cls}`}>{label}</span>
-      </div>
-
-      {puppy.status === 'available' && (
-        <a
-          href={`sms:${CONFIG.contactPhone.replace(/\D/g, '')}`}
-          className="mt-auto w-full text-center py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/40 text-amber-400 font-semibold text-sm transition-all"
-        >
-          Inquire →
-        </a>
-      )}
-    </motion.div>
-  )
-}
 
 // ─── FAQ ──────────────────────────────────────────────────────────────────────
 
@@ -577,10 +511,6 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
 
 export default function PuppiesPage() {
   const [contactOpen, setContactOpen] = useState(false)
-  const [tab, setTab] = useState<'all' | 'M' | 'F'>('all')
-
-  const available = CONFIG.puppies.filter(p => p.status === 'available').length
-  const filtered = CONFIG.puppies.filter(p => tab === 'all' || p.sex === tab)
 
   return (
     <div className="min-h-screen bg-[#070809] text-white overflow-x-hidden">
@@ -604,7 +534,7 @@ export default function PuppiesPage() {
                 `✦ OFA Health Tested`,
                 `✦ ${CONFIG.price}`,
                 `✦ ${CONFIG.depositAmount} Deposit`,
-                `✦ ${available} Spots Available`,
+                `✦ ~${CONFIG.estimatedPuppies} Puppies Expected`,
                 `✦ 2-Year Health Guarantee`,
                 `✦ ${CONFIG.location}`,
                 `✦ 24/7 Live Puppy Cam`,
@@ -737,40 +667,28 @@ export default function PuppiesPage() {
       <section id="availability" className="py-24">
         <div className="max-w-5xl mx-auto px-6">
           <Reveal className="mb-10">
-            <div className="flex items-end justify-between flex-wrap gap-4">
-              <div>
-                <p className="text-slate-600 text-xs tracking-[0.3em] uppercase mb-2">The Litter</p>
-                <h2 className="text-4xl font-black tracking-tight">Availability</h2>
-                <p className="text-slate-500 mt-2">{available} of {CONFIG.puppies.length} spots open · {CONFIG.depositAmount} holds your puppy</p>
-              </div>
-              <div className="flex gap-2 p-1 bg-white/[0.04] border border-white/[0.06] rounded-xl">
-                {(['all', 'M', 'F'] as const).map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setTab(t)}
-                    className={`px-5 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                      tab === t ? 'bg-amber-500 text-slate-950' : 'text-slate-500 hover:text-white'
-                    }`}
-                  >
-                    {t === 'all' ? 'All' : t === 'M' ? 'Males' : 'Females'}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <p className="text-slate-600 text-xs tracking-[0.3em] uppercase mb-2">The Litter</p>
+            <h2 className="text-4xl font-black tracking-tight">Availability</h2>
+            <p className="text-slate-500 mt-2">Estimating ~{CONFIG.estimatedPuppies} puppies · {CONFIG.depositAmount} holds your spot</p>
           </Reveal>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {filtered.map((p, i) => <PuppyCard key={p.id} puppy={p} index={i} />)}
-          </div>
-
-          <div className="flex flex-wrap gap-5 justify-center mt-10">
-            {CONFIG.colors.map(c => (
-              <div key={c} className="flex items-center gap-2.5 text-slate-500 text-sm">
-                <span className={`w-3 h-3 rounded-full ${colorDot[c]} opacity-70`} />
-                {c}
-              </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {Array.from({ length: CONFIG.estimatedPuppies }).map((_, i) => (
+              <Reveal key={i} delay={i * 0.04}>
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-5 flex flex-col items-center gap-3 text-center">
+                  <span className="text-3xl">🐾</span>
+                  <span className="text-emerald-400 text-xs font-bold uppercase tracking-widest">Available</span>
+                  <span className="text-slate-600 text-xs">Spot {i + 1}</span>
+                </div>
+              </Reveal>
             ))}
           </div>
+
+          <Reveal delay={0.2}>
+            <p className="text-slate-600 text-xs text-center mt-8">
+              Sex and color unknown until birth · {CONFIG.depositAmount} deposit reserves your place in line
+            </p>
+          </Reveal>
         </div>
       </section>
 
@@ -834,9 +752,7 @@ export default function PuppiesPage() {
             Ready to Bring<br />One Home?
           </h2>
           <p className="text-slate-500 mb-10 text-lg">
-            {available > 0
-              ? `${available} puppies still available. Spots go fast.`
-              : 'Join the waitlist for our next litter.'}
+            {`~${CONFIG.estimatedPuppies} puppies expected. Spots go fast.`}
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
