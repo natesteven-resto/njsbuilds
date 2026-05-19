@@ -620,7 +620,7 @@ export default function PuppiesPage() {
                 <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-3xl px-6 py-5">
                   <p className="text-rose-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Mother</p>
                   <h3 className="text-white font-black tracking-tight text-3xl" style={{ lineHeight: 1 }}>{CONFIG.momName}</h3>
-                  <p className="text-slate-500 text-sm mt-1.5">AKC #{CONFIG.momAKC}</p>
+                  <p className="text-slate-500 text-sm mt-1.5">Born Sept 15, 2019 · 6 years old · AKC #{CONFIG.momAKC}</p>
 
                   <p className="text-slate-500 text-sm leading-relaxed mt-4">{CONFIG.momDescription}</p>
                 </div>
@@ -642,7 +642,7 @@ export default function PuppiesPage() {
                 <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-3xl px-6 py-5">
                   <p className="text-sky-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Father</p>
                   <h3 className="text-white font-black tracking-tight text-3xl" style={{ lineHeight: 1 }}>{CONFIG.dadName}</h3>
-                  <p className="text-slate-500 text-sm mt-1.5">{CONFIG.dadRegistration} · Born Dec 2020</p>
+                  <p className="text-slate-500 text-sm mt-1.5">Born Dec 9, 2020 · 5 years old · {CONFIG.dadRegistration}</p>
 
                   <p className="text-slate-500 text-sm leading-relaxed mt-4">{CONFIG.dadDescription}</p>
                 </div>
