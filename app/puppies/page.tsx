@@ -24,7 +24,7 @@ const CONFIG = {
   price: '$1,000',
   depositAmount: '$300',
   location: 'Kansas',
-  contactPhone: '(316) 555-0100',
+  contactPhone: '(316) 617-4855',
 
   // YouTube Live: paste your video ID here when ready
   streamType: 'youtube' as 'youtube' | 'twitch' | 'none',
