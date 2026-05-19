@@ -723,7 +723,7 @@ export default function PuppiesPage() {
               { q: 'How do I reserve a puppy?', a: `A ${CONFIG.depositAmount} non-refundable deposit holds your puppy. Contact us by phone or use the inquiry form. Deposits are taken in order of inquiry.` },
               { q: 'When can puppies go home?', a: 'Puppies go home at 7 weeks old.' },
               { q: 'Do you ship?', a: 'No. In-person pickup only so you can meet the parents.' },
-              { q: 'Are silver Labs actually purebred?', a: "Yes. Silver Labradors are dilute chocolate Labs — a recessive gene that's always existed in the breed. AKC registers them as Black Labrador Retrievers." },
+              { q: 'Are silver Labs actually purebred?', a: "Yes. Silver Labradors are dilute chocolate Labs — a recessive gene that's always existed in the breed. AKC registers them as Black or Chocolate Labrador Retrievers depending on the lineage." },
               { q: 'Can I visit before the puppies arrive?', a: 'Absolutely. We encourage it. Contact us to schedule a time to meet Luna.' },
               { q: 'What does the price include?', a: 'AKC registration, first vet check, age-appropriate vaccines, and deworming.' },
             ].map((item, i) => <FAQItem key={i} {...item} index={i} />)}
