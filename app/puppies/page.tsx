@@ -21,7 +21,7 @@ const CONFIG = {
   litterSize: '~8 puppies (estimated)',
   estimatedPuppies: 8,
   colors: ['Silver', 'Charcoal'],
-  price: '$1,800',
+  price: '$1,000',
   depositAmount: '$300',
   location: 'Kansas',
   contactPhone: '(316) 555-0100',
@@ -531,11 +531,9 @@ export default function PuppiesPage() {
             <div key={copy} className="flex gap-12 text-slate-600 text-xs tracking-widest uppercase font-medium">
               {[
                 `✦ AKC Registered`,
-                `✦ OFA Health Tested`,
-                `✦ ${CONFIG.price}`,
+                `✦ $1,000`,
                 `✦ ${CONFIG.depositAmount} Deposit`,
                 `✦ ~${CONFIG.estimatedPuppies} Puppies Expected`,
-                `✦ 2-Year Health Guarantee`,
                 `✦ ${CONFIG.location}`,
                 `✦ 24/7 Live Puppy Cam`,
                 `✦ Arriving ${CONFIG.expectedDate}`,
