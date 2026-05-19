@@ -8,7 +8,6 @@ import { motion, useInView, AnimatePresence } from 'framer-motion'
 const CONFIG = {
   momName: 'Sage',
   momAge: '6 years',
-  momWeight: '62 lbs',
   momAKC: 'SS14491101',
   momDescription:
     'A stunning charcoal-silver Labrador with an incredibly gentle disposition. She loves water, is highly trainable, and adores children.',
@@ -623,12 +622,8 @@ export default function PuppiesPage() {
                 <div className="bg-[#0a0c10] border border-white/[0.06] rounded-b-3xl px-6 py-5">
                   <p className="text-rose-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Mother</p>
                   <h3 className="text-white font-black tracking-tight text-3xl" style={{ lineHeight: 1 }}>{CONFIG.momName}</h3>
-                  <p className="text-slate-500 text-sm mt-1.5">{CONFIG.momAge} · {CONFIG.momWeight} · AKC #{CONFIG.momAKC}</p>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {['OFA Hips', 'OFA Elbows', 'CAER Eyes'].map(c => (
-                      <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">{c}</span>
-                    ))}
-                  </div>
+                  <p className="text-slate-500 text-sm mt-1.5">AKC #{CONFIG.momAKC}</p>
+
                   <p className="text-slate-500 text-sm leading-relaxed mt-4">{CONFIG.momDescription}</p>
                 </div>
               </div>
@@ -650,11 +645,7 @@ export default function PuppiesPage() {
                   <p className="text-sky-400 text-xs font-black uppercase tracking-[0.4em] mb-1">Father</p>
                   <h3 className="text-white font-black tracking-tight text-3xl" style={{ lineHeight: 1 }}>{CONFIG.dadName}</h3>
                   <p className="text-slate-500 text-sm mt-1.5">{CONFIG.dadRegistration} · Born Dec 2020</p>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {['OFA Excellent', 'Clear Elbows', 'CAER Clear'].map(c => (
-                      <span key={c} className="text-xs px-2.5 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-slate-400">{c}</span>
-                    ))}
-                  </div>
+
                   <p className="text-slate-500 text-sm leading-relaxed mt-4">{CONFIG.dadDescription}</p>
                 </div>
               </div>
