@@ -10,12 +10,12 @@ const CONFIG = {
   momAge: '6 years',
   momAKC: 'SS14491101',
   momDescription:
-    'A stunning charcoal-silver Labrador with an incredibly gentle disposition. She loves water, is highly trainable, and adores children.',
+    'American-type Silver Lab — lean, athletic, and highly trainable with an incredibly gentle disposition. She loves water and adores children.',
 
   dadName: 'Duke',
   dadRegistration: 'AKC #SS23912504',
   dadDescription:
-    'An AKC-registered silver Labrador. 85 lbs of pure Labrador personality — bold, athletic, and incredibly gentle.',
+    'English-type Silver Lab — blocky build, calm temperament, and 85 lbs of pure Labrador personality. Bold, gentle, and built for the show ring.',
 
   expectedDate: 'May 30, 2026',
   litterSize: '~8 puppies (estimated)',
@@ -724,7 +724,8 @@ export default function PuppiesPage() {
               { q: 'When can puppies go home?', a: 'Puppies go home at 7 weeks old.' },
               { q: 'Do you ship?', a: 'No. In-person pickup only so you can meet the parents.' },
               { q: 'Are silver Labs actually purebred?', a: "Yes. Silver Labradors are dilute chocolate Labs — a recessive gene that's always existed in the breed. AKC registers them as Black or Chocolate Labrador Retrievers depending on the lineage." },
-              { q: 'Can I visit before the puppies arrive?', a: 'Absolutely. We encourage it. Contact us to schedule a time to meet Luna.' },
+              { q: 'Can I visit before the puppies arrive?', a: 'Absolutely. We encourage it. Contact us to schedule a time to meet the parents.' },
+              { q: 'Are these American or English Labs?', a: "Both — and that\'s intentional. Mom (Sage) is American-type: lean, athletic, and highly trainable. Dad (Duke) is English-type: blocky, calm, and easygoing. Crossing the two tends to produce puppies that carry the best of both — calmer temperament with the athleticism and drive that make Labs great family dogs and hunters." },
               { q: 'What does the price include?', a: 'AKC registration, first vet check, age-appropriate vaccines, and deworming.' },
             ].map((item, i) => <FAQItem key={i} {...item} index={i} />)}
           </div>
