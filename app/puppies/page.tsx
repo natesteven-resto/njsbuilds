@@ -28,7 +28,7 @@ const CONFIG = {
 
   // YouTube Live: paste your video ID here when ready
   streamType: 'youtube' as 'youtube' | 'twitch' | 'none',
-  youtubeVideoId: '',
+  youtubeVideoId: 'm8ZGiskV6aA',
 
 
 }
