@@ -152,7 +152,7 @@ function StreamEmbed() {
   return (
     <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/10">
       <iframe
-        src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&mute=1&loop=1&playlist=${youtubeVideoId}&controls=1&modestbranding=1`}
+        src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&mute=1&controls=1&modestbranding=1&rel=0`}
         className="w-full h-full"
         allow="autoplay; encrypted-media; picture-in-picture"
         allowFullScreen
