@@ -26,9 +26,10 @@ const CONFIG = {
   location: 'Kansas',
   contactPhone: '(316) 617-4855',
 
-  // YouTube Live: paste your video ID here when ready
+  // YouTube Live: channel ID auto-detects current live stream
   streamType: 'youtube' as 'youtube' | 'twitch' | 'none',
   youtubeVideoId: 'rSDv9F3bRyo',
+  youtubeChannelId: 'UCL-gUi48gxBCadGyV-ujL7w',
 
 
 }
@@ -152,7 +153,7 @@ function StreamEmbed() {
   return (
     <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/10">
       <iframe
-        src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&mute=1&controls=1&modestbranding=1&rel=0`}
+        src={`https://www.youtube.com/embed/live_stream?channel=${CONFIG.youtubeChannelId}&autoplay=1&mute=1&controls=1&modestbranding=1&rel=0`}
         className="w-full h-full"
         allow="autoplay; encrypted-media; picture-in-picture"
         allowFullScreen
