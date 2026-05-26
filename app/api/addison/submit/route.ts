@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     await resend.emails.send({
       from: 'Addison Training <transfers@restoreports.com>',
-      to: 'natesteven@gmail.com',
+      to: 'staticclark@gmail.com',
       subject: `⚽ Addison's Workout — ${dayEmoji} ${dayLabel} · ${date}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background: #030712; color: #F1F5F9; padding: 32px; border-radius: 12px;">
