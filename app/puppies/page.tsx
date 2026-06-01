@@ -18,9 +18,19 @@ const CONFIG = {
     'English-type Silver Lab — blocky build, calm temperament, and 85 lbs of pure Labrador personality. Bold, gentle, and built for the show ring.',
 
   expectedDate: 'May 30, 2026',
-  litterSize: '~8 puppies (estimated)',
+  litterSize: '8 puppies',
   estimatedPuppies: 8,
   colors: ['Silver', 'Charcoal'],
+  litter: [
+    { color: 'Silver', sex: 'Female' },
+    { color: 'Silver', sex: 'Female' },
+    { color: 'Charcoal', sex: 'Male' },
+    { color: 'Charcoal', sex: 'Female' },
+    { color: 'Charcoal', sex: 'Female' },
+    { color: 'Charcoal', sex: 'Male' },
+    { color: 'Charcoal', sex: 'Male' },
+    { color: 'Charcoal', sex: 'Female' },
+  ],
   price: '$1,000',
   depositAmount: '$300',
   location: 'Kansas',
@@ -457,7 +467,7 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
           className="text-slate-300 text-base sm:text-xl max-w-xl mx-auto mb-10 leading-relaxed"
         >
           Family raised. AKC registered.<br />
-          <span className="text-slate-400">New Litter Incoming — Estimating {CONFIG.expectedDate}.</span>
+          <span className="text-slate-400">Born {CONFIG.expectedDate} · {CONFIG.estimatedPuppies} Healthy Puppies</span>
         </motion.p>
 
         <motion.div
@@ -534,10 +544,11 @@ export default function PuppiesPage() {
                 `✦ AKC Registered`,
                 `✦ $1,000`,
                 `✦ ${CONFIG.depositAmount} Deposit`,
-                `✦ ~${CONFIG.estimatedPuppies} Puppies Expected`,
+                `✦ ${CONFIG.estimatedPuppies} Puppies Born`,
                 `✦ ${CONFIG.location}`,
                 `✦ 24/7 Live Puppy Cam`,
-                `✦ New Litter Incoming — Estimating ${CONFIG.expectedDate}`,
+                `✦ Born ${CONFIG.expectedDate}`,
+                `✦ 2 Silver · 6 Charcoal`,
               ].map(item => <span key={item}>{item}</span>)}
             </div>
           ))}
@@ -548,8 +559,11 @@ export default function PuppiesPage() {
       <section className="py-24">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <Reveal>
-            <p className="text-slate-600 text-xs tracking-[0.4em] uppercase mb-8">Estimated arrival</p>
-            <CountdownTimer targetDate={CONFIG.expectedDate} />
+            <p className="text-slate-600 text-xs tracking-[0.4em] uppercase mb-8">Born</p>
+            <div className="text-center">
+              <p className="text-4xl font-black text-emerald-400 tracking-tight">They&apos;re Here</p>
+              <p className="text-slate-500 mt-2 text-sm tracking-widest uppercase">Born {CONFIG.expectedDate} · Watch the live feed</p>
+            </div>
           </Reveal>
         </div>
       </section>
@@ -660,16 +674,17 @@ export default function PuppiesPage() {
           <Reveal className="mb-10">
             <p className="text-slate-600 text-xs tracking-[0.3em] uppercase mb-2">The Litter</p>
             <h2 className="text-4xl font-black tracking-tight">Availability</h2>
-            <p className="text-slate-500 mt-2">Estimating ~{CONFIG.estimatedPuppies} puppies · {CONFIG.depositAmount} holds your spot</p>
+            <p className="text-slate-500 mt-2">{CONFIG.estimatedPuppies} puppies · {CONFIG.depositAmount} holds your spot</p>
           </Reveal>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {Array.from({ length: CONFIG.estimatedPuppies }).map((_, i) => (
+            {CONFIG.litter.map((pup, i) => (
               <Reveal key={i} delay={i * 0.04}>
                 <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-5 flex flex-col items-center gap-3 text-center">
-                  <span className="text-3xl">🐾</span>
+                  <span className="text-3xl">{pup.sex === 'Female' ? '🎀' : '🐾'}</span>
                   <span className="text-emerald-400 text-xs font-bold uppercase tracking-widest">Available</span>
-                  <span className="text-slate-600 text-xs">Spot {i + 1}</span>
+                  <span className="text-white text-sm font-semibold">{pup.color}</span>
+                  <span className="text-slate-500 text-xs">{pup.sex}</span>
                 </div>
               </Reveal>
             ))}
@@ -677,7 +692,7 @@ export default function PuppiesPage() {
 
           <Reveal delay={0.2}>
             <p className="text-slate-600 text-xs text-center mt-8">
-              Sex and color unknown until birth · {CONFIG.depositAmount} deposit reserves your place in line
+              2 Silver · 6 Charcoal · {CONFIG.depositAmount} deposit reserves your spot
             </p>
           </Reveal>
         </div>
@@ -744,7 +759,7 @@ export default function PuppiesPage() {
             Ready to Bring<br />One Home?
           </h2>
           <p className="text-slate-500 mb-10 text-lg">
-            {`~${CONFIG.estimatedPuppies} puppies expected. Spots go fast.`}
+            {`${CONFIG.estimatedPuppies} puppies born. Spots go fast.`}
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
