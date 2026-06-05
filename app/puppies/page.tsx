@@ -18,8 +18,8 @@ const CONFIG = {
     'English-type Silver Lab — blocky build, calm temperament, and 85 lbs of pure Labrador personality. Bold, gentle, and built for the show ring.',
 
   expectedDate: 'May 30, 2026',
-  litterSize: '8 puppies',
-  estimatedPuppies: 8,
+  litterSize: '7 puppies',
+  estimatedPuppies: 7,
   colors: ['Silver', 'Charcoal'],
   litter: [
     { color: 'Silver', sex: 'Female' },
@@ -27,7 +27,6 @@ const CONFIG = {
     { color: 'Charcoal', sex: 'Male' },
     { color: 'Charcoal', sex: 'Female' },
     { color: 'Charcoal', sex: 'Female' },
-    { color: 'Charcoal', sex: 'Male' },
     { color: 'Charcoal', sex: 'Male' },
     { color: 'Charcoal', sex: 'Female' },
   ],
@@ -548,7 +547,7 @@ export default function PuppiesPage() {
                 `✦ ${CONFIG.location}`,
                 `✦ 24/7 Live Puppy Cam`,
                 `✦ Born ${CONFIG.expectedDate}`,
-                `✦ 2 Silver · 6 Charcoal`,
+                `✦ 2 Silver · 5 Charcoal`,
               ].map(item => <span key={item}>{item}</span>)}
             </div>
           ))}
@@ -692,7 +691,7 @@ export default function PuppiesPage() {
 
           <Reveal delay={0.2}>
             <p className="text-slate-600 text-xs text-center mt-8">
-              2 Silver · 6 Charcoal · {CONFIG.depositAmount} deposit reserves your spot
+              2 Silver · 5 Charcoal · {CONFIG.depositAmount} deposit reserves your spot
             </p>
           </Reveal>
         </div>
