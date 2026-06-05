@@ -162,7 +162,7 @@ function StreamEmbed() {
   return (
     <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/10">
       <iframe
-        src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&mute=1&controls=1&modestbranding=1&rel=0&origin=https://njsbuilds.com`}
+        src={`https://www.youtube.com/embed/live_stream?channel=${CONFIG.youtubeChannelId}&autoplay=1&mute=1&controls=1&modestbranding=1&rel=0&origin=https://njsbuilds.com`}
         className="w-full h-full"
         allow="autoplay; encrypted-media; picture-in-picture"
         allowFullScreen
