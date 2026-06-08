@@ -740,6 +740,77 @@ const DAYS: Record<string, DayPlan> = {
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
 
+// ─── VIDEO MAP ──────────────────────────────────────────────────────────────
+// Keys match exercise IDs (or their base without _mon/_tue/etc suffix)
+// id = specific YouTube video ID (embedded inline)
+// search = fallback YouTube search query (opens new tab)
+const VIDEO_MAP: Record<string, { id?: string; search: string }> = {
+  // Smith Machine
+  mon_smith_squat: { id: 'yoP29LtTdnQ', search: 'smith machine back squat proper form' },
+  tue_bench:       { id: '7FyJdsXeta8', search: 'smith machine bench press tutorial' },
+  thu_smith_dl:    { id: 'ONRRAgNLVac', search: 'smith machine deadlift proper form' },
+  thu_smith_ohp:   { search: 'smith machine overhead press tutorial' },
+  fri_squat_14:    { id: 'yoP29LtTdnQ', search: 'smith machine back squat form' },
+  fri_bench_14:    { id: '7FyJdsXeta8', search: 'smith machine bench press' },
+
+  // Kettlebell
+  mon_kb_rdl:      { search: 'single leg kettlebell Romanian deadlift tutorial' },
+  tue_kb_swing:    { id: 'pAWaNCsncZA', search: 'kettlebell swing tutorial beginners' },
+  thu_kb_50_swing: { id: 'pAWaNCsncZA', search: 'kettlebell swing proper form' },
+  thu_kb_goblet:   { search: 'kettlebell goblet squat tutorial' },
+  wed_bulgarian:   { id: '72bspMLvOvg', search: 'kettlebell Bulgarian split squat' },
+  fri_kb_swing_14: { id: 'pAWaNCsncZA', search: 'kettlebell swing' },
+
+  // Calf / Lower
+  mon_calf_raise: { id: 'u1Yc75YdiJA', search: 'single leg calf raise full range' },
+  fri_calf_14:    { id: 'u1Yc75YdiJA', search: 'single leg calf raise' },
+
+  // Plyometrics
+  mon_box_jump:    { id: 'Bc_ycZFCEvQ', search: 'box jump technique plyometrics' },
+  mon_band_jump:   { search: 'resistance band jump squat tutorial' },
+  mon_broad_jump:  { search: 'broad jump form plyometrics' },
+  wed_depth_jump:  { id: 'fL66hVKR89Q', search: 'depth drop jump plyometrics tutorial' },
+  wed_box_max:     { id: 'Bc_ycZFCEvQ', search: 'box jump technique max height' },
+  wed_vest_jump:   { search: 'weighted vest jump squat training' },
+  wed_lateral_bound: { id: 'QtCYUohMzJY', search: 'lateral bounds vertical jump training' },
+  wed_band_shuffle:  { search: 'resistance band lateral shuffle defensive footwork basketball' },
+  wed_broad_vest:    { search: 'broad jump plyometrics form' },
+  thu_vest_box:      { id: 'Bc_ycZFCEvQ', search: 'box jump technique' },
+  fri_box_jump_14:   { id: 'Bc_ycZFCEvQ', search: 'box jump technique' },
+  fri_bound_14:      { id: 'QtCYUohMzJY', search: 'lateral bounds vertical training' },
+  fri_broad_14:      { search: 'broad jump form plyometrics' },
+
+  // Cable
+  tue_lat_pull:   { id: 'CAwf7n6Luuc', search: 'lat pulldown proper form tutorial' },
+  tue_cable_row:  { search: 'standing cable row proper form tutorial' },
+  tue_face_pull:  { id: 'uty8Gti1X9M', search: 'cable face pull proper form' },
+  thu_landmine_row: { search: 'landmine row exercise tutorial' },
+
+  // Upper Body
+  tue_landmine:      { search: 'landmine press shoulder tutorial' },
+  tue_lateral_raise: { search: 'lateral raise proper form shoulder' },
+  tue_clap_push:     { search: 'clapping push up explosive plyometric tutorial' },
+
+  // Sprint / Speed
+  wed_sprint:      { search: 'sprint technique speed training basketball' },
+  wed_band_sprint: { search: 'resistance band sprint overspeed training' },
+  thu_resisted_sprint: { search: 'resistance band resisted sprint training' },
+
+  // Conditioning
+  thu_burpee: { search: 'proper burpee form tutorial' },
+
+  // Core — keyed WITHOUT day suffix (stripped at lookup time)
+  core_plank:   { search: 'perfect plank form proper technique' },
+  core_hollow:  { search: 'hollow hold gymnastics core tutorial' },
+  core_russian: { search: 'Russian twist kettlebell core tutorial' },
+}
+
+// Strip day suffix so core exercises (re-used across days) resolve via base key
+function getVideoEntry(exerciseId: string) {
+  const baseId = exerciseId.replace(/_(?:mon|tue|wed|thu|fri|bday)$/, '')
+  return VIDEO_MAP[exerciseId] ?? VIDEO_MAP[baseId] ?? null
+}
+
 function getDefaultDay(): string {
   const dow = new Date().getDay()
   if (dow === 1) return 'monday'
@@ -758,6 +829,7 @@ export default function NathanWorkout() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
+  const [videoModal, setVideoModal] = useState<{ exerciseId: string; label: string } | null>(null)
 
   useEffect(() => {
     setSelectedDay(getDefaultDay())
@@ -950,15 +1022,26 @@ export default function NathanWorkout() {
                       )}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => toggle(ex.id)}
-                    className={`mt-3 w-full py-3 rounded-xl font-black text-sm transition-all active:scale-95 ${
-                      done[ex.id] ? 'bg-gray-800 text-gray-500' : `${markDoneColor} text-white`
-                    }`}
-                  >
-                    {done[ex.id] ? '✓ Done' : 'Mark Done'}
-                  </button>
+                  <div className="mt-3 flex gap-2">
+                    {!done[ex.id] && getVideoEntry(ex.id) && (
+                      <button
+                        type="button"
+                        onClick={() => setVideoModal({ exerciseId: ex.id, label: ex.label })}
+                        className="flex-none bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold text-sm py-3 px-4 rounded-xl transition-all active:scale-95 flex items-center gap-1.5"
+                      >
+                        ▶ How to
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => toggle(ex.id)}
+                      className={`flex-1 py-3 rounded-xl font-black text-sm transition-all active:scale-95 ${
+                        done[ex.id] ? 'bg-gray-800 text-gray-500' : `${markDoneColor} text-white`
+                      }`}
+                    >
+                      {done[ex.id] ? '✓ Done' : 'Mark Done'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -988,6 +1071,66 @@ export default function NathanWorkout() {
         </button>
         <p className="text-center text-gray-600 text-xs mt-3">njsbuilds.com/nathan</p>
       </form>
+
+      {/* Video Modal */}
+      {videoModal && (() => {
+        const entry = getVideoEntry(videoModal.exerciseId)
+        if (!entry) return null
+        return (
+          <div className="fixed inset-0 z-50 flex flex-col justify-end">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/85"
+              onClick={() => setVideoModal(null)}
+            />
+            {/* Bottom sheet */}
+            <div className="relative bg-gray-950 rounded-t-3xl border-t border-gray-800 p-4 pb-10 max-h-[85vh] overflow-y-auto">
+              {/* Handle */}
+              <div className="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-4" />
+              {/* Header */}
+              <div className="flex items-start justify-between mb-4 gap-3">
+                <p className="text-white font-black text-sm leading-snug flex-1">{videoModal.label}</p>
+                <button
+                  onClick={() => setVideoModal(null)}
+                  className="text-gray-500 hover:text-white text-2xl leading-none flex-none mt-[-2px]"
+                >
+                  ×
+                </button>
+              </div>
+
+              {entry.id ? (
+                // Embedded YouTube video
+                <div
+                  className="relative w-full rounded-xl overflow-hidden bg-black"
+                  style={{ paddingBottom: '56.25%', height: 0 }}
+                >
+                  <iframe
+                    className="absolute inset-0 w-full h-full"
+                    src={`https://www.youtube.com/embed/${entry.id}?rel=0&modestbranding=1&playsinline=1`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                // Search fallback
+                <div className="text-center py-8">
+                  <div className="text-5xl mb-4">▶</div>
+                  <p className="text-gray-300 font-bold mb-1">Watch a tutorial</p>
+                  <p className="text-gray-500 text-sm mb-6">Opens YouTube in a new tab — your workout progress is saved here</p>
+                  <a
+                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(entry.search)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block bg-red-600 hover:bg-red-700 text-white font-black px-8 py-4 rounded-xl text-sm active:scale-95 transition-all"
+                  >
+                    🔍 Search: {entry.search}
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
