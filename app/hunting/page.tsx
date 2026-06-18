@@ -60,10 +60,10 @@ export default function HuntingGame() {
 
       /* ── Scene ─────────────────────────────────────────── */
       scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x8aaa80,0.004);
+      scene.fog = new THREE.FogExp2(0x8aaa80,0.0022);
 
       /* ── Camera ────────────────────────────────────────── */
-      camera = new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,800);
+      camera = new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,1400);
       camera.position.set(0,1.75,0);
       scene.add(camera);
 
@@ -101,34 +101,47 @@ export default function HuntingGame() {
       scene.add(sunDisc);
 
       /* ── Terrain ───────────────────────────────────────── */
-      const tSz=400, tSeg=isMob2?64:96;
+      // Larger world — mountains are part of the terrain, not separate objects
+      const tSz=700, tSeg=isMob2?80:110;
       const tGeo = new THREE.PlaneGeometry(tSz,tSz,tSeg,tSeg);
       tGeo.rotateX(-Math.PI/2);
       const tPos=tGeo.attributes.position;
       for(let i=0;i<tPos.count;i++){
         const x=tPos.getX(i),z=tPos.getZ(i);
         let h=0;
-        h+=Math.sin(x*.038)*Math.cos(z*.032)*3.2;
-        h+=Math.sin(x*.082+1.2)*Math.cos(z*.075+0.7)*1.8;
-        h+=Math.sin(x*.16+2.1)*Math.cos(z*.14+1.4)*0.8;
-        h+=(Math.random()-.5)*.3;
+        // Base rolling forest hills
+        h+=Math.sin(x*.038)*Math.cos(z*.032)*3.5;
+        h+=Math.sin(x*.082+1.2)*Math.cos(z*.075+0.7)*2.0;
+        h+=Math.sin(x*.16+2.1)*Math.cos(z*.14+1.4)*1.0;
+        h+=(Math.random()-.5)*.35;
+        // Mountain ring: terrain rises dramatically past radius ~150
+        const d=Math.sqrt(x*x+z*z);
+        const mRing=Math.max(0,(d-145)/95);
+        h+=mRing*mRing*52;
+        h+=Math.sin(x*.018+3.5)*Math.cos(z*.022+2.1)*mRing*22;
+        h+=Math.sin(x*.034+1.1)*Math.cos(z*.028+0.8)*mRing*14;
+        h+=Math.sin(x*.055+0.4)*Math.cos(z*.048+1.6)*mRing*8;
+        // Lake depression
         const ld=Math.sqrt((x-80)**2+(z-80)**2);
-        if(ld<32) h=Math.min(h,-0.4-(32-ld)*.12);
-        const river=Math.abs(x+z*.4-20);
-        if(river<12) h=Math.min(h,-0.2-(12-river)*.08);
+        if(ld<32)h=Math.min(h,-0.4-(32-ld)*.12);
+        // River channel
+        const rv=Math.abs(x+z*.4-20);
+        if(rv<12)h=Math.min(h,-0.2-(12-rv)*.08);
         tPos.setY(i,h);
       }
       tGeo.computeVertexNormals();
-      // PBR vertex colors
+      // Vertex colors: grass → rocky slope → grey peak → snow
       const cols:number[]=[];
       for(let i=0;i<tPos.count;i++){
         const x=tPos.getX(i),z=tPos.getZ(i),y=tPos.getY(i);
-        const n=(Math.sin(x*.31)*Math.cos(z*.28)*.5+.5)*.07;
-        if(y<-0.25){ cols.push(.18+n,.28+n,.52); }
-        else if(y<.5){ cols.push(.2+n,.42+n,.14); }
-        else if(y<2){ cols.push(.26+n,.48+n,.16); }
-        else if(y<4){ cols.push(.35+n,.42+n,.2); }
-        else{ cols.push(.42,.38,.24); }
+        const n=(Math.sin(x*.31)*Math.cos(z*.28)*.5+.5)*.06;
+        if(y<-0.25){      cols.push(.18+n,.28+n,.52);          } // water/mud
+        else if(y<1.0){   cols.push(.20+n,.44+n,.15);          } // rich grass
+        else if(y<5){     cols.push(.26+n,.46+n,.16);          } // mid grass
+        else if(y<12){    cols.push(.30+n,.38+n,.18);          } // dry/rocky grass
+        else if(y<22){    cols.push(.36+n*.4,.32+n*.4,.26);    } // grey rock
+        else if(y<32){    cols.push(.50+n*.2,.46+n*.2,.42);    } // lighter rock
+        else{             cols.push(.84,.87,.92);               } // snow
       }
       tGeo.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));
       const terrain = new THREE.Mesh(tGeo, new THREE.MeshStandardMaterial({ vertexColors:true, roughness:.92, metalness:0 }));
@@ -138,11 +151,18 @@ export default function HuntingGame() {
       /* ── Ground raycaster helper ───────────────────────── */
       // --- Height cache: sample once, fast bilinear lookup every frame ---
       // Pure procedural height — same formula as terrain generation, no raycasting needed
+      // Procedural height — MUST match terrain generation above exactly
       function tH(x:number,z:number):number{
         let h=0;
-        h+=Math.sin(x*.038)*Math.cos(z*.032)*3.2;
-        h+=Math.sin(x*.082+1.2)*Math.cos(z*.075+0.7)*1.8;
-        h+=Math.sin(x*.16+2.1)*Math.cos(z*.14+1.4)*0.8;
+        h+=Math.sin(x*.038)*Math.cos(z*.032)*3.5;
+        h+=Math.sin(x*.082+1.2)*Math.cos(z*.075+0.7)*2.0;
+        h+=Math.sin(x*.16+2.1)*Math.cos(z*.14+1.4)*1.0;
+        const d=Math.sqrt(x*x+z*z);
+        const mRing=Math.max(0,(d-145)/95);
+        h+=mRing*mRing*52;
+        h+=Math.sin(x*.018+3.5)*Math.cos(z*.022+2.1)*mRing*22;
+        h+=Math.sin(x*.034+1.1)*Math.cos(z*.028+0.8)*mRing*14;
+        h+=Math.sin(x*.055+0.4)*Math.cos(z*.048+1.6)*mRing*8;
         const ld=Math.sqrt((x-80)**2+(z-80)**2);
         if(ld<32)h=Math.min(h,-0.4-(32-ld)*.12);
         const rv=Math.abs(x+z*.4-20);
@@ -208,21 +228,7 @@ export default function HuntingGame() {
       lake.rotation.x=-Math.PI/2;lake.position.set(80,.08,80);
       scene.add(lake);
 
-      /* ── Mountains ─────────────────────────────────────── */
-      // Mountains
-      for(let m=0;m<24;m++){
-        const ang=(m/24)*Math.PI*2,d=210+Math.random()*110;
-        const mh=50+Math.random()*90,mr=28+Math.random()*22;
-        const seg=7+Math.floor(Math.random()*5);
-        const mGeo=new THREE.ConeGeometry(mr,mh,seg);
-        const r=.28+Math.random()*.08,gv=.3+Math.random()*.08,b=.36+Math.random()*.1;
-        const mMesh=new THREE.Mesh(mGeo,new THREE.MeshStandardMaterial({color:new THREE.Color(r,gv,b),roughness:.9,metalness:.05}));
-        mMesh.position.set(Math.cos(ang)*d,mh/2-3,Math.sin(ang)*d);
-        mMesh.castShadow=true; scene.add(mMesh);
-        const sMesh=new THREE.Mesh(new THREE.ConeGeometry(mr*.38,mh*.28,seg),new THREE.MeshStandardMaterial({color:0xeef4ff,roughness:.7,metalness:.05}));
-        sMesh.position.set(mMesh.position.x,mh*.87,mMesh.position.z);
-        scene.add(sMesh);
-      }
+      // Mountains are now baked into the terrain heightmap — no separate cones needed
 
       /* ── Trees ─────────────────────────────────────────── */
       // ── Instanced trees — 4 draw calls total regardless of tree count ──
@@ -260,7 +266,9 @@ export default function HuntingGame() {
         const tz=cl[1]+Math.sin(ang2)*spread;
         const ld=Math.sqrt((tx-80)**2+(tz-80)**2);
         const pd=Math.sqrt(tx*tx+tz*tz);
-        if(ld<34||pd<10||Math.abs(tx)>178||Math.abs(tz)>178)continue;
+        const th=tH(tx,tz);
+        // Trees on forest floor AND mountain slopes — not on snow peaks or in water
+        if(ld<34||pd<10||th>30||th<-0.1)continue;
         const sc=0.65+Math.random()*1.1;
         const trH=4.2*sc;
         const gy=groundY(tx,tz,0);
@@ -685,8 +693,8 @@ export default function HuntingGame() {
         if(gs.keys.has('KeyD')){gs.pos.addScaledVector(rgt,spd);moved=true;}
         if(gs.joy1.on){const jdx=gs.joy1.cx-gs.joy1.sx,jdy=gs.joy1.cy-gs.joy1.sy;const jd=Math.sqrt(jdx**2+jdy**2);if(jd>8){gs.pos.addScaledVector(fwd,-jdy/Math.max(jd,55)*spd*1.8);gs.pos.addScaledVector(rgt,jdx/Math.max(jd,55)*spd*1.8);moved=true;}}
         gs.moving=moved;
-        gs.pos.x=Math.max(-180,Math.min(180,gs.pos.x));
-        gs.pos.z=Math.max(-180,Math.min(180,gs.pos.z));
+        gs.pos.x=Math.max(-310,Math.min(310,gs.pos.x));
+        gs.pos.z=Math.max(-310,Math.min(310,gs.pos.z));
 
         // Terrain stick
         const ty=groundY(gs.pos.x,gs.pos.z,gs.crouching?1.1:1.75);
@@ -794,8 +802,8 @@ export default function HuntingGame() {
             a.group.position.x+=Math.sin(a.angle)*mSpd*.4;
             a.group.position.z+=Math.cos(a.angle)*mSpd*.4;
           }
-          a.group.position.x=Math.max(-170,Math.min(170,a.group.position.x));
-          a.group.position.z=Math.max(-170,Math.min(170,a.group.position.z));
+          a.group.position.x=Math.max(-300,Math.min(300,a.group.position.x));
+          a.group.position.z=Math.max(-300,Math.min(300,a.group.position.z));
           a.group.position.y=groundY(a.group.position.x,a.group.position.z,0);
           a.group.rotation.y=a.angle;
           // Body bob
