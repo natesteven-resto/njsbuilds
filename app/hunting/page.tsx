@@ -96,11 +96,13 @@ export default function HuntingGame() {
       scene.add(skyMesh);
 
       /* ── Sun disc ──────────────────────────────────────── */
-      const sunDisc = new THREE.Mesh(
-        new THREE.SphereGeometry(8,16,16),
-        new THREE.MeshBasicMaterial({color:0xfffae0})
-      );
-      scene.add(sunDisc);
+      const sunGroup=new THREE.Group();
+      sunGroup.add(new THREE.Mesh(new THREE.SphereGeometry(7,16,16),new THREE.MeshBasicMaterial({color:0xfffef0})));
+      const sc1=new THREE.Mesh(new THREE.SphereGeometry(13,16,16),new THREE.MeshBasicMaterial({color:0xfff0c0,transparent:true,opacity:.28,depthWrite:false}));sunGroup.add(sc1);
+      const sc2=new THREE.Mesh(new THREE.SphereGeometry(24,16,16),new THREE.MeshBasicMaterial({color:0xffe080,transparent:true,opacity:.10,depthWrite:false}));sunGroup.add(sc2);
+      const sc3=new THREE.Mesh(new THREE.SphereGeometry(44,12,12),new THREE.MeshBasicMaterial({color:0xffcc40,transparent:true,opacity:.04,depthWrite:false}));sunGroup.add(sc3);
+      const sunDisc=sunGroup;
+      scene.add(sunGroup);
 
       /* ── Terrain ───────────────────────────────────────── */
       // Larger world — mountains are part of the terrain, not separate objects
@@ -572,6 +574,12 @@ export default function HuntingGame() {
           if(ld<38||Math.sqrt(ax*ax+az*az)<14)continue;
           const grp=makeAnimal(type);
           grp.position.set(ax,groundY(ax,az,0),az);
+          // Scale up animals so they're visible and easier to hit
+          const sScale={deer:2.2,bear:2.6,turkey:1.6,moose:2.8,goat:1.8}[type]||2;
+          grp.scale.setScalar(sScale);
+          // Invisible hitbox sphere makes shooting forgiving
+          const hb=new THREE.Mesh(new THREE.SphereGeometry(sScale*.55,5,4),new THREE.MeshBasicMaterial({visible:false}));
+          hb.position.set(0,0.8,0); grp.add(hb);
           scene.add(grp);
           const ts=Math.random();
           animals.push({type,group:grp,hp,maxHp:hp,meat,state:'idle',alertLevel:0,alertMethod:'',angle:Math.random()*Math.PI*2,anim:Math.random()*10,dieT:0,trophyScore:ts});
@@ -588,6 +596,9 @@ export default function HuntingGame() {
         if(gh<12||gh>45)continue; // only on slopes (not flat ground, not extreme peaks)
         const gGrp=makeAnimal('goat');
         gGrp.position.set(gx,groundY(gx,gz,0),gz);
+        gGrp.scale.setScalar(1.8);
+        const ghb=new THREE.Mesh(new THREE.SphereGeometry(1.2,5,4),new THREE.MeshBasicMaterial({visible:false}));
+        ghb.position.set(0,0.7,0); gGrp.add(ghb);
         scene.add(gGrp);
         animals.push({type:'goat',group:gGrp,hp:ADEF.goat.hp,maxHp:ADEF.goat.hp,meat:ADEF.goat.meat,state:'idle',alertLevel:0,alertMethod:'',angle:Math.random()*Math.PI*2,anim:Math.random()*10,dieT:0,trophyScore:Math.random()});
       }
@@ -628,6 +639,9 @@ export default function HuntingGame() {
         lastT:0,
       };
       gsRef.current=gs;
+      // Expose functions so HTML buttons can call them
+      (gs as any).shootFn=shoot;
+      (gs as any).interactFn=interact;
 
       function setMsg(m:string){gs.msg=m;gs.msgT=4;}
 
@@ -1015,36 +1029,11 @@ export default function HuntingGame() {
           if(gs.joy1.on){const jdx=gs.joy1.cx-gs.joy1.sx,jdy=gs.joy1.cy-gs.joy1.sy,jd=Math.sqrt(jdx**2+jdy**2);const cx2=gs.joy1.sx+jdx*(jd>48?48/jd:1),cy2=gs.joy1.sy+jdy*(jd>48?48/jd:1);hx.globalAlpha=.5;hx.beginPath();hx.arc(cx2,cy2,24,0,Math.PI*2);hx.fill();}
           hx.globalAlpha=1;hx.fillStyle='rgba(255,255,255,.38)';hx.font='10px sans-serif';hx.textAlign='center';hx.fillText('MOVE',80,H-92);
 
-          // Action buttons (right side)
-          const btns=[
-            {x:W-62,y:H-200,lbl:'🔫',act:'shoot',col:'rgba(200,0,0,.7)',r:36},
-            {x:W-130,y:H-130,lbl:'🔭',act:'scope',col:gs.scoped?'rgba(251,191,36,.7)':'rgba(50,80,50,.6)',r:26},
-            {x:W-62,y:H-130,lbl:'🦆',act:'crouch',col:gs.crouching?'rgba(74,222,128,.6)':'rgba(50,60,50,.6)',r:26},
-            {x:W-130,y:H-200,lbl:'🎯',act:'interact',col:'rgba(60,80,200,.6)',r:26},
-          ];
-          btns.forEach(b=>{
-            hx.globalAlpha=.88;hx.fillStyle=b.col;hx.beginPath();hx.arc(b.x,b.y,b.r,0,Math.PI*2);hx.fill();
-            hx.globalAlpha=1;hx.font=`${b.r*.9}px sans-serif`;hx.textAlign='center';hx.textBaseline='middle';hx.fillText(b.lbl,b.x,b.y);hx.textBaseline='alphabetic';
-          });
+          // Buttons now handled by HTML React elements — no canvas drawing needed
         }
       }
 
-      // Mobile button tap handler
-      renderer.domElement.addEventListener('touchstart',(e:TouchEvent)=>{
-        e.preventDefault();
-        const W=innerWidth,H=innerHeight;
-        for(const t of Array.from(e.changedTouches)){
-          const tx=t.clientX,ty=t.clientY;
-          // Fire
-          if(Math.sqrt((tx-(W-62))**2+(ty-(H-200))**2)<36)shoot();
-          // Scope
-          if(Math.sqrt((tx-(W-130))**2+(ty-(H-130))**2)<26)gs.scoped=!gs.scoped;
-          // Crouch
-          if(Math.sqrt((tx-(W-62))**2+(ty-(H-130))**2)<26)gs.crouching=!gs.crouching;
-          // Interact
-          if(Math.sqrt((tx-(W-130))**2+(ty-(H-200))**2)<26)interact();
-        }
-      },{passive:false});
+      // Mobile buttons are now HTML React elements wired via gsRef — no canvas listener needed
 
       /* ── Render loop ───────────────────────────────────── */
       let lastT=0;
@@ -1102,6 +1091,36 @@ export default function HuntingGame() {
           <div style={{color:'rgba(255,255,255,.5)',fontSize:12,maxWidth:320,wordBreak:'break-word',marginBottom:16}}>{errMsg}</div>
           <div style={{color:'rgba(255,255,255,.4)',fontSize:11}}>Make sure WebGL is enabled in your browser settings. Try reloading.</div>
           <button onClick={()=>window.location.reload()} style={{marginTop:20,padding:'10px 28px',background:'#16a34a',color:'white',border:'none',borderRadius:10,fontSize:14,cursor:'pointer'}}>🔄 Reload</button>
+        </div>
+      )}
+
+      {/* ── Mobile action buttons (HTML, reliable touch targets) ── */}
+      {'ontouchstart' in (typeof window!=='undefined'?window:{}) && (
+        <div style={{position:'absolute',right:12,bottom:110,display:'flex',flexDirection:'column',gap:10,zIndex:8,pointerEvents:'none'}}>
+          {/* Fire button — big red, always visible */}
+          <button
+            onPointerDown={e=>{e.preventDefault();gsRef.current?.shootFn?.();}}
+            style={{width:84,height:84,borderRadius:'50%',background:'radial-gradient(circle at 35% 35%,#ff4444,#aa0000)',border:'3px solid rgba(255,150,150,.5)',fontSize:32,cursor:'pointer',pointerEvents:'all',touchAction:'manipulation',boxShadow:'0 4px 20px rgba(200,0,0,.6)',display:'flex',alignItems:'center',justifyContent:'center',userSelect:'none',WebkitUserSelect:'none' as 'none'}}>
+            🔫
+          </button>
+          {/* Scope */}
+          <button
+            onPointerDown={e=>{e.preventDefault();if(gsRef.current)gsRef.current.scoped=!gsRef.current.scoped;}}
+            style={{width:64,height:64,borderRadius:'50%',background:'rgba(30,60,30,.85)',border:'2px solid rgba(100,200,100,.4)',fontSize:26,cursor:'pointer',pointerEvents:'all',touchAction:'manipulation',boxShadow:'0 2px 12px rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',userSelect:'none',WebkitUserSelect:'none' as 'none'}}>
+            🔭
+          </button>
+          {/* Crouch */}
+          <button
+            onPointerDown={e=>{e.preventDefault();if(gsRef.current)gsRef.current.crouching=!gsRef.current.crouching;}}
+            style={{width:64,height:64,borderRadius:'50%',background:'rgba(20,50,20,.85)',border:'2px solid rgba(100,200,100,.4)',fontSize:26,cursor:'pointer',pointerEvents:'all',touchAction:'manipulation',boxShadow:'0 2px 12px rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',userSelect:'none',WebkitUserSelect:'none' as 'none'}}>
+            🦆
+          </button>
+          {/* Interact */}
+          <button
+            onPointerDown={e=>{e.preventDefault();gsRef.current?.interactFn?.();}}
+            style={{width:64,height:64,borderRadius:'50%',background:'rgba(20,40,80,.85)',border:'2px solid rgba(100,140,220,.4)',fontSize:26,cursor:'pointer',pointerEvents:'all',touchAction:'manipulation',boxShadow:'0 2px 12px rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',userSelect:'none',WebkitUserSelect:'none' as 'none'}}>
+            🎯
+          </button>
         </div>
       )}
 
