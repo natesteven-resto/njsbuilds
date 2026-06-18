@@ -100,10 +100,11 @@ export default function DuckHunt() {
     type GS = 'menu' | 'play' | 'over'
     let gs: GS = 'menu'
     let score = 0, best = +(localStorage.getItem('dh_best2') || 0)
-    let time = 180, shots = 2, reloading = false
+    let time = 60, shots = 2, reloading = false
     let callCD = 0, spawnT = 1.5, uid = 0
     let ducks: Duck[] = [], drops: Drop[] = [], feaths: Feath[] = []
     let flash = { t: '', a: 0 }, prev = 0
+    let ptr = { x: -1, y: -1, a: 0 }
 
     // ── Spawn logic ──────────────────────────────────────────────────
     function pickDef(): DuckDef {
@@ -116,7 +117,8 @@ export default function DuckHunt() {
       if (ducks.length >= 6) return
       const w = W(), h = H(), def = pickDef()
       const left = Math.random() < 0.5
-      const spd = def.spd * (0.8 + Math.random() * 0.4)
+      const urgency = 1 + (1 - Math.max(0, time) / 60) * 1.5
+      const spd = def.spd * (0.8 + Math.random() * 0.4) * urgency
       const minY = called ? h * 0.30 : h * 0.06
       const maxY = called ? h * 0.60 : h * 0.50
       ducks.push({
@@ -252,6 +254,24 @@ export default function DuckHunt() {
       cx.restore()
     }
 
+    // ── Crosshair ─────────────────────────────────────────────────────
+    function drawCrosshair(x: number, y: number, alpha: number) {
+      const size = 22, gap = 7
+      cx.save(); cx.globalAlpha = Math.min(1, alpha)
+      cx.strokeStyle = '#fff'; cx.lineWidth = 1.5
+      cx.shadowColor = '#000'; cx.shadowBlur = 4
+      cx.beginPath()
+      cx.moveTo(x - size, y); cx.lineTo(x - gap, y)
+      cx.moveTo(x + gap,  y); cx.lineTo(x + size, y)
+      cx.moveTo(x, y - size); cx.lineTo(x, y - gap)
+      cx.moveTo(x, y + gap);  cx.lineTo(x, y + size)
+      cx.stroke()
+      cx.beginPath(); cx.arc(x, y, gap, 0, Math.PI * 2); cx.stroke()
+      cx.fillStyle = '#fff'
+      cx.beginPath(); cx.arc(x, y, 2, 0, Math.PI * 2); cx.fill()
+      cx.restore()
+    }
+
     // ── HUD ──────────────────────────────────────────────────────────
     function drawHUD() {
       const w = W(), h = H(), sm = w < 420
@@ -264,9 +284,10 @@ export default function DuckHunt() {
       cx.fillStyle = 'rgba(255,255,255,0.6)'; cx.font = `${sm ? 11 : 13}px Arial`
       cx.fillText(`Best: ${best.toLocaleString()}`, w - 14, 63)
 
-      // Timer (top center)
+      // Timer (top center) — pulses red when under 15s
       const mm = Math.floor(time / 60), ss = Math.floor(time % 60).toString().padStart(2, '0')
-      cx.fillStyle = time < 30 ? 'rgba(180,30,30,0.88)' : 'rgba(0,0,0,0.48)'
+      const pulse = time < 15 && Math.floor(Date.now() / 400) % 2 === 0
+      cx.fillStyle = pulse ? 'rgba(220,20,20,0.95)' : time < 30 ? 'rgba(180,30,30,0.88)' : 'rgba(0,0,0,0.48)'
       cx.beginPath(); rr(w/2 - 52, 8, 104, 46, 8); cx.fill()
       cx.fillStyle = time < 30 ? '#ff7070' : '#fff'
       cx.font = `bold ${sm ? 25 : 30}px Arial`; cx.textAlign = 'center'
@@ -445,7 +466,7 @@ export default function DuckHunt() {
 
     // ── Start / reset game ───────────────────────────────────────────
     function start() {
-      score = 0; time = 180; shots = 2; reloading = false
+      score = 0; time = 60; shots = 2; reloading = false
       callCD = 0; spawnT = 1.5; uid = 0
       ducks = []; drops = []; feaths = []
       flash = { t: '', a: 0 }
@@ -473,10 +494,11 @@ export default function DuckHunt() {
         if (time <= 0) { time = 0; gs = 'over' }
         if (callCD > 0) callCD -= dt
 
-        // Spawn timer
+        // Spawn timer — tightens as time runs out
         spawnT -= dt
         if (spawnT <= 0) {
-          const iv = Math.max(1.0, 2.5 - score / 2000)
+          const urgency = 1 + (1 - Math.max(0, time) / 60) * 1.5
+          const iv = Math.max(0.55, (2.5 - score / 2000) / urgency)
           spawnT = iv * (0.6 + Math.random() * 0.8)
           spawn()
         }
@@ -532,6 +554,10 @@ export default function DuckHunt() {
         // ── Draw live ducks ──
         for (const dk of ducks) drawDuck(dk)
 
+        // ── Crosshair ──
+        if (ptr.x >= 0) drawCrosshair(ptr.x, ptr.y, Math.max(0.35, ptr.a))
+        if (ptr.a > 0) ptr.a -= dt * 1.5
+
         drawHUD()
       }
 
@@ -540,19 +566,29 @@ export default function DuckHunt() {
 
     // ── Event listeners ──────────────────────────────────────────────
     const onMouse = (e: MouseEvent) => tap(e.clientX, e.clientY)
+    const onMouseMove = (e: MouseEvent) => { ptr.x = e.clientX; ptr.y = e.clientY; ptr.a = 1 }
     const onTouch = (e: TouchEvent) => {
       e.preventDefault()
-      const t = e.changedTouches[0]; tap(t.clientX, t.clientY)
+      const t = e.changedTouches[0]
+      ptr.x = t.clientX; ptr.y = t.clientY; ptr.a = 1.8
+      tap(t.clientX, t.clientY)
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      const t = e.touches[0]; ptr.x = t.clientX; ptr.y = t.clientY; ptr.a = 1
     }
     cv.addEventListener('click', onMouse)
+    cv.addEventListener('mousemove', onMouseMove)
     cv.addEventListener('touchend', onTouch, { passive: false })
+    cv.addEventListener('touchmove', onTouchMove, { passive: false })
 
     raf = requestAnimationFrame(loop)
 
     return () => {
       cancelAnimationFrame(raf)
       cv.removeEventListener('click', onMouse)
+      cv.removeEventListener('mousemove', onMouseMove)
       cv.removeEventListener('touchend', onTouch)
+      cv.removeEventListener('touchmove', onTouchMove)
       removeEventListener('resize', resize)
       ac?.close().catch(() => {})
     }
@@ -568,7 +604,7 @@ export default function DuckHunt() {
         ref={canvasRef}
         style={{
           display: 'block',
-          cursor: 'crosshair',
+          cursor: 'none',
           touchAction: 'none',
           userSelect: 'none',
           WebkitUserSelect: 'none',
