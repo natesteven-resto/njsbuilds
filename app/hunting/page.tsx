@@ -68,7 +68,7 @@ export default function HuntingGame() {
       scene.fog=new THREE.Fog(0x8aaa80,60,520);
 
       /* ── Camera ────────────────────────────────────────── */
-      camera = new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,1400);
+      camera = new THREE.PerspectiveCamera(72,innerWidth/innerHeight,isMob2?0.8:0.15,1400);
       camera.position.set(0,1.75,0);
       scene.add(camera);
 
@@ -209,7 +209,7 @@ export default function HuntingGame() {
         else{             cols.push(.90,.92,.96);               } // snow
       }
       tGeo.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));
-      const terrainMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92,metalness:0});
+      const terrainMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92,metalness:0,side:THREE.DoubleSide});
       let terrainTimeUniform={value:0};
 
       // Terrain uses vertex colors — no shader override needed
@@ -241,11 +241,12 @@ export default function HuntingGame() {
       function groundY(x:number,z:number,base=1.75){return tH(x,z)+base;}
 
       /* ── Instanced Grass ───────────────────────────────── */
-      const GRASS_COUNT=isMob2?1500:5000;
-      const bladeGeo=new THREE.PlaneGeometry(.12,.45);
-      bladeGeo.translate(0,.225,0);
-      const bladeMat=new THREE.MeshStandardMaterial({
-        color:0x2a7218,side:THREE.DoubleSide,roughness:.95,metalness:0,alphaTest:.1,
+      // Grass disabled on mobile — PBR PlaneGeometry renders black on iOS Safari
+      const GRASS_COUNT=isMob2?0:4000;
+      const bladeGeo=new THREE.PlaneGeometry(.14,.5);
+      bladeGeo.translate(0,.25,0);
+      const bladeMat=new THREE.MeshBasicMaterial({
+        color:0x2e8a1a,side:THREE.DoubleSide,
       });
       const grassMesh=new THREE.InstancedMesh(bladeGeo,bladeMat,GRASS_COUNT);
       grassMesh.receiveShadow=true;
