@@ -27,6 +27,8 @@ export default function HuntingGame() {
   const hudRef    = useRef<HTMLCanvasElement>(null);
   const gsRef     = useRef<any>(null);
   const [panel,   setPanel]   = useState<'none'|'quests'>('none');
+  const [loading, setLoading] = useState(true);
+  const [errMsg,  setErrMsg]  = useState('');
   const [snap,    setSnap]    = useState({
     hp:100,maxHp:100,ammo:18,maxAmmo:18,weapon:'pistol',
     quests:QUESTS.map(q=>({...q,prog:0,done:false})),
@@ -42,10 +44,11 @@ export default function HuntingGame() {
     let THREE:any, renderer:any, scene:any, camera:any;
 
     async function init(){
+      try{
       THREE = await import('three');
 
       /* ── Renderer ──────────────────────────────────────── */
-      renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+      renderer = new THREE.WebGLRenderer({ antialias:true });
       renderer.setPixelRatio(Math.min(devicePixelRatio,2));
       renderer.setSize(innerWidth,innerHeight);
       renderer.shadowMap.enabled=true;
@@ -478,10 +481,21 @@ export default function HuntingGame() {
       const onKU=(e:KeyboardEvent)=>gs.keys.delete(e.code);
       window.addEventListener('keydown',onKD);window.addEventListener('keyup',onKU);
 
-      const onMM=(e:MouseEvent)=>{if(document.pointerLockElement===renderer.domElement){gs.mouse.dx+=e.movementX*.002;gs.mouse.dy+=e.movementY*.002;}};
-      renderer.domElement.addEventListener('click',()=>renderer.domElement.requestPointerLock());
-      window.addEventListener('mousemove',onMM);
-      window.addEventListener('mousedown',(e)=>{if(e.button===0&&document.pointerLockElement===renderer.domElement)shoot();});
+      const isMobileDevice='ontouchstart' in window;
+      const onMM=(e:MouseEvent)=>{
+        if(document.pointerLockElement===renderer.domElement){
+          gs.mouse.dx+=e.movementX*.002;gs.mouse.dy+=e.movementY*.002;
+        }
+      };
+      if(!isMobileDevice){
+        renderer.domElement.addEventListener('click',()=>{
+          try{renderer.domElement.requestPointerLock();}catch(err){}
+        });
+        window.addEventListener('mousemove',onMM);
+        window.addEventListener('mousedown',(e:MouseEvent)=>{
+          if(e.button===0&&document.pointerLockElement===renderer.domElement)shoot();
+        });
+      }
 
       // Touch input
       const onTS=(e:TouchEvent)=>{
@@ -658,7 +672,11 @@ export default function HuntingGame() {
         if(gs.msgT>0)gs.msgT=Math.max(0,gs.msgT-dt*.001);
 
         // Sync snapshot
-        setSnap({hp:Math.round(gs.hp),maxHp:gs.maxHp,ammo:gs.ammo,maxAmmo:gs.maxAmmo,weapon:gs.weapon,quests:gs.quests.map(q=>({...q})),inv:{...gs.inv},campfire:gs.campfire,tent:gs.tent,crouching:gs.crouching,scoped:gs.scoped,msg:gs.msg,msgTimer:gs.msgT,tod:gs.tod,windDeg:Math.round((gs.windAngle*180/Math.PI+360)%360),trophies:gs.trophies});
+        // Throttle React state updates to ~4fps to not kill mobile
+        gs.lastT=(gs.lastT||0)+dt;
+        if(gs.lastT>250){gs.lastT=0;
+          setSnap({hp:Math.round(gs.hp),maxHp:gs.maxHp,ammo:gs.ammo,maxAmmo:gs.maxAmmo,weapon:gs.weapon,quests:gs.quests.map(q=>({...q})),inv:{...gs.inv},campfire:gs.campfire,tent:gs.tent,crouching:gs.crouching,scoped:gs.scoped,msg:gs.msg,msgTimer:gs.msgT,tod:gs.tod,windDeg:Math.round((gs.windAngle*180/Math.PI+360)%360),trophies:gs.trophies});
+        }
       }
 
       /* ── HUD ───────────────────────────────────────────── */
@@ -801,11 +819,17 @@ export default function HuntingGame() {
         raf=requestAnimationFrame(loop);
       }
       raf=requestAnimationFrame(loop);
+      setLoading(false);
 
       return()=>{
         window.removeEventListener('keydown',onKD);window.removeEventListener('keyup',onKU);
         window.removeEventListener('mousemove',onMM);window.removeEventListener('resize',onResize);
       };
+      }catch(e:any){
+        console.error('Game init error:',e);
+        setErrMsg('Error: '+(e?.message||String(e)));
+        setLoading(false);
+      }
     }
 
     const cleanup=init();
@@ -821,6 +845,29 @@ export default function HuntingGame() {
     <div style={{position:'relative',width:'100vw',height:'100dvh',overflow:'hidden',background:'#000',userSelect:'none',WebkitUserSelect:'none' as 'none'}}>
       <div ref={mountRef} style={{position:'absolute',inset:0}}/>
       <canvas ref={hudRef} style={{position:'absolute',inset:0,pointerEvents:'none',width:'100%',height:'100%'}}/>
+
+      {/* Loading screen */}
+      {loading&&!errMsg&&(
+        <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'#030a04',zIndex:20}}>
+          <div style={{fontSize:48,marginBottom:16}}>🌲</div>
+          <div style={{color:'#4ade80',fontWeight:'bold',fontSize:18,marginBottom:8}}>Loading Wilderness...</div>
+          <div style={{width:200,height:4,background:'rgba(255,255,255,.1)',borderRadius:2,overflow:'hidden'}}>
+            <div style={{height:'100%',width:'60%',background:'#4ade80',borderRadius:2,animation:'slide 1.4s ease-in-out infinite'}}/>
+          </div>
+          <style>{`@keyframes slide{0%{transform:translateX(-200%)}100%{transform:translateX(300%)}}`}</style>
+        </div>
+      )}
+
+      {/* Error screen */}
+      {errMsg&&(
+        <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'#0a0404',zIndex:20,padding:24,textAlign:'center'}}>
+          <div style={{fontSize:36,marginBottom:12}}>⚠️</div>
+          <div style={{color:'#f87171',fontWeight:'bold',fontSize:16,marginBottom:8}}>Failed to start game</div>
+          <div style={{color:'rgba(255,255,255,.5)',fontSize:12,maxWidth:320,wordBreak:'break-word',marginBottom:16}}>{errMsg}</div>
+          <div style={{color:'rgba(255,255,255,.4)',fontSize:11}}>Make sure WebGL is enabled in your browser settings. Try reloading.</div>
+          <button onClick={()=>window.location.reload()} style={{marginTop:20,padding:'10px 28px',background:'#16a34a',color:'white',border:'none',borderRadius:10,fontSize:14,cursor:'pointer'}}>🔄 Reload</button>
+        </div>
+      )}
 
       {/* Quest panel */}
       {panel==='quests'&&(
