@@ -211,49 +211,36 @@ export default function HuntingGame() {
       let terrainTimeUniform={value:0};
       terrainMat.onBeforeCompile=(s:any)=>{
         s.uniforms.uTime=terrainTimeUniform;
-        // Only need world-space Y (height) — derived from vertex position, no normal needed
+        // Inject only the world Y height — using object-space position.y which equals world height
+        // since terrain is at world origin with no Y translation
         s.vertexShader=s.vertexShader
-          .replace('void main(){','varying float vWY;varying vec2 vWXZ;\nvoid main(){')
-          .replace('#include <worldpos_vertex>',
-            '#include <worldpos_vertex>\nvWY=worldPosition.y;vWXZ=worldPosition.xz;');
+          .replace('void main(){','varying float vTH;\nvoid main(){')
+          .replace('#include <begin_vertex>','#include <begin_vertex>\nvTH=position.y;');
         s.fragmentShader=s.fragmentShader
-          .replace('void main(){',`
-            varying float vWY;
-            varying vec2 vWXZ;
-            uniform float uTime;
-            float h3(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-            float n3(vec2 p){vec2 i=floor(p);vec2 f=fract(p);float a=h3(i),b=h3(i+vec2(1,0)),cc=h3(i+vec2(0,1)),d=h3(i+vec2(1,1));vec2 u=f*f*(3.-2.*f);return mix(a,b,u.x)+(cc-a)*u.y*(1.-u.x)+(d-b)*u.x*u.y;}
-            void main(){`)
+          .replace('void main(){','varying float vTH;\nvoid main(){')
           .replace('#include <color_fragment>',`
             #include <color_fragment>
-            float wy=clamp(vWY,-5.,60.);
-            float d1=n3(vWXZ*.22);
-            float d2=n3(vWXZ*.8+1.3);
-            float detail=d1*.65+d2*.35;
-            // Grass zone
-            if(wy<6.){
-              vec3 gA=vec3(.17,.42,.11);vec3 gB=vec3(.24,.52,.15);
-              vec3 gc=mix(gA,gB,detail);
-              float dirt=step(.68,n3(vWXZ*.15+3.1));
-              gc=mix(gc,vec3(.30,.21,.12),dirt*.45);
-              diffuseColor.rgb=mix(diffuseColor.rgb,gc,.65);
-            }
-            // Mid height rocky transition
-            if(wy>8.&&wy<26.){
-              float blend=smoothstep(8.,16.,wy)*(1.-smoothstep(20.,26.,wy));
-              vec3 rc=vec3(.36+detail*.07,.32+detail*.05,.26+detail*.04);
-              diffuseColor.rgb=mix(diffuseColor.rgb,rc,blend*.75);
-            }
-            // Snow cap
-            if(wy>24.){
-              float sb=smoothstep(24.,32.,wy);
-              diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.92,.94,.98),sb);
-            }
+            // Height-based colour blend — no noise, no artifacts
+            float h=clamp(vTH,-2.,60.);
+            // Grass tint
+            vec3 grass=vec3(.20,.46,.13);
+            // Rock
+            vec3 rock=vec3(.38,.32,.26);
+            // Snow
+            vec3 snow=vec3(.92,.94,.97);
+            vec3 col=diffuseColor.rgb;
+            // Low: blend toward rich grass
+            col=mix(col, grass, smoothstep(6.,0.,h)*.55);
+            // Mid: fade to rock
+            col=mix(col, rock, smoothstep(8.,22.,h)*smoothstep(30.,18.,h)*.7);
+            // High: snow
+            col=mix(col, snow, smoothstep(26.,34.,h));
             // Water-edge mud
-            if(wy<.1) diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.17,.13,.09),.7);
+            col=mix(col, vec3(.16,.12,.09), smoothstep(.5,-.5,h)*.8);
+            diffuseColor.rgb=col;
           `);
       }
-      const terrain = new THREE.Mesh(tGeo, terrainMat);
+            const terrain = new THREE.Mesh(tGeo, terrainMat);
       terrain.receiveShadow=true;
       scene.add(terrain);
 
