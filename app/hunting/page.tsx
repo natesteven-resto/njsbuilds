@@ -48,10 +48,11 @@ export default function HuntingGame() {
       THREE = await import('three');
 
       /* ── Renderer ──────────────────────────────────────── */
-      renderer = new THREE.WebGLRenderer({ antialias:true });
-      renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+      const isMob2='ontouchstart' in window;
+      renderer = new THREE.WebGLRenderer({ antialias:!isMob2 });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, isMob2 ? 1.2 : 2));
       renderer.setSize(innerWidth,innerHeight);
-      renderer.shadowMap.enabled=true;
+      renderer.shadowMap.enabled=!isMob2;
       renderer.shadowMap.type=THREE.PCFSoftShadowMap;
       renderer.toneMapping=THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure=1.15;
@@ -100,7 +101,7 @@ export default function HuntingGame() {
       scene.add(sunDisc);
 
       /* ── Terrain ───────────────────────────────────────── */
-      const tSz=400, tSeg=128;
+      const tSz=400, tSeg=isMob2?64:96;
       const tGeo = new THREE.PlaneGeometry(tSz,tSz,tSeg,tSeg);
       tGeo.rotateX(-Math.PI/2);
       const tPos=tGeo.attributes.position;
@@ -135,15 +136,31 @@ export default function HuntingGame() {
       scene.add(terrain);
 
       /* ── Ground raycaster helper ───────────────────────── */
+      // --- Height cache: sample once, fast bilinear lookup every frame ---
       const gRay=new THREE.Raycaster(), gDir=new THREE.Vector3(0,-1,0);
-      function groundY(x:number,z:number,base=1.75){
+      function groundYRay(x:number,z:number,base=1.75){
         gRay.set(new THREE.Vector3(x,60,z),gDir);
         const hits=gRay.intersectObject(terrain);
         return hits.length>0?hits[0].point.y+base:base;
       }
+      // Build height grid from terrain vertices
+      const HRES=128, HHALF=tSz/2;
+      const hGrid=new Float32Array(HRES*HRES);
+      for(let i=0;i<tPos.count;i++){
+        const wx=tPos.getX(i)+HHALF,wz=tPos.getZ(i)+HHALF;
+        const hi=Math.round(wx/tSz*(HRES-1)),hj=Math.round(wz/tSz*(HRES-1));
+        if(hi>=0&&hi<HRES&&hj>=0&&hj<HRES)hGrid[hi*HRES+hj]=tPos.getY(i);
+      }
+      function groundY(x:number,z:number,base=1.75){
+        const u=(x+HHALF)/tSz*(HRES-1),v=(z+HHALF)/tSz*(HRES-1);
+        if(u<0||u>=HRES-1||v<0||v>=HRES-1)return base;
+        const ui=Math.floor(u),vi=Math.floor(v),uf=u-ui,vf=v-vi;
+        const h=hGrid[ui*HRES+vi]*(1-uf)*(1-vf)+hGrid[(ui+1)*HRES+vi]*uf*(1-vf)+hGrid[ui*HRES+(vi+1)]*(1-uf)*vf+hGrid[(ui+1)*HRES+(vi+1)]*uf*vf;
+        return h+base;
+      }
 
       /* ── Instanced Grass ───────────────────────────────── */
-      const GRASS_COUNT=8000;
+      const GRASS_COUNT=isMob2?1500:5000;
       const bladeGeo=new THREE.PlaneGeometry(.12,.45);
       bladeGeo.translate(0,.225,0);
       const bladeMat=new THREE.MeshStandardMaterial({
@@ -235,7 +252,7 @@ export default function HuntingGame() {
         g.position.set(x,groundY(x,z,0),z);
         scene.add(g);
       }
-      for(let i=0;i<200;i++){
+      for(let i=0;i<(isMob2?90:200);i++){
         const a=Math.random()*Math.PI*2,d=10+Math.random()*165;
         const tx=Math.cos(a)*d,tz=Math.sin(a)*d;
         const ld=Math.sqrt((tx-80)**2+(tz-80)**2);
@@ -245,7 +262,7 @@ export default function HuntingGame() {
 
       /* ── Rocks ─────────────────────────────────────────── */
       const rockMat=new THREE.MeshStandardMaterial({color:0x6a6a60,roughness:.85,metalness:.08});
-      for(let i=0;i<120;i++){
+      for(let i=0;i<(isMob2?40:120);i++){
         const a=Math.random()*Math.PI*2,d=8+Math.random()*170;
         const rx=Math.cos(a)*d,rz=Math.sin(a)*d;
         const rs=.3+Math.random()*1.8;
@@ -257,7 +274,7 @@ export default function HuntingGame() {
 
       /* ── Fallen logs ───────────────────────────────────── */
       const logMat=new THREE.MeshStandardMaterial({color:0x3a2008,roughness:.98,metalness:0});
-      for(let i=0;i<25;i++){
+      for(let i=0;i<(isMob2?8:25);i++){
         const a=Math.random()*Math.PI*2,d=15+Math.random()*120;
         const lx=Math.cos(a)*d,lz=Math.sin(a)*d;
         const log=new THREE.Mesh(new THREE.CylinderGeometry(.18,.22,2+Math.random()*3,8),logMat);
@@ -287,30 +304,54 @@ export default function HuntingGame() {
       scene.add(tentGroup);
 
       /* ── Weapon attached to camera ─────────────────────── */
-      const wGroup=new THREE.Group();camera.add(wGroup);
+      // First-person weapon + hand group
+      const fpGroup=new THREE.Group();
+      camera.add(fpGroup);
+      const skinMat=new THREE.MeshStandardMaterial({color:0xc07848,roughness:.88,metalness:0});
+      // Forearm
+      const armMesh=new THREE.Mesh(new THREE.CapsuleGeometry(.044,.32,4,8),skinMat);
+      armMesh.position.set(.24,-.38,-.22);armMesh.rotation.x=-.55;armMesh.rotation.z=.12;
+      fpGroup.add(armMesh);
+      // Hand knuckles
+      const handMesh=new THREE.Mesh(new THREE.BoxGeometry(.09,.072,.11),skinMat);
+      handMesh.position.set(.22,-.26,-.42);fpGroup.add(handMesh);
+      // Thumb
+      const thumbMesh=new THREE.Mesh(new THREE.CapsuleGeometry(.02,.06,3,5),skinMat);
+      thumbMesh.position.set(.16,-.22,-.44);thumbMesh.rotation.z=.6;fpGroup.add(thumbMesh);
+
+      const wGroup=new THREE.Group();
+      fpGroup.add(wGroup);
+
       function buildWeapon(t:string){
         while(wGroup.children.length)wGroup.remove(wGroup.children[0]);
-        const dm=new THREE.MeshStandardMaterial({color:0x1a1a1a,roughness:.3,metalness:.8});
-        const wm=new THREE.MeshStandardMaterial({color:0x4a2a0a,roughness:.9,metalness:0});
+        const dm=new THREE.MeshStandardMaterial({color:0x222222,roughness:.25,metalness:.85});
+        const wm=new THREE.MeshStandardMaterial({color:0x3a1e06,roughness:.88,metalness:0});
+        wGroup.position.set(.22,-.26,-.42);
         if(t==='pistol'){
-          const s=new THREE.Mesh(new THREE.BoxGeometry(.08,.09,.3),dm);s.position.set(.2,-.18,-.36);
-          const g=new THREE.Mesh(new THREE.BoxGeometry(.072,.15,.11),dm);g.position.set(.2,-.26,-.27);g.rotation.x=.18;
-          wGroup.add(s,g);
+          const slide=new THREE.Mesh(new THREE.BoxGeometry(.075,.085,.28),dm);slide.position.set(0,.04,-.1);
+          const grip=new THREE.Mesh(new THREE.BoxGeometry(.068,.14,.10),dm);grip.position.set(0,-.04,0);grip.rotation.x=.15;
+          const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.013,.013,.18,6),dm);barrel.rotation.x=Math.PI/2;barrel.position.set(0,.042,-.22);
+          wGroup.add(slide,grip,barrel);
         }else if(t==='rifle'){
-          const b=new THREE.Mesh(new THREE.CylinderGeometry(.016,.016,.85,6),dm);b.rotation.x=Math.PI/2;b.position.set(.18,-.18,-.75);
-          const s=new THREE.Mesh(new THREE.BoxGeometry(.062,.082,.48),wm);s.position.set(.18,-.21,-.22);
-          const r=new THREE.Mesh(new THREE.BoxGeometry(.064,.084,.42),dm);r.position.set(.18,-.2,-.52);
-          wGroup.add(b,s,r);
+          const body=new THREE.Mesh(new THREE.BoxGeometry(.06,.078,.38),dm);body.position.set(0,.02,-.24);
+          const stock=new THREE.Mesh(new THREE.BoxGeometry(.058,.072,.32),wm);stock.position.set(0,.016,.08);
+          const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.014,.014,.55,6),dm);barrel.rotation.x=Math.PI/2;barrel.position.set(0,.032,-.58);
+          const mag=new THREE.Mesh(new THREE.BoxGeometry(.044,.14,.062),dm);mag.position.set(0,-.06,-.18);
+          wGroup.add(body,stock,barrel,mag);
         }else if(t==='shotgun'){
-          const b1=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,.68,6),dm);b1.rotation.x=Math.PI/2;b1.position.set(.16,-.17,-.68);
-          const b2=b1.clone();b2.position.x=.2;
-          const s=new THREE.Mesh(new THREE.BoxGeometry(.068,.088,.48),wm);s.position.set(.18,-.21,-.22);
-          wGroup.add(b1,b2,s);
+          const body=new THREE.Mesh(new THREE.BoxGeometry(.065,.082,.38),dm);body.position.set(0,.02,-.24);
+          const stock=new THREE.Mesh(new THREE.BoxGeometry(.062,.078,.30),wm);stock.position.set(0,.016,.1);
+          const b1=new THREE.Mesh(new THREE.CylinderGeometry(.019,.019,.52,6),dm);b1.rotation.x=Math.PI/2;b1.position.set(-.018,.04,-.52);
+          const b2=b1.clone();b2.position.x=.018;
+          wGroup.add(body,stock,b1,b2);
         }else{
-          const b=new THREE.Mesh(new THREE.CylinderGeometry(.013,.013,1.05,6),dm);b.rotation.x=Math.PI/2;b.position.set(.18,-.18,-.9);
-          const s=new THREE.Mesh(new THREE.BoxGeometry(.055,.075,.52),wm);s.position.set(.18,-.2,-.2);
-          const sc=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.32,8),dm);sc.rotation.x=Math.PI/2;sc.position.set(.18,-.14,-.55);
-          wGroup.add(b,s,sc);
+          const body=new THREE.Mesh(new THREE.BoxGeometry(.052,.07,.44),dm);body.position.set(0,.02,-.32);
+          const stock=new THREE.Mesh(new THREE.BoxGeometry(.05,.068,.34),wm);stock.position.set(0,.016,.12);
+          const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,.72,6),dm);barrel.rotation.x=Math.PI/2;barrel.position.set(0,.03,-.78);
+          const scope=new THREE.Mesh(new THREE.CylinderGeometry(.038,.038,.28,8),dm);scope.rotation.x=Math.PI/2;scope.position.set(0,.072,-.36);
+          const lensL=new THREE.Mesh(new THREE.CircleGeometry(.028,8),new THREE.MeshStandardMaterial({color:0x223344,roughness:.05,metalness:.1}));lensL.position.set(0,.072,-.52);lensL.rotation.y=Math.PI;
+          const lensR=lensL.clone();lensR.position.z=-.2;lensR.rotation.y=0;
+          wGroup.add(body,stock,barrel,scope,lensL,lensR);
         }
       }
       buildWeapon('pistol');
@@ -361,7 +402,7 @@ export default function HuntingGame() {
       }
 
       const animals:Animal3D[]=[];
-      const aDefs:[string,number,number,number][]=[['deer',7,80,2],['bear',3,300,3],['turkey',7,50,1],['moose',3,220,4]];
+      const aDefs:[string,number,number,number][]=isMob2?[['deer',4,80,2],['bear',2,300,3],['turkey',4,50,1],['moose',2,220,4]]:[['deer',7,80,2],['bear',3,300,3],['turkey',7,50,1],['moose',3,220,4]];
       aDefs.forEach(([type,n,hp,meat])=>{
         for(let i=0;i<n;i++){
           const a=Math.random()*Math.PI*2,d=22+Math.random()*100;
@@ -553,7 +594,10 @@ export default function HuntingGame() {
         // Walk bob
         if(moved)gs.walkBob+=dt*.008;
         const bob=Math.sin(gs.walkBob)*( gs.crouching?.025:.05);
-        wGroup.position.set(Math.sin(Date.now()*.0009)*.006,-.0+bob*.5+(-gs.recoil),0);
+        // Weapon bob and recoil
+        const bT=Date.now()*.001;
+        fpGroup.position.set(Math.sin(bT*.9)*.004,bob*.4-gs.recoil,0);
+        fpGroup.rotation.x=-gs.recoil*.5+Math.sin(bT*.7)*.003;
         gs.recoil=Math.max(0,gs.recoil-dt*.0012);
         gs.shotAnim=Math.max(0,gs.shotAnim-dt*.002);
 
