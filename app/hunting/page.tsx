@@ -718,6 +718,22 @@ buildWeapon('pistol');
             setMsg(`${a.type.charAt(0).toUpperCase()+a.type.slice(1)} downed! ${rating} trophy!`);
           }
         });
+
+        // Gunshot sound alarm — all nearby animals flee from the noise
+        const soundRange:Record<string,number>={pistol:90,rifle:160,shotgun:140,sniper:200};
+        const alarmR=soundRange[gs.weapon]||120;
+        const alarmR2=alarmR*alarmR;
+        animals.forEach(a=>{
+          if(a.state==='dead')return;
+          const dx=a.group.position.x-gs.pos.x;
+          const dz=a.group.position.z-gs.pos.z;
+          if(dx*dx+dz*dz<alarmR2){
+            // Bears that haven't been shot get alert/aggro, others flee
+            if(a.state==='idle'||a.state==='alert'){
+              a.state=a.type==='bear'?'aggro':'flee';
+            }
+          }
+        });
       }
 
       function capitalize(s:string){return s[0].toUpperCase()+s.slice(1);}
