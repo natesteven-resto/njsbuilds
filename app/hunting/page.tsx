@@ -427,13 +427,27 @@ export default function HuntingGame() {
       }
       buildWeapon('pistol');
 
+      /* PMREM env for PBR reflections */
+      try{
+        const pmrem=new THREE.PMREMGenerator(renderer);
+        const envS=new THREE.Scene();
+        envS.add(new THREE.HemisphereLight(0x87ceeb,0x3a5a2a,3));
+        const esl=new THREE.DirectionalLight(0xfff5e0,5);esl.position.set(1,2,1);envS.add(esl);
+        envS.add(new THREE.Mesh(new THREE.SphereGeometry(50,8,8),new THREE.MeshBasicMaterial({color:0x87ceeb,side:THREE.BackSide})));
+        scene.environment=pmrem.fromScene(envS).texture;
+        pmrem.dispose();
+      }catch(ee){console.warn('PMREM:',ee);}
+
+buildWeapon('pistol');
+
       /* ── Animals ───────────────────────────────────────── */
       interface Animal3D {
         type:string; group:T.Group; hp:number; maxHp:number; meat:number;
-        state:'idle'|'alert'|'flee'|'aggro'|'dead';
+        state:'idle'|'alert'|'flee'|'aggro'|'dead'|string;
         alertLevel:number; alertMethod:string;
         angle:number; anim:number; dieT:number;
         trophyScore:number;
+        bleedRate:number; hitZone:string;
       }
       function makeAnimal(type:string):T.Group{
         const g=new THREE.Group();
@@ -582,7 +596,7 @@ export default function HuntingGame() {
           hb.position.set(0,0.8,0); grp.add(hb);
           scene.add(grp);
           const ts=Math.random();
-          animals.push({type,group:grp,hp,maxHp:hp,meat,state:'idle',alertLevel:0,alertMethod:'',angle:Math.random()*Math.PI*2,anim:Math.random()*10,dieT:0,trophyScore:ts});
+          animals.push({type,group:grp,hp,maxHp:hp,meat,state:'idle',alertLevel:0,alertMethod:'',angle:Math.random()*Math.PI*2,anim:Math.random()*10,dieT:0,trophyScore:ts,bleedRate:0,hitZone:''});
         }
       });
 
@@ -600,7 +614,7 @@ export default function HuntingGame() {
         const ghb=new THREE.Mesh(new THREE.SphereGeometry(1.2,5,4),new THREE.MeshBasicMaterial({visible:false}));
         ghb.position.set(0,0.7,0); gGrp.add(ghb);
         scene.add(gGrp);
-        animals.push({type:'goat',group:gGrp,hp:ADEF.goat.hp,maxHp:ADEF.goat.hp,meat:ADEF.goat.meat,state:'idle',alertLevel:0,alertMethod:'',angle:Math.random()*Math.PI*2,anim:Math.random()*10,dieT:0,trophyScore:Math.random()});
+        animals.push({type:'goat',group:gGrp,hp:ADEF.goat.hp,maxHp:ADEF.goat.hp,meat:ADEF.goat.meat,state:'idle',alertLevel:0,alertMethod:'',angle:Math.random()*Math.PI*2,anim:Math.random()*10,dieT:0,trophyScore:Math.random(),bleedRate:0,hitZone:''});
       }
 
       /* ── Blood drops ───────────────────────────────────── */
@@ -648,6 +662,20 @@ export default function HuntingGame() {
         buildWeapon(gs.weapon);
         setMsg(`Switched to ${gs.weapon.toUpperCase()}`);
       };
+      // Init EffectComposer bloom after gs is ready
+      ;(async()=>{try{
+        const [{EffectComposer},{RenderPass},{UnrealBloomPass},{OutputPass}]=await Promise.all([
+          import('three/examples/jsm/postprocessing/EffectComposer.js'),
+          import('three/examples/jsm/postprocessing/RenderPass.js'),
+          import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
+          import('three/examples/jsm/postprocessing/OutputPass.js'),
+        ]);
+        const comp=new (EffectComposer as any)(renderer);
+        comp.addPass(new (RenderPass as any)(scene,camera));
+        comp.addPass(new (UnrealBloomPass as any)(new THREE.Vector2(innerWidth,innerHeight),isMob2?0.28:0.48,0.4,0.80));
+        comp.addPass(new (OutputPass as any)());
+        (gs as any).composer=comp;
+      }catch(ee){console.warn('Bloom:',ee);}})();
 
       function setMsg(m:string){gs.msg=m;gs.msgT=4;}
 
@@ -663,12 +691,25 @@ export default function HuntingGame() {
           if(a.state==='dead')return;
           const hits=ray.intersectObject(a.group,true);
           if(!hits.length)return;
-          a.hp-=dmg[gs.weapon]||22;
+          // Vital organ detection
+          const hp=hits[0].point;
+          const localY=(hp.y-a.group.position.y)/a.group.scale.x;
+          const localDist=Math.sqrt((hp.x-a.group.position.x)**2+(hp.z-a.group.position.z)**2)/a.group.scale.x;
+          let zone='body',zoneDmgMult=1,bleedAdd=0,zoneMsg='';
+          if(localY>1.6){zone='head';zoneDmgMult=4;bleedAdd=0;zoneMsg='💀 HEAD SHOT!';}
+          else if(localY>0.7&&localDist<0.7){zone='vital';zoneDmgMult=2;bleedAdd=8;zoneMsg='🫀 Vital hit! Bleeding...';}
+          else if(localY<0.35){zone='leg';zoneDmgMult=0.6;bleedAdd=2;zoneMsg='🦵 Leg shot. Animal limping.';}
+          else{zone='gut';zoneDmgMult=1;bleedAdd=4;zoneMsg='💢 Gut shot. Animal bleeding...';}
+          a.hitZone=zone;
+          a.bleedRate=Math.min(25,a.bleedRate+bleedAdd);
+          const baseDmg=(dmg[gs.weapon]||22)*zoneDmgMult;
+          a.hp-=baseDmg;
           const adef=ADEF[a.type];
           a.state=a.type==='bear'&&a.hp>0?'aggro':'flee';
-          addBlood(hits[0].point.x,hits[0].point.y,hits[0].point.z);
+          addBlood(hp.x,hp.y,hp.z);
+          if(zoneMsg)setMsg(zoneMsg);
           if(a.hp<=0){
-            a.state='dead';a.dieT=4;
+            a.state='dead';a.dieT=4;a.bleedRate=0;
             gs.inv[a.type as keyof typeof gs.inv]++;
             const rating=a.trophyScore>.92?'💎 Diamond':a.trophyScore>.7?'🥇 Gold':a.trophyScore>.4?'🥈 Silver':'🥉 Bronze';
             gs.trophies.push({type:a.type,rating,score:Math.round(a.trophyScore*100)});
@@ -915,6 +956,20 @@ export default function HuntingGame() {
           a.group.position.z=Math.max(-300,Math.min(300,a.group.position.z));
           a.group.position.y=groundY(a.group.position.x,a.group.position.z,0);
           a.group.rotation.y=a.angle;
+          // Bleed-out: lose HP over time when bleeding, drop blood trail
+          if(a.bleedRate>0&&a.state!=='dead'){
+            a.hp-=a.bleedRate*(dt/1000);
+            if(Math.random()<0.08)addBlood(a.group.position.x+(Math.random()-.5)*.4,a.group.position.y+.1,a.group.position.z+(Math.random()-.5)*.4);
+            if(a.hp<=0){
+              a.state='dead';a.dieT=4;a.bleedRate=0;
+              gs.inv[a.type as keyof typeof gs.inv]++;
+              const rt=a.trophyScore>.92?'💎 Diamond':a.trophyScore>.7?'🥇 Gold':a.trophyScore>.4?'🥈 Silver':'🥉 Bronze';
+              gs.trophies.push({type:a.type,rating:rt,score:Math.round(a.trophyScore*100)});
+              const q2=gs.quests.find(q=>q.key===a.type);
+              if(q2&&!q2.done){q2.prog++;if(q2.prog>=q2.goal){q2.done=true;unlockReward(q2);}}
+              setMsg(`${capitalize(a.type)} bled out! ${rt} trophy!`);
+            }
+          }
           // Body animation: bob when moving, head-down when grazing
           a.group.children.forEach((c:any,ci)=>{
             if(ci===0&&isGrazing) c.rotation.x=Math.sin(a.anim*.8)*.12+.15; // graze: head down
@@ -1046,7 +1101,10 @@ export default function HuntingGame() {
       function loop(t:number){
         if(!alive)return;
         const dt=Math.min(t-lastT,80);lastT=t;
-        update(dt);renderer.render(scene,camera);drawHUD();
+        update(dt);
+        if((gs as any).composer) (gs as any).composer.render();
+        else renderer.render(scene,camera);
+        drawHUD();
         raf=requestAnimationFrame(loop);
       }
       raf=requestAnimationFrame(loop);
