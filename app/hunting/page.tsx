@@ -190,15 +190,31 @@ export default function HuntingGame() {
       }
       const dummy=new THREE.Object3D();
       let lastGrassUpdate={x:9999,z:9999};
+      // Seeded RNG so grass placement is stable (no flicker on re-update)
+      function seededRand(seed:number){let x=Math.sin(seed*9301+49297)*233280;return x-Math.floor(x);}
       function updateGrass(px:number,pz:number){
         if(Math.sqrt((px-lastGrassUpdate.x)**2+(pz-lastGrassUpdate.z)**2)<5)return;
         lastGrassUpdate={x:px,z:pz};
         for(let i=0;i<GRASS_COUNT;i++){
           const gx=px+grassPos[i].x,gz=pz+grassPos[i].z;
+          const gh=tH(gx,gz);
+          // No grass on snow (>28), water (<-0.15), or extreme slopes
+          if(gh>28||gh<-0.15){
+            dummy.position.set(9999,0,9999);dummy.scale.setScalar(.001);dummy.updateMatrix();
+            grassMesh.setMatrixAt(i,dummy.matrix);continue;
+          }
           const gy=groundY(gx,gz,0);
+          // Patchy distribution — clump via noise so it looks natural
+          const patch=Math.sin(gx*.18)*Math.cos(gz*.22)+Math.sin(gx*.09+gz*.11);
+          if(patch<-0.2){
+            dummy.position.set(9999,0,9999);dummy.scale.setScalar(.001);dummy.updateMatrix();
+            grassMesh.setMatrixAt(i,dummy.matrix);continue;
+          }
           dummy.position.set(gx,gy,gz);
-          dummy.rotation.y=Math.random()*Math.PI*2;
-          dummy.scale.setScalar(.8+Math.random()*.5);
+          dummy.rotation.y=seededRand(i)*Math.PI*2;
+          // Taller in valley, shorter on slopes
+          const sc=Math.max(.3,(1.1-gh/35))*(seededRand(i+1000)*.5+.75);
+          dummy.scale.setScalar(sc);
           dummy.updateMatrix();
           grassMesh.setMatrixAt(i,dummy.matrix);
         }
@@ -238,16 +254,27 @@ export default function HuntingGame() {
       const treeDummy = new THREE.Object3D();
       const trnkIM = new THREE.InstancedMesh(
         new THREE.CylinderGeometry(.17,.3,1,7), // unit height, scaled per instance
-        new THREE.MeshStandardMaterial({color:0x4a2808,roughness:.96,metalness:0}), TREE_N);
+        (() => {
+          const m = new THREE.MeshStandardMaterial({color:0x3a1804,roughness:.96,metalness:0});
+          m.onBeforeCompile = (s:any) => {
+            s.fragmentShader = s.fragmentShader.replace(
+              'vec4 diffuseColor = vec4( diffuse, opacity );',
+              `float bg = sin(vUv.x*20.0+vUv.y*4.0)*.32+sin(vUv.x*9.0)*.24+.5;
+               float br = max(0.,sin(vUv.y*28.0+sin(vUv.x*11.0)*2.))*.28;
+               vec3 bd = vec3(.16,.09,.04); vec3 bl = vec3(.36,.20,.09);
+               vec4 diffuseColor = vec4(mix(bd,bl,bg+br), opacity);`
+            );
+          }; return m;
+        })(), TREE_N);
       const cone1IM = new THREE.InstancedMesh(
         new THREE.ConeGeometry(1,1,8),
-        new THREE.MeshStandardMaterial({color:0x18560a,roughness:.88,metalness:0}), TREE_N);
+        new THREE.MeshStandardMaterial({color:0x165208,roughness:.86,metalness:0}), TREE_N);
       const cone2IM = new THREE.InstancedMesh(
         new THREE.ConeGeometry(1,1,8),
-        new THREE.MeshStandardMaterial({color:0x1e680c,roughness:.88,metalness:0}), TREE_N);
+        new THREE.MeshStandardMaterial({color:0x1c6210,roughness:.86,metalness:0}), TREE_N);
       const cone3IM = new THREE.InstancedMesh(
         new THREE.ConeGeometry(1,1,8),
-        new THREE.MeshStandardMaterial({color:0x226010,roughness:.88,metalness:0}), TREE_N);
+        new THREE.MeshStandardMaterial({color:0x20680e,roughness:.86,metalness:0}), TREE_N);
       trnkIM.castShadow=true; cone1IM.castShadow=true;
       scene.add(trnkIM,cone1IM,cone2IM,cone3IM);
 
@@ -827,28 +854,54 @@ export default function HuntingGame() {
             }
           }
 
+          // Dawn/dusk: animals more active; midday/night they rest
+          const isActive=(gs.tod>.20&&gs.tod<.38)||(gs.tod>.60&&gs.tod<.80);
+          const actMult=isActive?1.8:gs.tod>.38&&gs.tod<.60?1.0:0.35;
+
+          // Herding: occasionally drift toward nearest same-species companion
+          if(a.state==='idle'&&Math.random()<.0008*dt/16){
+            let nearDist=9999,nearAX=0,nearAZ=0,foundNear=false;
+            animals.forEach(b=>{if(b!==a&&b.type===a.type&&b.state!=='dead'){const d2=Math.sqrt((b.group.position.x-a.group.position.x)**2+(b.group.position.z-a.group.position.z)**2);if(d2>12&&d2<80&&d2<nearDist){nearDist=d2;nearAX=b.group.position.x;nearAZ=b.group.position.z;foundNear=true;}}});
+            if(foundNear)a.angle=Math.atan2(nearAX-a.group.position.x,nearAZ-a.group.position.z);
+          }
+
+          // Grazing: slow wander with occasional pause (head-bob)
+          const isGrazing=a.state==='idle'&&Math.sin(a.anim*.3)>.4;
+          const idleSpd=isGrazing?.18:.55;
+
           // Move
-          const mSpd=(a.state==='flee'?adef.spd:a.state==='aggro'?adef.aSpd||5:.6)*(dt/1000);
+          const mSpd=(a.state==='flee'?adef.spd:a.state==='aggro'?adef.aSpd||5:idleSpd)*actMult*(dt/1000);
           if(a.state==='flee'){
             const fd=Math.sqrt(dx*dx+dz*dz)||1;
-            a.group.position.x-=dx/fd*mSpd;a.group.position.z-=dz/fd*mSpd;a.angle=Math.atan2(-dx,-dz);
+            // Zigzag flee — animals don't run in a straight line
+            const zz=Math.sin(a.anim*7)*0.45;
+            const fx=-dx/fd+zz*(dz/fd);  // add perpendicular component
+            const fz=-dz/fd+zz*(-dx/fd);
+            a.group.position.x+=fx*mSpd;a.group.position.z+=fz*mSpd;
+            a.angle=Math.atan2(fx,fz);
           }else if(a.state==='aggro'){
             const fd=Math.sqrt(dx*dx+dz*dz)||1;
             a.group.position.x+=dx/fd*mSpd;a.group.position.z+=dz/fd*mSpd;a.angle=Math.atan2(dx,dz);
             if(dist<3&&gs.hp>0){gs.hp=Math.max(0,gs.hp-14*(dt/1000));}
           }else{
-            if(Math.random()<.004)a.angle+=(Math.random()-.5)*1.4;
-            a.group.position.x+=Math.sin(a.angle)*mSpd*.4;
-            a.group.position.z+=Math.cos(a.angle)*mSpd*.4;
+            // Natural wander: stop/start, graze, change direction naturally
+            if(!isGrazing){
+              if(Math.random()<.003*actMult)a.angle+=(Math.random()-.5)*1.6;
+              a.group.position.x+=Math.sin(a.angle)*mSpd;
+              a.group.position.z+=Math.cos(a.angle)*mSpd;
+            }
           }
           a.group.position.x=Math.max(-300,Math.min(300,a.group.position.x));
           a.group.position.z=Math.max(-300,Math.min(300,a.group.position.z));
           a.group.position.y=groundY(a.group.position.x,a.group.position.z,0);
           a.group.rotation.y=a.angle;
-          // Body bob
-          a.group.children.forEach((c:any,i)=>{if(i<3)c.position.y+=Math.sin(a.anim*2+i)*.003;});
+          // Body animation: bob when moving, head-down when grazing
+          a.group.children.forEach((c:any,ci)=>{
+            if(ci===0&&isGrazing) c.rotation.x=Math.sin(a.anim*.8)*.12+.15; // graze: head down
+            else if(ci===0) c.rotation.x=Math.sin(a.anim*1.5)*.04; // alert: slight head bob
+          });
           // Reset flee if far enough
-          if(a.state==='flee'&&dist>80)a.state='idle';
+          if(a.state==='flee'&&dist>85)a.state='idle';
         });
 
         // Blood cleanup
