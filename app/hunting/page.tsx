@@ -137,27 +137,19 @@ export default function HuntingGame() {
 
       /* ── Ground raycaster helper ───────────────────────── */
       // --- Height cache: sample once, fast bilinear lookup every frame ---
-      const gRay=new THREE.Raycaster(), gDir=new THREE.Vector3(0,-1,0);
-      function groundYRay(x:number,z:number,base=1.75){
-        gRay.set(new THREE.Vector3(x,60,z),gDir);
-        const hits=gRay.intersectObject(terrain);
-        return hits.length>0?hits[0].point.y+base:base;
+      // Pure procedural height — same formula as terrain generation, no raycasting needed
+      function tH(x:number,z:number):number{
+        let h=0;
+        h+=Math.sin(x*.038)*Math.cos(z*.032)*3.2;
+        h+=Math.sin(x*.082+1.2)*Math.cos(z*.075+0.7)*1.8;
+        h+=Math.sin(x*.16+2.1)*Math.cos(z*.14+1.4)*0.8;
+        const ld=Math.sqrt((x-80)**2+(z-80)**2);
+        if(ld<32)h=Math.min(h,-0.4-(32-ld)*.12);
+        const rv=Math.abs(x+z*.4-20);
+        if(rv<12)h=Math.min(h,-0.2-(12-rv)*.08);
+        return h;
       }
-      // Build height grid from terrain vertices
-      const HRES=128, HHALF=tSz/2;
-      const hGrid=new Float32Array(HRES*HRES);
-      for(let i=0;i<tPos.count;i++){
-        const wx=tPos.getX(i)+HHALF,wz=tPos.getZ(i)+HHALF;
-        const hi=Math.round(wx/tSz*(HRES-1)),hj=Math.round(wz/tSz*(HRES-1));
-        if(hi>=0&&hi<HRES&&hj>=0&&hj<HRES)hGrid[hi*HRES+hj]=tPos.getY(i);
-      }
-      function groundY(x:number,z:number,base=1.75){
-        const u=(x+HHALF)/tSz*(HRES-1),v=(z+HHALF)/tSz*(HRES-1);
-        if(u<0||u>=HRES-1||v<0||v>=HRES-1)return base;
-        const ui=Math.floor(u),vi=Math.floor(v),uf=u-ui,vf=v-vi;
-        const h=hGrid[ui*HRES+vi]*(1-uf)*(1-vf)+hGrid[(ui+1)*HRES+vi]*uf*(1-vf)+hGrid[ui*HRES+(vi+1)]*(1-uf)*vf+hGrid[(ui+1)*HRES+(vi+1)]*uf*vf;
-        return h+base;
-      }
+      function groundY(x:number,z:number,base=1.75){return tH(x,z)+base;}
 
       /* ── Instanced Grass ───────────────────────────────── */
       const GRASS_COUNT=isMob2?1500:5000;
@@ -252,7 +244,7 @@ export default function HuntingGame() {
         g.position.set(x,groundY(x,z,0),z);
         scene.add(g);
       }
-      for(let i=0;i<(isMob2?90:200);i++){
+      for(let i=0;i<(isMob2?140:280);i++){
         const a=Math.random()*Math.PI*2,d=10+Math.random()*165;
         const tx=Math.cos(a)*d,tz=Math.sin(a)*d;
         const ld=Math.sqrt((tx-80)**2+(tz-80)**2);
@@ -366,37 +358,102 @@ export default function HuntingGame() {
       }
       function makeAnimal(type:string):T.Group{
         const g=new THREE.Group();
-        const bc:Record<string,number>={deer:0x8b6914,bear:0x2a1a0a,turkey:0x6a4a1a,moose:0x4a3010};
-        const bMat=new THREE.MeshStandardMaterial({color:bc[type],roughness:.9,metalness:0});
-        const dMat=new THREE.MeshStandardMaterial({color:new THREE.Color(bc[type]).multiplyScalar(.62),roughness:.9,metalness:0});
+        const cols:Record<string,number>={deer:0x8b6914,bear:0x2a1a0a,turkey:0x704a18,moose:0x4a3010};
+        const bMat=new THREE.MeshStandardMaterial({color:cols[type],roughness:.88,metalness:0});
+        const dMat=new THREE.MeshStandardMaterial({color:new THREE.Color(cols[type]).multiplyScalar(.58),roughness:.88,metalness:0});
+        const eyeMat=new THREE.MeshStandardMaterial({color:0x0a0a0a,roughness:.2,metalness:0});
+        function cyl(r:number,h:number,segs=6){return new THREE.CylinderGeometry(r,r*1.05,h,segs);}
+        function sph(r:number,ws=8,hs=6){return new THREE.SphereGeometry(r,ws,hs);}
+
         if(type==='deer'){
-          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.36,.9,8,8),bMat);body.rotation.z=Math.PI/2;body.position.y=1.1;body.castShadow=true;g.add(body);
-          [[-0.25,-0.45],[-0.25,.25],[.25,-.45],[.25,.25]].forEach(([x,z])=>{const l=new THREE.Mesh(new THREE.CylinderGeometry(.06,.05,.92,6),dMat);l.position.set(x,.46,z);l.castShadow=true;g.add(l);});
-          const neck=new THREE.Mesh(new THREE.CylinderGeometry(.11,.17,.72,7),bMat);neck.position.set(0,1.56,-.52);neck.rotation.x=-.5;neck.castShadow=true;g.add(neck);
-          const head=new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),bMat);head.position.set(0,1.98,-.8);head.scale.z=1.38;head.castShadow=true;g.add(head);
-          const eye1=new THREE.Mesh(new THREE.SphereGeometry(.04,6,6),new THREE.MeshStandardMaterial({color:0x111111,roughness:.2}));eye1.position.set(-.14,2.05,-.98);g.add(eye1);eye1.clone().position.set(.14,2.05,-.98);g.add(eye1.clone());
-          const aMat=new THREE.MeshStandardMaterial({color:0x4a3010,roughness:.95,metalness:0});
-          [-.1,.1].forEach(x=>{const a=new THREE.Mesh(new THREE.CylinderGeometry(.025,.04,.52,5),aMat);a.position.set(x,2.18,-.76);a.rotation.z=x*.8;g.add(a);});
+          // Body — slender horizontal capsule
+          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.19,.82,6,8),bMat);
+          body.rotation.z=Math.PI/2; body.position.y=.88; body.castShadow=true; g.add(body);
+          // Belly/chest lighter patch
+          const belly=new THREE.Mesh(sph(.16,6,5),new THREE.MeshStandardMaterial({color:0xc8a060,roughness:.9,metalness:0}));
+          belly.scale.set(.9,1,.75); belly.position.set(0,.82,.1); g.add(belly);
+          // Legs
+          [[-0.16,-0.36],[-0.16,.28],[.16,-.36],[.16,.28]].forEach(([lx,lz])=>{
+            const l=new THREE.Mesh(cyl(.045,.72),dMat); l.position.set(lx,.36,lz); g.add(l);
+            // Hoof
+            const h2=new THREE.Mesh(cyl(.055,.08),new THREE.MeshStandardMaterial({color:0x1a1008,roughness:.95})); h2.position.set(lx,0,lz); g.add(h2);
+          });
+          // Neck
+          const neck=new THREE.Mesh(cyl(.09,.55,7),bMat); neck.position.set(0,1.22,-.44); neck.rotation.x=-.55; g.add(neck);
+          // Head
+          const head=new THREE.Mesh(sph(.18,8,7),bMat); head.position.set(0,1.62,-.72); head.scale.z=1.5; g.add(head);
+          // Ears
+          [-.14,.14].forEach(ex=>{const e=new THREE.Mesh(sph(.08,6,5),bMat);e.scale.y=1.6;e.position.set(ex,1.78,-.7);g.add(e);});
+          // Eyes
+          [-.1,.1].forEach(ex=>{const e=new THREE.Mesh(sph(.03,5,4),eyeMat);e.position.set(ex,1.66,-.88);g.add(e);});
+          // Antlers
+          const aMat2=new THREE.MeshStandardMaterial({color:0x5a3a10,roughness:.96});
+          [-.08,.08].forEach(ax=>{const m=new THREE.Mesh(cyl(.02,.46,5),aMat2);m.position.set(ax,1.9,-.7);m.rotation.z=ax*4;g.add(m);
+            const t1=new THREE.Mesh(cyl(.014,.24,4),aMat2);t1.position.set(ax*2.5,2.12,-.75);t1.rotation.z=ax*2;g.add(t1);});
+          // White tail
+          const tail=new THREE.Mesh(sph(.08,5,4),new THREE.MeshStandardMaterial({color:0xeee8d8,roughness:.9})); tail.position.set(0,.88,.46); g.add(tail);
+
         }else if(type==='bear'){
-          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.58,.92,8,8),bMat);body.rotation.z=Math.PI/2;body.position.y=.88;body.castShadow=true;g.add(body);
-          [[-0.36,-.42],[-.36,.32],[.36,-.42],[.36,.32]].forEach(([x,z])=>{const l=new THREE.Mesh(new THREE.CylinderGeometry(.14,.12,.68,6),dMat);l.position.set(x,.34,z);l.castShadow=true;g.add(l);});
-          const head=new THREE.Mesh(new THREE.SphereGeometry(.4,8,8),dMat);head.position.set(0,1.38,-.72);head.castShadow=true;g.add(head);
-          const snout=new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),new THREE.MeshStandardMaterial({color:0x5a3a18,roughness:.9}));snout.position.set(0,1.3,-.98);snout.scale.z=1.4;g.add(snout);
-          [-.22,.22].forEach(x=>{const e=new THREE.Mesh(new THREE.SphereGeometry(.1,6,6),dMat);e.position.set(x,1.68,-.7);g.add(e);});
+          // Stocky body — bears are wide and low
+          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.32,.88,6,8),bMat);
+          body.rotation.z=Math.PI/2; body.position.y=.68; body.castShadow=true; g.add(body);
+          // Thick stubby legs
+          [[-0.22,-.38],[-.22,.28],[.22,-.38],[.22,.28]].forEach(([lx,lz])=>{
+            const l=new THREE.Mesh(cyl(.11,.5),dMat); l.position.set(lx,.25,lz); g.add(l);
+          });
+          // Massive head close to body
+          const head=new THREE.Mesh(sph(.3,8,7),dMat); head.position.set(0,1.06,-.62); head.castShadow=true; g.add(head);
+          // Snout
+          const snout=new THREE.Mesh(sph(.18,7,6),new THREE.MeshStandardMaterial({color:0x5a3a18,roughness:.9})); snout.scale.z=1.6; snout.position.set(0,1.0,-.88); g.add(snout);
+          // Nose
+          const nose=new THREE.Mesh(sph(.06,5,4),new THREE.MeshStandardMaterial({color:0x0a0a0a,roughness:.3})); nose.position.set(0,1.04,-1.02); g.add(nose);
+          // Ears
+          [-.2,.2].forEach(ex=>{const e=new THREE.Mesh(sph(.1,6,5),dMat);e.position.set(ex,1.34,-.62);g.add(e);});
+          // Eyes
+          [-.12,.12].forEach(ex=>{const e=new THREE.Mesh(sph(.04,5,4),eyeMat);e.position.set(ex,1.14,-.86);g.add(e);});
+
         }else if(type==='turkey'){
-          const body=new THREE.Mesh(new THREE.SphereGeometry(.4,8,8),bMat);body.position.y=.8;body.scale.z=1.4;body.castShadow=true;g.add(body);
-          [-.12,.12].forEach(x=>{const l=new THREE.Mesh(new THREE.CylinderGeometry(.04,.03,.58,5),new THREE.MeshStandardMaterial({color:0xa08040,roughness:.9}));l.position.set(x,.29,x*.5);g.add(l);});
-          for(let fi=0;fi<8;fi++){const fa=((fi/7)-.5)*Math.PI*.72;const fan=new THREE.Mesh(new THREE.PlaneGeometry(.2,.58),new THREE.MeshStandardMaterial({color:0x8a5a10,side:THREE.DoubleSide,roughness:.9}));fan.position.set(Math.sin(fa)*.28,.9,Math.cos(fa)*.28+.2);fan.rotation.y=-fa;g.add(fan);}
-          const head=new THREE.Mesh(new THREE.SphereGeometry(.14,6,6),dMat);head.position.set(0,1.15,-.52);g.add(head);
-          const wattle=new THREE.Mesh(new THREE.SphereGeometry(.06,5,5),new THREE.MeshStandardMaterial({color:0xcc2222,roughness:.6}));wattle.position.set(0,1.05,-.62);g.add(wattle);
-        }else{
-          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.62,1.22,8,8),bMat);body.rotation.z=Math.PI/2;body.position.y=1.42;body.castShadow=true;g.add(body);
-          [[-0.36,-.62],[-.36,.36],[.36,-.62],[.36,.36]].forEach(([x,z])=>{const l=new THREE.Mesh(new THREE.CylinderGeometry(.1,.08,1.22,6),dMat);l.position.set(x,.61,z);l.castShadow=true;g.add(l);});
-          const neck=new THREE.Mesh(new THREE.CylinderGeometry(.16,.24,.9,7),bMat);neck.position.set(0,2.18,-.72);neck.rotation.x=-.58;g.add(neck);
-          const head=new THREE.Mesh(new THREE.BoxGeometry(.42,.42,.72),dMat);head.position.set(0,2.68,-1.18);g.add(head);
-          const bell=new THREE.Mesh(new THREE.CapsuleGeometry(.07,.28,4,6),dMat);bell.position.set(0,2.4,-1.3);g.add(bell);
-          const aMat=new THREE.MeshStandardMaterial({color:0x5a3a10,roughness:.95,metalness:0});
-          [-1,1].forEach(s=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(.04,.06,.95,5),aMat);m.position.set(s*.22,3.08,-1.16);m.rotation.z=s*.42;g.add(m);const p=new THREE.Mesh(new THREE.BoxGeometry(.72,.08,.36),aMat);p.position.set(s*.52,3.45,-1.16);g.add(p);});
+          // Compact round body
+          const body=new THREE.Mesh(sph(.24,8,7),bMat); body.scale.set(1.1,1,1.5); body.position.y=.5; body.castShadow=true; g.add(body);
+          // Thin legs
+          [-.08,.08].forEach(lx=>{const l=new THREE.Mesh(cyl(.025,.4,5),new THREE.MeshStandardMaterial({color:0xaa8040,roughness:.9}));l.position.set(lx,.2,lx*.3);g.add(l);});
+          // Fan tail (5 planes)
+          for(let fi=0;fi<7;fi++){const fa=((fi/6)-.5)*Math.PI*.65;
+            const fan=new THREE.Mesh(new THREE.PlaneGeometry(.15,.48),new THREE.MeshStandardMaterial({color:fi%2===0?0x7a4a10:0x9a6a20,side:THREE.DoubleSide,roughness:.9}));
+            fan.position.set(Math.sin(fa)*.2,.54,Math.cos(fa)*.2+.26); fan.rotation.y=-fa; g.add(fan);}
+          // Neck
+          const neck=new THREE.Mesh(cyl(.04,.32,6),new THREE.MeshStandardMaterial({color:0x8a2020,roughness:.7})); neck.position.set(0,.74,-.32); neck.rotation.x=-.3; g.add(neck);
+          // Head
+          const head=new THREE.Mesh(sph(.1,6,5),dMat); head.position.set(0,.92,-.5); g.add(head);
+          // Wattle
+          const w=new THREE.Mesh(sph(.04,5,4),new THREE.MeshStandardMaterial({color:0xdd1111,roughness:.5})); w.position.set(0,.85,-.58); g.add(w);
+          // Snood (that droopy thing)
+          const sn=new THREE.Mesh(cyl(.02,.08,4),new THREE.MeshStandardMaterial({color:0xcc1111,roughness:.5})); sn.position.set(0,.94,-.56); g.add(sn);
+
+        }else{ // moose — largest animal, very tall
+          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.34,1.15,6,8),bMat);
+          body.rotation.z=Math.PI/2; body.position.y=1.4; body.castShadow=true; g.add(body);
+          // Hump on shoulders
+          const hump=new THREE.Mesh(sph(.26,7,6),bMat); hump.scale.set(1.2,.9,1); hump.position.set(0,1.7,.4); g.add(hump);
+          // Long legs
+          [[-0.22,-.58],[-.22,.38],[.22,-.58],[.22,.38]].forEach(([lx,lz])=>{
+            const l=new THREE.Mesh(cyl(.08,.95),dMat); l.position.set(lx,.48,lz); g.add(l);
+            const hoof=new THREE.Mesh(cyl(.1,.1),new THREE.MeshStandardMaterial({color:0x1a0a00,roughness:.95})); hoof.position.set(lx,0,lz); g.add(hoof);
+          });
+          // Thick neck
+          const neck=new THREE.Mesh(cyl(.16,.82,7),bMat); neck.position.set(0,2.1,-.62); neck.rotation.x=-.52; g.add(neck);
+          // Elongated head/snout (moose have huge bulbous noses)
+          const head=new THREE.Mesh(sph(.22,8,7),dMat); head.scale.set(.95,1,1.8); head.position.set(0,2.58,-1.12); g.add(head);
+          // Bell (dewlap)
+          const bell=new THREE.Mesh(new THREE.CapsuleGeometry(.06,.3,4,6),dMat); bell.position.set(0,2.26,-1.22); g.add(bell);
+          // Eyes
+          [-.14,.14].forEach(ex=>{const e=new THREE.Mesh(sph(.04,5,4),eyeMat);e.position.set(ex,2.65,-1.28);g.add(e);});
+          // Palmate antlers
+          const aMat2=new THREE.MeshStandardMaterial({color:0x5a3a10,roughness:.96});
+          [-1,1].forEach(s=>{const main=new THREE.Mesh(cyl(.038,.82,5),aMat2);main.position.set(s*.2,3.0,-1.1);main.rotation.z=s*.38;g.add(main);
+            const palm=new THREE.Mesh(new THREE.BoxGeometry(.68,.07,.32),aMat2);palm.position.set(s*.48,3.38,-1.1);g.add(palm);
+            for(let t=0;t<4;t++){const pt=new THREE.Mesh(cyl(.018,.22,4),aMat2);pt.position.set(s*(.2+t*.15),3.42+t*.02,-1.1);pt.rotation.z=s*.2;g.add(pt);}
+          });
         }
         return g;
       }
@@ -589,7 +646,7 @@ export default function HuntingGame() {
 
         // Terrain stick
         const ty=groundY(gs.pos.x,gs.pos.z,gs.crouching?1.1:1.75);
-        gs.pos.y+=(ty-gs.pos.y)*.25;
+        gs.pos.y=ty; // snap instantly, no lerp = no clipping
 
         // Walk bob
         if(moved)gs.walkBob+=dt*.008;
