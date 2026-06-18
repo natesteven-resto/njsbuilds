@@ -281,7 +281,9 @@ export default function HuntingGame() {
       /* ── Tent ──────────────────────────────────────────── */
       const tentGroup=new THREE.Group();tentGroup.visible=false;
       const tentMat=new THREE.MeshStandardMaterial({color:0x8a6040,roughness:.85,metalness:0,side:THREE.DoubleSide});
-      tentGroup.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(2.2,2.6,4),tentMat),{position:{y:1.3}}));
+      const tentMesh=new THREE.Mesh(new THREE.ConeGeometry(2.2,2.6,4),tentMat);
+      tentMesh.position.y=1.3;
+      tentGroup.add(tentMesh);
       scene.add(tentGroup);
 
       /* ── Weapon attached to camera ─────────────────────── */
