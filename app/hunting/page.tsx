@@ -533,7 +533,7 @@ export default function HuntingGame() {
         if(gs.keys.has('ArrowRight'))gs.yaw-=dt*.002;
 
         // Movement
-        const fwd=new THREE.Vector3(Math.sin(gs.yaw),0,Math.cos(gs.yaw));
+        const fwd=new THREE.Vector3(-Math.sin(gs.yaw),0,-Math.cos(gs.yaw));
         const rgt=new THREE.Vector3(Math.cos(gs.yaw),0,-Math.sin(gs.yaw));
         const spd=(gs.crouching?2.8:5.2)*(dt/1000);
         let moved=false;
