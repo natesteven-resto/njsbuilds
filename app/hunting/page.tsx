@@ -642,6 +642,12 @@ export default function HuntingGame() {
       // Expose functions so HTML buttons can call them
       (gs as any).shootFn=shoot;
       (gs as any).interactFn=interact;
+      (gs as any).switchFn=()=>{
+        const w=Array.from(gs.weapons),ci=w.indexOf(gs.weapon);
+        gs.weapon=w[(ci+1)%w.length];
+        buildWeapon(gs.weapon);
+        setMsg(`Switched to ${gs.weapon.toUpperCase()}`);
+      };
 
       function setMsg(m:string){gs.msg=m;gs.msgT=4;}
 
@@ -1095,7 +1101,7 @@ export default function HuntingGame() {
       )}
 
       {/* ── Mobile action buttons (HTML, reliable touch targets) ── */}
-      {'ontouchstart' in (typeof window!=='undefined'?window:{}) && (
+      {(typeof window!=='undefined'&&'ontouchstart' in window) && (
         <div style={{position:'absolute',right:12,bottom:110,display:'flex',flexDirection:'column',gap:10,zIndex:8,pointerEvents:'none'}}>
           {/* Fire button — big red, always visible */}
           <button
@@ -1123,6 +1129,29 @@ export default function HuntingGame() {
           </button>
         </div>
       )}
+
+      {/* Weapon switch button */}
+        {(typeof window!=='undefined') && (
+          <button
+            onPointerDown={e=>{e.preventDefault();gsRef.current?.switchFn?.();}}
+            style={{
+              position:'absolute',bottom:20,left:'50%',transform:'translateX(-50%)',
+              padding:'10px 22px',borderRadius:30,
+              background:'rgba(10,20,10,.88)',border:'2px solid rgba(100,200,80,.45)',
+              color:'white',fontSize:15,fontWeight:'bold',cursor:'pointer',
+              pointerEvents:'all',touchAction:'manipulation',
+              boxShadow:'0 4px 18px rgba(0,0,0,.5)',
+              display:'flex',alignItems:'center',gap:8,zIndex:8,
+              userSelect:'none',WebkitUserSelect:'none' as 'none',
+              fontFamily:'system-ui,sans-serif',letterSpacing:.5,
+            }}>
+            <span style={{fontSize:20}}>
+              {snap.weapon==='rifle'?'🎯':snap.weapon==='shotgun'?'💥':snap.weapon==='sniper'?'🔭':'🔫'}
+            </span>
+            <span style={{textTransform:'uppercase' as 'uppercase'}}>{snap.weapon}</span>
+            <span style={{fontSize:11,opacity:.6,marginLeft:2}}>↕</span>
+          </button>
+        )}
 
       {/* Quest panel */}
       {panel==='quests'&&(
