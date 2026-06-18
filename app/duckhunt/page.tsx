@@ -2,14 +2,6 @@
 
 import { useEffect, useRef } from 'react'
 
-// ── Viewport: disable zoom for game ─────────────────────────────────
-export const viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-}
-
 // ── Duck type definitions ────────────────────────────────────────────
 interface DuckDef {
   name: string; pts: number; spd: number; sc: number; freq: number
