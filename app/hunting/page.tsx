@@ -198,48 +198,21 @@ export default function HuntingGame() {
       for(let i=0;i<tPos.count;i++){
         const x=tPos.getX(i),z=tPos.getZ(i),y=tPos.getY(i);
         const n=(Math.sin(x*.31)*Math.cos(z*.28)*.5+.5)*.06;
-        if(y<-0.25){      cols.push(.18+n,.28+n,.52);          } // water/mud
-        else if(y<1.0){   cols.push(.20+n,.44+n,.15);          } // rich grass
-        else if(y<5){     cols.push(.26+n,.46+n,.16);          } // mid grass
-        else if(y<12){    cols.push(.30+n,.38+n,.18);          } // dry/rocky grass
-        else if(y<22){    cols.push(.36+n*.4,.32+n*.4,.26);    } // grey rock
-        else if(y<32){    cols.push(.50+n*.2,.46+n*.2,.42);    } // lighter rock
-        else{             cols.push(.84,.87,.92);               } // snow
+        if(y<-0.25){      cols.push(.16+n,.20+n,.40);          } // deep water edge
+        else if(y<0.3){   cols.push(.22+n,.28+n,.18);          } // wet soil
+        else if(y<2.0){   cols.push(.18+n,.46+n,.12);          } // lush grass
+        else if(y<5){     cols.push(.22+n,.50+n,.14);          } // grass
+        else if(y<10){    cols.push(.28+n,.44+n,.16);          } // dry grass
+        else if(y<18){    cols.push(.34+n,.30+n,.22);          } // rocky grass
+        else if(y<26){    cols.push(.40+n*.3,.36+n*.3,.30);    } // stone
+        else if(y<34){    cols.push(.58+n*.15,.54+n*.15,.50);  } // light rock
+        else{             cols.push(.90,.92,.96);               } // snow
       }
       tGeo.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));
       const terrainMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92,metalness:0});
       let terrainTimeUniform={value:0};
-      terrainMat.onBeforeCompile=(s:any)=>{
-        s.uniforms.uTime=terrainTimeUniform;
-        // Inject only the world Y height — using object-space position.y which equals world height
-        // since terrain is at world origin with no Y translation
-        s.vertexShader=s.vertexShader
-          .replace('void main(){','varying float vTH;\nvoid main(){')
-          .replace('#include <begin_vertex>','#include <begin_vertex>\nvTH=position.y;');
-        s.fragmentShader=s.fragmentShader
-          .replace('void main(){','varying float vTH;\nvoid main(){')
-          .replace('#include <color_fragment>',`
-            #include <color_fragment>
-            // Height-based colour blend — no noise, no artifacts
-            float h=clamp(vTH,-2.,60.);
-            // Grass tint
-            vec3 grass=vec3(.20,.46,.13);
-            // Rock
-            vec3 rock=vec3(.38,.32,.26);
-            // Snow
-            vec3 snow=vec3(.92,.94,.97);
-            vec3 col=diffuseColor.rgb;
-            // Low: blend toward rich grass
-            col=mix(col, grass, smoothstep(6.,0.,h)*.55);
-            // Mid: fade to rock
-            col=mix(col, rock, smoothstep(8.,22.,h)*smoothstep(30.,18.,h)*.7);
-            // High: snow
-            col=mix(col, snow, smoothstep(26.,34.,h));
-            // Water-edge mud
-            col=mix(col, vec3(.16,.12,.09), smoothstep(.5,-.5,h)*.8);
-            diffuseColor.rgb=col;
-          `);
-      }
+
+      // Terrain uses vertex colors — no shader override needed
             const terrain = new THREE.Mesh(tGeo, terrainMat);
       terrain.receiveShadow=true;
       scene.add(terrain);
@@ -497,36 +470,7 @@ export default function HuntingGame() {
       for(let i=dbi;i<DEAD_N*4;i++){treeDummy.position.set(9999,0,9999);treeDummy.scale.setScalar(.001);treeDummy.updateMatrix();deadBranch.setMatrixAt(i,treeDummy.matrix);}
       deadTrnk.instanceMatrix.needsUpdate=true;deadBranch.instanceMatrix.needsUpdate=true;}
 
-      /* ── Undergrowth: ferns and shrubs ─ */
-      const UG_N=isMob2?800:2000;
-      const fernMat=new THREE.MeshStandardMaterial({color:0x1e6010,roughness:.92,side:THREE.DoubleSide});
-      const shrubMat=new THREE.MeshStandardMaterial({color:0x2a5a18,roughness:.90});
-      const fernIM=new THREE.InstancedMesh(new THREE.PlaneGeometry(.6,1.0),fernMat,UG_N);
-      const shrubIM=new THREE.InstancedMesh(new THREE.SphereGeometry(.4,5,4),shrubMat,UG_N);
-      scene.add(fernIM,shrubIM);
-      {for(let ui=0;ui<UG_N;ui++){
-        const ua=Math.random()*Math.PI*2,ud=3+Math.random()*160;
-        const ux=Math.cos(ua)*ud,uz=Math.sin(ua)*ud;
-        const uh=tH(ux,uz);
-        if(uh>22||uh<0||Math.sqrt((ux-80)**2+(uz-80)**2)<30){
-          treeDummy.position.set(9999,0,9999);treeDummy.scale.setScalar(.001);treeDummy.updateMatrix();
-          fernIM.setMatrixAt(ui,treeDummy.matrix);shrubIM.setMatrixAt(ui,treeDummy.matrix);continue;
-        }
-        const ugy=groundY(ux,uz,0);
-        const usc=.5+Math.random()*.8;
-        if(ui%3===0){// fern cross
-          treeDummy.position.set(ux,ugy+.5*usc,uz);treeDummy.scale.set(usc,usc,usc);treeDummy.rotation.y=Math.random()*Math.PI*2;treeDummy.updateMatrix();
-          fernIM.setMatrixAt(ui,treeDummy.matrix);
-          treeDummy.position.set(9999,0,9999);treeDummy.scale.setScalar(.001);treeDummy.updateMatrix();shrubIM.setMatrixAt(ui,treeDummy.matrix);
-        }else{
-          treeDummy.position.set(ux,ugy+.4*usc,uz);treeDummy.scale.setScalar(usc*.7);treeDummy.rotation.y=Math.random()*Math.PI;treeDummy.updateMatrix();
-          shrubIM.setMatrixAt(ui,treeDummy.matrix);
-          treeDummy.position.set(9999,0,9999);treeDummy.scale.setScalar(.001);treeDummy.updateMatrix();fernIM.setMatrixAt(ui,treeDummy.matrix);
-        }
-      }
-      fernIM.instanceMatrix.needsUpdate=true;shrubIM.instanceMatrix.needsUpdate=true;}
-
-      /* ── Rocks ─────────────────────────────────────────── */
+            /* ── Rocks ─────────────────────────────────────────── */
       const rockMat=new THREE.MeshPhysicalMaterial({color:0x6a6a60,roughness:.82,metalness:.12,clearcoat:.05,clearcoatRoughness:.8});
       for(let i=0;i<(isMob2?40:120);i++){
         const a=Math.random()*Math.PI*2,d=8+Math.random()*170;
