@@ -20,11 +20,12 @@ const ENEMIES = [
   { name:'Rocksteady',    hp:5, atk:2, color:'#92400e', dark:'#301000', v:'rock'     },
   { name:'Krang',         hp:6, atk:2, color:'#be185d', dark:'#4a002a', v:'krang'    },
   { name:'Shredder',      hp:8, atk:3, color:'#6b21a8', dark:'#1a0035', v:'shredder', boss:true },
-] as const;
+];
 
 const LEO_MAX_HP  = 5;
 const LEVEL_TIME  = 60;
 
+type EnemyVariant = 'ninja'|'big'|'bebop'|'rock'|'krang'|'shredder';
 type Phase = 'start'|'idle'|'attack'|'special'|'miss'|'enemyatk'|'levelup'|'win'|'over';
 
 function genQ(level: number) {
@@ -45,18 +46,18 @@ function genQ(level: number) {
 export default function NinjaTurtles() {
   const [phase,setPhase]=useState<Phase>('start');
   const [level,setLevel]=useState(1);
-  const [eHp,setEHp]=useState(ENEMIES[0].hp);
-  const [lHp,setLHp]=useState(LEO_MAX_HP);
+  const [eHp,setEHp]=useState<number>(ENEMIES[0].hp);
+  const [lHp,setLHp]=useState<number>(LEO_MAX_HP);
   const [q,setQ]=useState(()=>genQ(1));
   const [fb,setFb]=useState('');
   const [score,setScore]=useState(0);
-  const [timer,setTimer]=useState(LEVEL_TIME);
+  const [timer,setTimer]=useState<number>(LEVEL_TIME);
 
   const cvs=useRef<HTMLCanvasElement>(null);
   const phRef=useRef<Phase>('start'); const phStart=useRef(0);
-  const lvRef=useRef(1); const eHpRef=useRef(ENEMIES[0].hp);
-  const lHpRef=useRef(LEO_MAX_HP); const scRef=useRef(0);
-  const tmRef=useRef(LEVEL_TIME); const lkRef=useRef(false);
+  const lvRef=useRef(1); const eHpRef=useRef<number>(ENEMIES[0].hp);
+  const lHpRef=useRef<number>(LEO_MAX_HP); const scRef=useRef(0);
+  const tmRef=useRef<number>(LEVEL_TIME); const lkRef=useRef(false);
   const timerInt=useRef<ReturnType<typeof setInterval>|null>(null);
 
   useEffect(()=>{phRef.current=phase;phStart.current=performance.now();},[phase]);
