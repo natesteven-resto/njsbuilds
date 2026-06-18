@@ -56,9 +56,9 @@ export default function HuntingGame() {
       renderer.setSize(innerWidth,innerHeight);
       renderer.shadowMap.enabled=!isMob2;
       renderer.shadowMap.type=isMob2?THREE.BasicShadowMap:THREE.PCFSoftShadowMap;
-      renderer.physicallyCorrectLights=true;
+      // physicallyCorrectLights removed — breaks standard intensity units
       renderer.toneMapping=THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure=1.0;
+      renderer.toneMappingExposure=0.72;
       renderer.outputColorSpace=THREE.SRGBColorSpace;
       mountRef.current!.appendChild(renderer.domElement);
 
@@ -211,60 +211,48 @@ export default function HuntingGame() {
       let terrainTimeUniform={value:0};
       terrainMat.onBeforeCompile=(s:any)=>{
         s.uniforms.uTime=terrainTimeUniform;
+        // Only need world-space Y (height) — derived from vertex position, no normal needed
         s.vertexShader=s.vertexShader
-          .replace('void main(){','varying vec3 vWorldPos;varying vec3 vWorldNorm;\nvoid main(){')
-          .replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvWorldPos=worldPosition.xyz;')
-          .replace('#include <defaultnormal_vertex>','#include <defaultnormal_vertex>\nvWorldNorm=normalize(mat3(modelMatrix)*objectNormal);');
+          .replace('void main(){','varying float vWY;varying vec2 vWXZ;\nvoid main(){')
+          .replace('#include <worldpos_vertex>',
+            '#include <worldpos_vertex>\nvWY=worldPosition.y;vWXZ=worldPosition.xz;');
         s.fragmentShader=s.fragmentShader
           .replace('void main(){',`
-            varying vec3 vWorldPos;
-            varying vec3 vWorldNorm;
+            varying float vWY;
+            varying vec2 vWXZ;
             uniform float uTime;
-            float hash2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-            float noise2(vec2 p){vec2 i=floor(p);vec2 f=fract(p);float a=hash2(i);float b=hash2(i+vec2(1,0));float c=hash2(i+vec2(0,1));float d=hash2(i+vec2(1,1));vec2 u=f*f*(3.-2.*f);return mix(a,b,u.x)+(c-a)*u.y*(1.-u.x)+(d-b)*u.x*u.y;}
-            float fbm2(vec2 p){return noise2(p)*.5+noise2(p*2.1+1.3)*.3+noise2(p*4.7+2.8)*.2;}
+            float h3(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+            float n3(vec2 p){vec2 i=floor(p);vec2 f=fract(p);float a=h3(i),b=h3(i+vec2(1,0)),cc=h3(i+vec2(0,1)),d=h3(i+vec2(1,1));vec2 u=f*f*(3.-2.*f);return mix(a,b,u.x)+(cc-a)*u.y*(1.-u.x)+(d-b)*u.x*u.y;}
             void main(){`)
           .replace('#include <color_fragment>',`
             #include <color_fragment>
-            float wy=vWorldPos.y;
-            vec2 wp=vWorldPos.xz;
-            float slope=1.-abs(normalize(vWorldNorm).y);
-            float detail=fbm2(wp*.25);
-            float microN=noise2(wp*4.);
-            float microF=noise2(wp*12.);
-            // Rich grass with micro-variation
+            float wy=clamp(vWY,-5.,60.);
+            float d1=n3(vWXZ*.22);
+            float d2=n3(vWXZ*.8+1.3);
+            float detail=d1*.65+d2*.35;
+            // Grass zone
             if(wy<6.){
-              vec3 gA=vec3(.16,.42,.10);vec3 gB=vec3(.24,.52,.14);
-              vec3 grassCol=mix(gA,gB,detail*.8+microN*.2);
-              // Dirt patches
-              float dirt=smoothstep(.5,.7,fbm2(wp*.18+2.3));
-              grassCol=mix(grassCol,vec3(.32,.22,.12),dirt*.5);
-              diffuseColor.rgb=mix(diffuseColor.rgb,grassCol,.7);
+              vec3 gA=vec3(.17,.42,.11);vec3 gB=vec3(.24,.52,.15);
+              vec3 gc=mix(gA,gB,detail);
+              float dirt=step(.68,n3(vWXZ*.15+3.1));
+              gc=mix(gc,vec3(.30,.21,.12),dirt*.45);
+              diffuseColor.rgb=mix(diffuseColor.rgb,gc,.65);
             }
-            // Rocky slopes — slope angle triggers rock texture
-            vec3 rockA=vec3(.38+detail*.06,.34+detail*.04,.28+detail*.03);
-            vec3 rockB=vec3(.28+microF*.05,.25+microF*.03,.22+microF*.02);
-            vec3 rockCol=mix(rockA,rockB,microN);
-            float rockMix=smoothstep(.35,.65,slope);
-            diffuseColor.rgb=mix(diffuseColor.rgb,rockCol,rockMix);
-            // High rock/scree zone
-            if(wy>10.&&wy<26.){
-              float rockZone=smoothstep(10.,18.,wy)*(1.-smoothstep(18.,26.,wy));
-              diffuseColor.rgb=mix(diffuseColor.rgb,rockCol,rockZone*.7);
+            // Mid height rocky transition
+            if(wy>8.&&wy<26.){
+              float blend=smoothstep(8.,16.,wy)*(1.-smoothstep(20.,26.,wy));
+              vec3 rc=vec3(.36+detail*.07,.32+detail*.05,.26+detail*.04);
+              diffuseColor.rgb=mix(diffuseColor.rgb,rc,blend*.75);
             }
-            // Snow — crystaline sparkle
+            // Snow cap
             if(wy>24.){
-              float snowBlend=smoothstep(24.,32.,wy);
-              float sparkle=pow(noise2(wp*8.),8.)*2.;
-              vec3 snowCol=vec3(.90,.93,.98)+sparkle*.15;
-              diffuseColor.rgb=mix(diffuseColor.rgb,snowCol,snowBlend);
+              float sb=smoothstep(24.,32.,wy);
+              diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.92,.94,.98),sb);
             }
-            // Wet mud near water
-            if(wy<0.2){
-              diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.18,.14,.10),.7);
-            }
+            // Water-edge mud
+            if(wy<.1) diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.17,.13,.09),.7);
           `);
-      };
+      }
       const terrain = new THREE.Mesh(tGeo, terrainMat);
       terrain.receiveShadow=true;
       scene.add(terrain);
@@ -655,6 +643,7 @@ export default function HuntingGame() {
         const esl=new THREE.DirectionalLight(0xfff5e0,5);esl.position.set(1,2,1);envS.add(esl);
         envS.add(new THREE.Mesh(new THREE.SphereGeometry(50,8,8),new THREE.MeshBasicMaterial({color:0x87ceeb,side:THREE.BackSide})));
         scene.environment=pmrem.fromScene(envS).texture;
+        (scene as any).environmentIntensity=0.3;
         pmrem.dispose();
       }catch(ee){console.warn('PMREM:',ee);}
 
@@ -901,7 +890,7 @@ buildWeapon('pistol');
             comp.addPass(ssao);
           }catch(e2){console.warn('SSAO:',e2);}
         }
-        comp.addPass(new (UnrealBloomPass as any)(new THREE.Vector2(innerWidth,innerHeight),isMob2?0.28:0.52,0.38,0.76));
+        comp.addPass(new (UnrealBloomPass as any)(new THREE.Vector2(innerWidth,innerHeight),isMob2?0.12:0.20,0.5,0.88));
         comp.addPass(new (OutputPass as any)());
         (gs as any).composer=comp;
       }catch(ee){console.warn('Bloom:',ee);}})();
@@ -1098,11 +1087,11 @@ buildWeapon('pistol');
         const sunH=Math.max(0,Math.sin((gs.tod-.25)/(.78-.25)*Math.PI));
         sun.position.set(Math.cos(sunPhi)*220,Math.sin(sunPhi)*180,60);
         sunDisc.position.copy(sun.position).normalize().multiplyScalar(460);
-        sun.intensity=isDaytime?Math.max(0,sunH*2.4):0;
+        sun.intensity=isDaytime?Math.max(0,sunH*1.4):0;
         sun.color.setHSL(isDaytime?(.12+sunH*.04):0,.9,.85);
-        ambient.intensity=isDaytime?.3+sunH*.7:.1;
+        ambient.intensity=isDaytime?.22+sunH*.45:.06;
         ambient.color.set(isDaytime?0xfff8e0:0x101828);
-        hemi.intensity=isDaytime?.2+sunH*.4:.06;
+        hemi.intensity=isDaytime?.15+sunH*.28:.04;
         const skyS=(isDaytime?new THREE.Color(0x4a82c8):new THREE.Color(0x050c20));
         const horS=(isDaytime?new THREE.Color(0xc8dce8):new THREE.Color(0x101828));
         // Update atmospheric sky uniforms
