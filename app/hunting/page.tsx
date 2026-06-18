@@ -8,11 +8,12 @@ import type * as T from 'three';
    ═══════════════════════════════════════════════════════════════ */
 
 const QUESTS = [
-  { id:'q1', icon:'🦌', name:'First Blood',    desc:'Hunt 2 deer',    goal:2, reward:'🎯 Hunting Rifle',      key:'deer'   },
-  { id:'q2', icon:'🐻', name:'Bear Bane',       desc:'Hunt a bear',    goal:1, reward:'💥 12-Gauge Shotgun',   key:'bear'   },
-  { id:'q3', icon:'🫎', name:'Moose Master',    desc:'Hunt a moose',   goal:1, reward:'🔭 .308 Sniper Rifle',  key:'moose'  },
-  { id:'q4', icon:'🐟', name:"Gone Fishin'",   desc:'Catch 3 fish',   goal:3, reward:'📦 +60 Ammo',           key:'fish'   },
-  { id:'q5', icon:'🦃', name:'Turkey Season',  desc:'Hunt 3 turkeys', goal:3, reward:'🦺 Hunting Vest +50HP', key:'turkey' },
+  { id:'q1', icon:'🦌', name:'First Blood',      desc:'Hunt 2 deer',          goal:2, reward:'🎯 Hunting Rifle',        key:'deer'   },
+  { id:'q2', icon:'🐻', name:'Bear Bane',         desc:'Hunt a bear',          goal:1, reward:'💥 12-Gauge Shotgun',     key:'bear'   },
+  { id:'q3', icon:'🫎', name:'Moose Master',      desc:'Hunt a moose',         goal:1, reward:'🔭 .308 Sniper Rifle',    key:'moose'  },
+  { id:'q4', icon:'🐟', name:"Gone Fishin'",     desc:'Catch 3 fish',         goal:3, reward:'📦 +60 Ammo',             key:'fish'   },
+  { id:'q5', icon:'🦃', name:'Turkey Season',    desc:'Hunt 3 turkeys',       goal:3, reward:'🦺 Hunting Vest +50HP',   key:'turkey' },
+  { id:'q6', icon:'🐐', name:'Mountain Hunter',  desc:'Hunt 2 mountain goats',goal:2, reward:'🏔️ Elite Rifle Scope',   key:'goat'   },
 ];
 
 const ADEF: Record<string,{hp:number;meat:number;sightR:number;sightA:number;soundR:number;smellR:number;spd:number;aSpd:number}> = {
@@ -20,6 +21,7 @@ const ADEF: Record<string,{hp:number;meat:number;sightR:number;sightA:number;sou
   bear:   { hp:300, meat:3, sightR:55, sightA:0.5,  soundR:65, smellR:110, spd:5.5, aSpd:6.5},
   turkey: { hp:50,  meat:1, sightR:80, sightA:0.8,  soundR:35, smellR:60,  spd:6.2, aSpd:0  },
   moose:  { hp:220, meat:4, sightR:50, sightA:0.5,  soundR:55, smellR:100, spd:5.0, aSpd:5.5},
+  goat:   { hp:90,  meat:2, sightR:90, sightA:0.7,  soundR:50, smellR:80,  spd:6.8, aSpd:0  },
 };
 
 export default function HuntingGame() {
@@ -406,107 +408,130 @@ export default function HuntingGame() {
       }
       function makeAnimal(type:string):T.Group{
         const g=new THREE.Group();
-        const cols:Record<string,number>={deer:0x8b6914,bear:0x2a1a0a,turkey:0x704a18,moose:0x4a3010};
-        const bMat=new THREE.MeshStandardMaterial({color:cols[type],roughness:.88,metalness:0});
-        const dMat=new THREE.MeshStandardMaterial({color:new THREE.Color(cols[type]).multiplyScalar(.58),roughness:.88,metalness:0});
-        const eyeMat=new THREE.MeshStandardMaterial({color:0x0a0a0a,roughness:.2,metalness:0});
-        function cyl(r:number,h:number,segs=6){return new THREE.CylinderGeometry(r,r*1.05,h,segs);}
-        function sph(r:number,ws=8,hs=6){return new THREE.SphereGeometry(r,ws,hs);}
+        const cols:Record<string,number>={deer:0x8b6914,bear:0x2a1a0a,turkey:0x704a18,moose:0x4a3010,goat:0xddd8cc};
+        const darkMul:Record<string,number>={deer:.62,bear:.55,turkey:.58,moose:.6,goat:.78};
+        const bCol=cols[type]||0x8b6914;
+        const bMat=new THREE.MeshStandardMaterial({color:bCol,roughness:.88,metalness:0});
+        const dMat=new THREE.MeshStandardMaterial({color:new THREE.Color(bCol).multiplyScalar(darkMul[type]||.62),roughness:.88,metalness:0});
+        const eyeMat=new THREE.MeshStandardMaterial({color:0x0a0505,roughness:.15,metalness:0});
+        const noseMat=new THREE.MeshStandardMaterial({color:0x0a0a0a,roughness:.3,metalness:0});
+        function cyl(r:number,h:number,s=7){return new THREE.CylinderGeometry(r,r*1.06,h,s);}
+        function sph(r:number,w=8,h2=6){return new THREE.SphereGeometry(r,w,h2);}
+        function mk(geo:any,mat:any){const m=new THREE.Mesh(geo,mat);m.castShadow=true;return m;}
 
         if(type==='deer'){
-          // Body — slender horizontal capsule
-          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.19,.82,6,8),bMat);
-          body.rotation.z=Math.PI/2; body.position.y=.88; body.castShadow=true; g.add(body);
-          // Belly/chest lighter patch
-          const belly=new THREE.Mesh(sph(.16,6,5),new THREE.MeshStandardMaterial({color:0xc8a060,roughness:.9,metalness:0}));
-          belly.scale.set(.9,1,.75); belly.position.set(0,.82,.1); g.add(belly);
-          // Legs
-          [[-0.16,-0.36],[-0.16,.28],[.16,-.36],[.16,.28]].forEach(([lx,lz])=>{
-            const l=new THREE.Mesh(cyl(.045,.72),dMat); l.position.set(lx,.36,lz); g.add(l);
-            // Hoof
-            const h2=new THREE.Mesh(cyl(.055,.08),new THREE.MeshStandardMaterial({color:0x1a1008,roughness:.95})); h2.position.set(lx,0,lz); g.add(h2);
+          const body=mk(sph(.35,8,6),bMat); body.scale.set(.52,.60,1.68); body.position.set(0,.82,0); g.add(body);
+          const belly=mk(sph(.32,6,5),new THREE.MeshStandardMaterial({color:0xc8a05a,roughness:.9}));
+          belly.scale.set(.4,.45,1.3); belly.position.set(0,.76,.05); g.add(belly);
+          [[-0.17,-0.34],[-0.17,.30],[.17,-.34],[.17,.30]].forEach(([lx,lz])=>{
+            const leg=mk(cyl(.042,.72),dMat); leg.position.set(lx,.36,lz); g.add(leg);
+            const hoof=mk(cyl(.052,.09),new THREE.MeshStandardMaterial({color:0x1a0a00,roughness:.95}));
+            hoof.position.set(lx,0,lz); g.add(hoof);
           });
-          // Neck
-          const neck=new THREE.Mesh(cyl(.09,.55,7),bMat); neck.position.set(0,1.22,-.44); neck.rotation.x=-.55; g.add(neck);
-          // Head
-          const head=new THREE.Mesh(sph(.18,8,7),bMat); head.position.set(0,1.62,-.72); head.scale.z=1.5; g.add(head);
-          // Ears
-          [-.14,.14].forEach(ex=>{const e=new THREE.Mesh(sph(.08,6,5),bMat);e.scale.y=1.6;e.position.set(ex,1.78,-.7);g.add(e);});
-          // Eyes
-          [-.1,.1].forEach(ex=>{const e=new THREE.Mesh(sph(.03,5,4),eyeMat);e.position.set(ex,1.66,-.88);g.add(e);});
-          // Antlers
-          const aMat2=new THREE.MeshStandardMaterial({color:0x5a3a10,roughness:.96});
-          [-.08,.08].forEach(ax=>{const m=new THREE.Mesh(cyl(.02,.46,5),aMat2);m.position.set(ax,1.9,-.7);m.rotation.z=ax*4;g.add(m);
-            const t1=new THREE.Mesh(cyl(.014,.24,4),aMat2);t1.position.set(ax*2.5,2.12,-.75);t1.rotation.z=ax*2;g.add(t1);});
-          // White tail
-          const tail=new THREE.Mesh(sph(.08,5,4),new THREE.MeshStandardMaterial({color:0xeee8d8,roughness:.9})); tail.position.set(0,.88,.46); g.add(tail);
+          const neck=mk(cyl(.09,.52,7),bMat); neck.position.set(0,1.18,-.44); neck.rotation.x=-.56; g.add(neck);
+          const head=mk(sph(.18,8,7),bMat); head.scale.set(.88,1,1.42); head.position.set(0,1.55,-.72); g.add(head);
+          [-.14,.14].forEach(ex=>{
+            const e=mk(sph(.088,6,5),bMat); e.scale.set(1,1.65,.7); e.position.set(ex,1.7,-.68); g.add(e);
+            const ei=mk(sph(.06,5,4),new THREE.MeshStandardMaterial({color:0xd4a0a0,roughness:.9})); ei.scale.set(.7,1.3,.5); ei.position.set(ex,1.72,-.67); g.add(ei);
+          });
+          [-.1,.1].forEach(ex=>{
+            const ew=mk(sph(.038,6,5),new THREE.MeshStandardMaterial({color:0xf0e8d0,roughness:.3})); ew.position.set(ex,1.6,-.86); g.add(ew);
+            const ep=mk(sph(.026,5,4),eyeMat); ep.position.set(ex*1.02,1.6,-.88); g.add(ep);
+          });
+          const nose=mk(sph(.05,5,4),noseMat); nose.scale.set(1.1,.7,1); nose.position.set(0,1.56,-.88); g.add(nose);
+          const aMat=new THREE.MeshStandardMaterial({color:0x5a3a10,roughness:.97});
+          [-.08,.08].forEach(ax=>{
+            const main=mk(cyl(.022,.46,5),aMat); main.position.set(ax,1.78,-.68); main.rotation.z=ax*3.8; g.add(main);
+            const b1=mk(cyl(.014,.24,4),aMat); b1.position.set(ax*2.2,2.0,-.72); b1.rotation.z=ax*1.8; b1.rotation.x=-.3; g.add(b1);
+            const b2=mk(cyl(.012,.2,4),aMat); b2.position.set(ax*2.8,2.12,-.7); b2.rotation.z=ax*1.2; b2.rotation.x=.2; g.add(b2);
+          });
+          const tail=mk(sph(.09,5,4),new THREE.MeshStandardMaterial({color:0xeee8d8,roughness:.9})); tail.position.set(0,.88,.48); g.add(tail);
 
         }else if(type==='bear'){
-          // Stocky body — bears are wide and low
-          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.32,.88,6,8),bMat);
-          body.rotation.z=Math.PI/2; body.position.y=.68; body.castShadow=true; g.add(body);
-          // Thick stubby legs
-          [[-0.22,-.38],[-.22,.28],[.22,-.38],[.22,.28]].forEach(([lx,lz])=>{
-            const l=new THREE.Mesh(cyl(.11,.5),dMat); l.position.set(lx,.25,lz); g.add(l);
+          const body=mk(sph(.42,8,6),bMat); body.scale.set(.95,.78,1.52); body.position.set(0,.68,0); g.add(body);
+          const chest=mk(sph(.38,7,5),new THREE.MeshStandardMaterial({color:new THREE.Color(bCol).multiplyScalar(.72),roughness:.92}));
+          chest.scale.set(.6,.55,1.0); chest.position.set(0,.65,-.18); g.add(chest);
+          [[-0.28,-.35],[-.28,.28],[.28,-.35],[.28,.28]].forEach(([lx,lz])=>{
+            const l=mk(cyl(.12,.55),dMat); l.position.set(lx,.275,lz); g.add(l);
+            const p=mk(cyl(.14,.08),new THREE.MeshStandardMaterial({color:0x0a0500,roughness:.95})); p.position.set(lx,0,lz); g.add(p);
           });
-          // Massive head close to body
-          const head=new THREE.Mesh(sph(.3,8,7),dMat); head.position.set(0,1.06,-.62); head.castShadow=true; g.add(head);
-          // Snout
-          const snout=new THREE.Mesh(sph(.18,7,6),new THREE.MeshStandardMaterial({color:0x5a3a18,roughness:.9})); snout.scale.z=1.6; snout.position.set(0,1.0,-.88); g.add(snout);
-          // Nose
-          const nose=new THREE.Mesh(sph(.06,5,4),new THREE.MeshStandardMaterial({color:0x0a0a0a,roughness:.3})); nose.position.set(0,1.04,-1.02); g.add(nose);
-          // Ears
-          [-.2,.2].forEach(ex=>{const e=new THREE.Mesh(sph(.1,6,5),dMat);e.position.set(ex,1.34,-.62);g.add(e);});
-          // Eyes
-          [-.12,.12].forEach(ex=>{const e=new THREE.Mesh(sph(.04,5,4),eyeMat);e.position.set(ex,1.14,-.86);g.add(e);});
+          const head=mk(sph(.32,8,7),dMat); head.position.set(0,1.05,-.65); g.add(head);
+          const snout=mk(sph(.2,7,6),new THREE.MeshStandardMaterial({color:0x5a3a18,roughness:.88}));
+          snout.scale.set(.85,.7,1.55); snout.position.set(0,.98,-.92); g.add(snout);
+          const nose=mk(sph(.07,6,5),noseMat); nose.position.set(0,1.02,-1.08); g.add(nose);
+          [-.18,.18].forEach(ex=>{
+            const e=mk(sph(.11,7,6),dMat); e.position.set(ex,1.34,-.62); g.add(e);
+            const ei=mk(sph(.07,5,4),new THREE.MeshStandardMaterial({color:0x1a0a00,roughness:.9})); ei.position.set(ex,1.35,-.66); g.add(ei);
+          });
+          [-.13,.13].forEach(ex=>{ const ep=mk(sph(.05,5,4),eyeMat); ep.position.set(ex,1.12,-.88); g.add(ep); });
 
         }else if(type==='turkey'){
-          // Compact round body
-          const body=new THREE.Mesh(sph(.24,8,7),bMat); body.scale.set(1.1,1,1.5); body.position.y=.5; body.castShadow=true; g.add(body);
-          // Thin legs
-          [-.08,.08].forEach(lx=>{const l=new THREE.Mesh(cyl(.025,.4,5),new THREE.MeshStandardMaterial({color:0xaa8040,roughness:.9}));l.position.set(lx,.2,lx*.3);g.add(l);});
-          // Fan tail (5 planes)
-          for(let fi=0;fi<7;fi++){const fa=((fi/6)-.5)*Math.PI*.65;
-            const fan=new THREE.Mesh(new THREE.PlaneGeometry(.15,.48),new THREE.MeshStandardMaterial({color:fi%2===0?0x7a4a10:0x9a6a20,side:THREE.DoubleSide,roughness:.9}));
-            fan.position.set(Math.sin(fa)*.2,.54,Math.cos(fa)*.2+.26); fan.rotation.y=-fa; g.add(fan);}
-          // Neck
-          const neck=new THREE.Mesh(cyl(.04,.32,6),new THREE.MeshStandardMaterial({color:0x8a2020,roughness:.7})); neck.position.set(0,.74,-.32); neck.rotation.x=-.3; g.add(neck);
-          // Head
-          const head=new THREE.Mesh(sph(.1,6,5),dMat); head.position.set(0,.92,-.5); g.add(head);
-          // Wattle
-          const w=new THREE.Mesh(sph(.04,5,4),new THREE.MeshStandardMaterial({color:0xdd1111,roughness:.5})); w.position.set(0,.85,-.58); g.add(w);
-          // Snood (that droopy thing)
-          const sn=new THREE.Mesh(cyl(.02,.08,4),new THREE.MeshStandardMaterial({color:0xcc1111,roughness:.5})); sn.position.set(0,.94,-.56); g.add(sn);
+          const body=mk(sph(.26,8,7),bMat); body.scale.set(1.0,.92,1.38); body.position.set(0,.48,0); g.add(body);
+          const breast=mk(sph(.22,7,6),new THREE.MeshStandardMaterial({color:0x4a3818,roughness:.85}));
+          breast.scale.set(.7,.7,1.0); breast.position.set(0,.44,-.16); g.add(breast);
+          const lMat3=new THREE.MeshStandardMaterial({color:0xaa7030,roughness:.88});
+          [-.07,.07].forEach(lx=>{
+            const l=mk(cyl(.03,.42,5),lMat3); l.position.set(lx,.21,lx*.4); g.add(l);
+          });
+          for(let fi=0;fi<7;fi++){
+            const fa=((fi/6)-.5)*Math.PI*.68;
+            const fan=new THREE.Mesh(new THREE.PlaneGeometry(.14,.52),new THREE.MeshStandardMaterial({color:fi%2===0?0x7a4a10:0x9a6a22,side:THREE.DoubleSide,roughness:.88}));
+            fan.position.set(Math.sin(fa)*.18,.52,Math.cos(fa)*.18+.28); fan.rotation.y=-fa; g.add(fan);
+          }
+          const neck=mk(cyl(.04,.28,5),new THREE.MeshStandardMaterial({color:0x8a1a1a,roughness:.75})); neck.position.set(0,.72,-.3); neck.rotation.x=-.22; g.add(neck);
+          const head=mk(sph(.115,7,6),dMat); head.position.set(0,.9,-.48); g.add(head);
+          const wattle=mk(sph(.046,5,4),new THREE.MeshStandardMaterial({color:0xdd1111,roughness:.5})); wattle.scale.set(1,1.5,1); wattle.position.set(0,.83,-.57); g.add(wattle);
+          const snood=mk(cyl(.022,.1,4),new THREE.MeshStandardMaterial({color:0xcc1111,roughness:.5})); snood.position.set(0,.93,-.55); snood.rotation.x=.3; g.add(snood);
+          [-.055,.055].forEach(ex=>{ const e=mk(sph(.03,5,4),eyeMat); e.position.set(ex,.92,-.57); g.add(e); });
 
-        }else{ // moose — largest animal, very tall
-          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.34,1.15,6,8),bMat);
-          body.rotation.z=Math.PI/2; body.position.y=1.4; body.castShadow=true; g.add(body);
-          // Hump on shoulders
-          const hump=new THREE.Mesh(sph(.26,7,6),bMat); hump.scale.set(1.2,.9,1); hump.position.set(0,1.7,.4); g.add(hump);
-          // Long legs
-          [[-0.22,-.58],[-.22,.38],[.22,-.58],[.22,.38]].forEach(([lx,lz])=>{
-            const l=new THREE.Mesh(cyl(.08,.95),dMat); l.position.set(lx,.48,lz); g.add(l);
-            const hoof=new THREE.Mesh(cyl(.1,.1),new THREE.MeshStandardMaterial({color:0x1a0a00,roughness:.95})); hoof.position.set(lx,0,lz); g.add(hoof);
+        }else if(type==='moose'){
+          const body=mk(sph(.5,8,6),bMat); body.scale.set(.58,.78,2.08); body.position.set(0,1.42,0); g.add(body);
+          const hump=mk(sph(.3,7,6),bMat); hump.scale.set(.85,.75,1.1); hump.position.set(0,1.82,.38); g.add(hump);
+          [[-0.24,-.6],[-.24,.42],[.24,-.6],[.24,.42]].forEach(([lx,lz])=>{
+            const upper=mk(cyl(.1,.58),dMat); upper.position.set(lx,.82,lz); g.add(upper);
+            const lower=mk(cyl(.072,.68),new THREE.MeshStandardMaterial({color:0x1e1008,roughness:.9})); lower.position.set(lx,.34,lz); g.add(lower);
+            const hoof=mk(cyl(.1,.1),noseMat); hoof.position.set(lx,0,lz); g.add(hoof);
           });
-          // Thick neck
-          const neck=new THREE.Mesh(cyl(.16,.82,7),bMat); neck.position.set(0,2.1,-.62); neck.rotation.x=-.52; g.add(neck);
-          // Elongated head/snout (moose have huge bulbous noses)
-          const head=new THREE.Mesh(sph(.22,8,7),dMat); head.scale.set(.95,1,1.8); head.position.set(0,2.58,-1.12); g.add(head);
-          // Bell (dewlap)
-          const bell=new THREE.Mesh(new THREE.CapsuleGeometry(.06,.3,4,6),dMat); bell.position.set(0,2.26,-1.22); g.add(bell);
-          // Eyes
-          [-.14,.14].forEach(ex=>{const e=new THREE.Mesh(sph(.04,5,4),eyeMat);e.position.set(ex,2.65,-1.28);g.add(e);});
-          // Palmate antlers
-          const aMat2=new THREE.MeshStandardMaterial({color:0x5a3a10,roughness:.96});
-          [-1,1].forEach(s=>{const main=new THREE.Mesh(cyl(.038,.82,5),aMat2);main.position.set(s*.2,3.0,-1.1);main.rotation.z=s*.38;g.add(main);
-            const palm=new THREE.Mesh(new THREE.BoxGeometry(.68,.07,.32),aMat2);palm.position.set(s*.48,3.38,-1.1);g.add(palm);
-            for(let t=0;t<4;t++){const pt=new THREE.Mesh(cyl(.018,.22,4),aMat2);pt.position.set(s*(.2+t*.15),3.42+t*.02,-1.1);pt.rotation.z=s*.2;g.add(pt);}
+          const neck=mk(cyl(.17,.82,7),bMat); neck.position.set(0,2.12,-.65); neck.rotation.x=-.5; g.add(neck);
+          const head=mk(sph(.26,8,7),dMat); head.scale.set(.82,1,1.95); head.position.set(0,2.6,-1.18); g.add(head);
+          const bigNose=mk(sph(.2,8,7),new THREE.MeshStandardMaterial({color:new THREE.Color(bCol).multiplyScalar(.52),roughness:.88}));
+          bigNose.scale.set(.9,1.1,1.4); bigNose.position.set(0,2.52,-1.45); g.add(bigNose);
+          const nose2=mk(sph(.08,6,5),noseMat); nose2.position.set(0,2.5,-1.62); g.add(nose2);
+          const bell=mk(cyl(.06,.4,5),dMat); bell.position.set(0,2.28,-1.25); g.add(bell);
+          [-.16,.16].forEach(ex=>{ const e=mk(sph(.05,5,4),eyeMat); e.position.set(ex,2.65,-1.3); g.add(e); });
+          const aMat=new THREE.MeshStandardMaterial({color:0x5a3a10,roughness:.97});
+          [-1,1].forEach(s=>{
+            const main=mk(cyl(.042,.88,5),aMat); main.position.set(s*.22,3.02,-1.12); main.rotation.z=s*.36; g.add(main);
+            const palm=new THREE.Mesh(new THREE.BoxGeometry(.72,.07,.3),aMat); palm.position.set(s*.52,3.42,-1.12); g.add(palm);
+            for(let t2=0;t2<5;t2++){
+              const pt=mk(cyl(.016,.24,4),aMat); pt.position.set(s*(.16+t2*.15),3.46,-1.12); pt.rotation.z=s*.18; g.add(pt);
+            }
           });
+
+        }else{ // goat — mountain goat, stocky and sure-footed
+          const body=mk(sph(.3,8,6),bMat); body.scale.set(.72,.7,1.38); body.position.set(0,.68,0); g.add(body);
+          const coat=mk(sph(.28,7,5),new THREE.MeshStandardMaterial({color:0xf4f0e8,roughness:.95}));
+          coat.scale.set(.55,.5,.95); coat.position.set(0,.65,0); g.add(coat);
+          [[-0.14,-.28],[-.14,.22],[.14,-.28],[.14,.22]].forEach(([lx,lz])=>{
+            const l=mk(cyl(.055,.52),dMat); l.position.set(lx,.26,lz); g.add(l);
+            const h2=mk(cyl(.065,.09),noseMat); h2.position.set(lx,0,lz); g.add(h2);
+          });
+          const neck=mk(cyl(.08,.38,6),bMat); neck.position.set(0,.98,-.38); neck.rotation.x=-.48; g.add(neck);
+          const head=mk(sph(.18,7,6),bMat); head.scale.set(.88,1,1.2); head.position.set(0,1.28,-.56); g.add(head);
+          const beard=mk(cyl(.04,.22,5),new THREE.MeshStandardMaterial({color:0xf0ece0,roughness:.95})); beard.position.set(0,1.06,-.62); g.add(beard);
+          const hornMat=new THREE.MeshStandardMaterial({color:0x1a1208,roughness:.88});
+          [-.09,.09].forEach(hx=>{
+            const h1=mk(cyl(.028,.32,5),hornMat); h1.position.set(hx,1.44,-.5); h1.rotation.z=hx*3.2; h1.rotation.x=.2; g.add(h1);
+            const h3=mk(cyl(.02,.2,5),hornMat); h3.position.set(hx*1.6,1.62,-.52); h3.rotation.z=hx*4; h3.rotation.x=.8; g.add(h3);
+          });
+          [-.09,.09].forEach(ex=>{ const e=mk(sph(.032,5,4),eyeMat); e.position.set(ex,1.32,-.68); g.add(e); });
+          const nose3=mk(sph(.055,5,4),noseMat); nose3.scale.set(1,.7,1); nose3.position.set(0,1.26,-.7); g.add(nose3);
         }
         return g;
       }
 
       const animals:Animal3D[]=[];
+
       const aDefs:[string,number,number,number][]=isMob2?[['deer',5,80,2],['bear',2,300,3],['turkey',5,50,1],['moose',2,220,4]]:[['deer',8,80,2],['bear',3,300,3],['turkey',8,50,1],['moose',3,220,4]];
       aDefs.forEach(([type,n,hp,meat])=>{
         for(let i=0;i<n;i++){
@@ -525,6 +550,20 @@ export default function HuntingGame() {
           animals.push({type,group:grp,hp,maxHp:hp,meat,state:'idle',alertLevel:0,alertMethod:'',angle:Math.random()*Math.PI*2,anim:Math.random()*10,dieT:0,trophyScore:ts});
         }
       });
+
+      // Mountain goats — spawn specifically on high-elevation terrain
+      const goatCount=isMob2?5:10;
+      for(let gi=0;gi<goatCount*8&&animals.filter(a=>a.type==='goat').length<goatCount;gi++){
+        const ga=Math.random()*Math.PI*2;
+        const gd=155+Math.random()*85; // mountain zone
+        const gx=Math.cos(ga)*gd, gz=Math.sin(ga)*gd;
+        const gh=tH(gx,gz);
+        if(gh<12||gh>45)continue; // only on slopes (not flat ground, not extreme peaks)
+        const gGrp=makeAnimal('goat');
+        gGrp.position.set(gx,groundY(gx,gz,0),gz);
+        scene.add(gGrp);
+        animals.push({type:'goat',group:gGrp,hp:ADEF.goat.hp,maxHp:ADEF.goat.hp,meat:ADEF.goat.meat,state:'idle',alertLevel:0,alertMethod:'',angle:Math.random()*Math.PI*2,anim:Math.random()*10,dieT:0,trophyScore:Math.random()});
+      }
 
       /* ── Blood drops ───────────────────────────────────── */
       const bloodGeo=new THREE.SphereGeometry(.06,4,4);
