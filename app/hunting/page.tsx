@@ -55,14 +55,17 @@ export default function HuntingGame() {
       renderer.setPixelRatio(Math.min(devicePixelRatio, isMob2 ? 1.2 : 2));
       renderer.setSize(innerWidth,innerHeight);
       renderer.shadowMap.enabled=!isMob2;
-      renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+      renderer.shadowMap.type=isMob2?THREE.BasicShadowMap:THREE.PCFSoftShadowMap;
+      renderer.physicallyCorrectLights=true;
       renderer.toneMapping=THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure=1.15;
+      renderer.toneMappingExposure=1.0;
+      renderer.outputColorSpace=THREE.SRGBColorSpace;
       mountRef.current!.appendChild(renderer.domElement);
 
       /* ── Scene ─────────────────────────────────────────── */
       scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x8aaa80,0.0022);
+      // Height-aware fog: linear for better mountain visibility
+      scene.fog=new THREE.Fog(0x8aaa80,60,520);
 
       /* ── Camera ────────────────────────────────────────── */
       camera = new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,1400);
@@ -74,7 +77,8 @@ export default function HuntingGame() {
       const hemi     = new THREE.HemisphereLight(0x87ceeb,0x3a5a2a,0.4);
       const sun      = new THREE.DirectionalLight(0xfff5e0,2.2);
       sun.castShadow=true;
-      sun.shadow.mapSize.set(2048,2048);
+      sun.shadow.mapSize.set(isMob2?1024:2048,isMob2?1024:2048);
+      sun.shadow.radius=isMob2?1:2; // PCF soft edge radius
       sun.shadow.camera.near=1;sun.shadow.camera.far=500;
       sun.shadow.camera.left=-200;sun.shadow.camera.right=200;
       sun.shadow.camera.top=200;sun.shadow.camera.bottom=-200;
@@ -84,13 +88,68 @@ export default function HuntingGame() {
       scene.add(ambient,hemi,sun,fill);
 
       /* ── Sky sphere ────────────────────────────────────── */
+      const skyUniforms={
+        uSunDir:{value:new THREE.Vector3(.6,.3,.4)},
+        uSunElev:{value:.5},
+        uDaytime:{value:1.0},
+        uStarSeed:{value:Math.random()*100},
+      };
       const skyMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(490,32,16),
+        new THREE.SphereGeometry(490,64,32),
         new THREE.ShaderMaterial({
           side:THREE.BackSide,
-          uniforms:{ uSky:{value:new THREE.Color(0x4a82c8)}, uHorizon:{value:new THREE.Color(0xc8dce8)}, uGround:{value:new THREE.Color(0x2a5a1a)} },
-          vertexShader:`varying vec3 vPos; void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-          fragmentShader:`uniform vec3 uSky,uHorizon,uGround; varying vec3 vPos; void main(){float h=normalize(vPos).y;vec3 c=h>0.0?mix(uHorizon,uSky,pow(h,0.5)):mix(uHorizon,uGround,-h*3.0);gl_FragColor=vec4(c,1.0);}`,
+          uniforms:skyUniforms,
+          vertexShader:`
+            varying vec3 vDir;
+            void main(){vDir=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}
+          `,
+          fragmentShader:`
+            uniform vec3 uSunDir;
+            uniform float uSunElev,uDaytime,uStarSeed;
+            varying vec3 vDir;
+            float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+            float fbm(vec2 p){return hash(p)*.5+hash(p*2.3+1.7)*.3+hash(p*5.1+3.2)*.2;}
+            void main(){
+              vec3 d=normalize(vDir);
+              float h=max(d.y,0.0);
+              float nh=max(-d.y,0.0);
+              // Sun angle for scatter
+              float cosTheta=dot(d,normalize(uSunDir));
+              float mie=pow(max(cosTheta,0.0),8.0)*uDaytime;
+              float rayleigh=1.0+cosTheta*cosTheta;
+              // Day sky colours with Rayleigh
+              vec3 dayZenith=vec3(.12,.28,.75);
+              vec3 dayHorizon=vec3(.55,.75,.95);
+              vec3 dawnZenith=vec3(.08,.12,.45);
+              vec3 dawnHorizon=mix(vec3(.95,.45,.15),vec3(.65,.75,.95),uSunElev);
+              vec3 nightZenith=vec3(.01,.02,.08);
+              vec3 nightHorizon=vec3(.02,.04,.10);
+              vec3 zenith=mix(mix(nightZenith,dawnZenith,uDaytime),dayZenith,smoothstep(.25,.7,uSunElev)*uDaytime);
+              vec3 horizon=mix(mix(nightHorizon,dawnHorizon,uDaytime),dayHorizon,smoothstep(.1,.6,uSunElev)*uDaytime);
+              vec3 skyCol=mix(horizon,zenith,pow(h,.45));
+              // Mie scattering (sun glow halo)
+              skyCol+=vec3(1.,.65,.25)*mie*2.5*uDaytime;
+              // Horizon luminance band
+              float hBand=exp(-h*8.0)*uDaytime;
+              skyCol+=mix(vec3(.95,.55,.2),vec3(.8,.9,1.),uSunElev)*hBand*.6;
+              // Ground (dark below horizon)
+              skyCol=mix(mix(vec3(.04,.06,.04),vec3(.08,.06,.04),uDaytime),skyCol,smoothstep(-.08,.04,d.y));
+              // Stars at night
+              if(uDaytime<.4){
+                float starMask=1.-uDaytime*2.5;
+                vec2 sp=vec2(atan(d.x,d.z),asin(d.y));
+                float star=pow(fbm(sp*18.0+uStarSeed),16.)*starMask*3.;
+                skyCol+=vec3(.9,.95,1.)*star;
+                // Milky Way band
+                float mw=exp(-abs(d.y-.1)*6.)*abs(sin(atan(d.x,d.z)*3.))*starMask*.2;
+                skyCol+=vec3(.3,.25,.4)*mw;
+              }
+              // Subtle clouds
+              float cloud=smoothstep(.55,.75,fbm(d.xz*2.5+vec2(uSunElev*.3,.1)));
+              skyCol=mix(skyCol,mix(vec3(.6,.65,.7),vec3(.95,.9,.85),uSunElev),cloud*uDaytime*.45);
+              gl_FragColor=vec4(skyCol,1.0);
+            }
+          `,
         })
       );
       scene.add(skyMesh);
@@ -148,7 +207,65 @@ export default function HuntingGame() {
         else{             cols.push(.84,.87,.92);               } // snow
       }
       tGeo.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));
-      const terrain = new THREE.Mesh(tGeo, new THREE.MeshStandardMaterial({ vertexColors:true, roughness:.92, metalness:0 }));
+      const terrainMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92,metalness:0});
+      let terrainTimeUniform={value:0};
+      terrainMat.onBeforeCompile=(s:any)=>{
+        s.uniforms.uTime=terrainTimeUniform;
+        s.vertexShader=s.vertexShader
+          .replace('void main(){','varying vec3 vWorldPos;varying vec3 vWorldNorm;\nvoid main(){')
+          .replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvWorldPos=worldPosition.xyz;')
+          .replace('#include <defaultnormal_vertex>','#include <defaultnormal_vertex>\nvWorldNorm=normalize(mat3(modelMatrix)*objectNormal);');
+        s.fragmentShader=s.fragmentShader
+          .replace('void main(){',`
+            varying vec3 vWorldPos;
+            varying vec3 vWorldNorm;
+            uniform float uTime;
+            float hash2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+            float noise2(vec2 p){vec2 i=floor(p);vec2 f=fract(p);float a=hash2(i);float b=hash2(i+vec2(1,0));float c=hash2(i+vec2(0,1));float d=hash2(i+vec2(1,1));vec2 u=f*f*(3.-2.*f);return mix(a,b,u.x)+(c-a)*u.y*(1.-u.x)+(d-b)*u.x*u.y;}
+            float fbm2(vec2 p){return noise2(p)*.5+noise2(p*2.1+1.3)*.3+noise2(p*4.7+2.8)*.2;}
+            void main(){`)
+          .replace('#include <color_fragment>',`
+            #include <color_fragment>
+            float wy=vWorldPos.y;
+            vec2 wp=vWorldPos.xz;
+            float slope=1.-abs(normalize(vWorldNorm).y);
+            float detail=fbm2(wp*.25);
+            float microN=noise2(wp*4.);
+            float microF=noise2(wp*12.);
+            // Rich grass with micro-variation
+            if(wy<6.){
+              vec3 gA=vec3(.16,.42,.10);vec3 gB=vec3(.24,.52,.14);
+              vec3 grassCol=mix(gA,gB,detail*.8+microN*.2);
+              // Dirt patches
+              float dirt=smoothstep(.5,.7,fbm2(wp*.18+2.3));
+              grassCol=mix(grassCol,vec3(.32,.22,.12),dirt*.5);
+              diffuseColor.rgb=mix(diffuseColor.rgb,grassCol,.7);
+            }
+            // Rocky slopes — slope angle triggers rock texture
+            vec3 rockA=vec3(.38+detail*.06,.34+detail*.04,.28+detail*.03);
+            vec3 rockB=vec3(.28+microF*.05,.25+microF*.03,.22+microF*.02);
+            vec3 rockCol=mix(rockA,rockB,microN);
+            float rockMix=smoothstep(.35,.65,slope);
+            diffuseColor.rgb=mix(diffuseColor.rgb,rockCol,rockMix);
+            // High rock/scree zone
+            if(wy>10.&&wy<26.){
+              float rockZone=smoothstep(10.,18.,wy)*(1.-smoothstep(18.,26.,wy));
+              diffuseColor.rgb=mix(diffuseColor.rgb,rockCol,rockZone*.7);
+            }
+            // Snow — crystaline sparkle
+            if(wy>24.){
+              float snowBlend=smoothstep(24.,32.,wy);
+              float sparkle=pow(noise2(wp*8.),8.)*2.;
+              vec3 snowCol=vec3(.90,.93,.98)+sparkle*.15;
+              diffuseColor.rgb=mix(diffuseColor.rgb,snowCol,snowBlend);
+            }
+            // Wet mud near water
+            if(wy<0.2){
+              diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.18,.14,.10),.7);
+            }
+          `);
+      };
+      const terrain = new THREE.Mesh(tGeo, terrainMat);
       terrain.receiveShadow=true;
       scene.add(terrain);
 
@@ -244,9 +361,23 @@ export default function HuntingGame() {
           }
         `,
       });
-      const lake=new THREE.Mesh(new THREE.CircleGeometry(28,64),waterMat);
-      lake.rotation.x=-Math.PI/2;lake.position.set(80,.08,80);
+      // PBR lake with depth color + shoreline foam
+      const lakeGeo2=new THREE.CircleGeometry(28,80);
+      lakeGeo2.rotateX(-Math.PI/2);
+      const lakePbrMat=new THREE.MeshPhysicalMaterial({
+        color:0x124a8a, roughness:.04, metalness:.0,
+        transparent:true, opacity:.82,
+        transmission:0.3, ior:1.33,
+        reflectivity:.95, envMapIntensity:1.4,
+      });
+      const lake=new THREE.Mesh(lakeGeo2,lakePbrMat);
+      lake.position.set(80,.08,80); lake.receiveShadow=true;
       scene.add(lake);
+      // Shore foam ring
+      const foamGeo=new THREE.RingGeometry(25,28.5,80);
+      foamGeo.rotateX(-Math.PI/2);
+      const foamMat=new THREE.MeshBasicMaterial({color:0xdde8f0,transparent:true,opacity:.35,side:THREE.DoubleSide});
+      const foam=new THREE.Mesh(foamGeo,foamMat);foam.position.set(80,.1,80);scene.add(foam);
 
       // Mountains are now baked into the terrain heightmap — no separate cones needed
 
@@ -331,8 +462,97 @@ export default function HuntingGame() {
       cone2IM.instanceMatrix.needsUpdate=true;
       cone3IM.instanceMatrix.needsUpdate=true;
 
+      /* ── Birch trees (white bark, slender, deciduous look) ─ */
+      const BIRCH_N=isMob2?60:140;
+      const birchTrnk=new THREE.InstancedMesh(new THREE.CylinderGeometry(.12,.18,1,8),
+        new THREE.MeshStandardMaterial({color:0xe8e4d8,roughness:.88,metalness:0}),BIRCH_N);
+      // Dark ring marks on birch
+      const birchRingMat=new THREE.MeshStandardMaterial({color:0x2a2220,roughness:.95});
+      const birchTop=new THREE.InstancedMesh(new THREE.SphereGeometry(1,8,6),
+        new THREE.MeshStandardMaterial({color:0x8ab840,roughness:.85,metalness:0,transparent:true,opacity:.88}),BIRCH_N);
+      birchTrnk.castShadow=true; birchTop.castShadow=true;
+      scene.add(birchTrnk,birchTop);
+      {let bi=0;
+      for(let attempt=0;attempt<BIRCH_N*5&&bi<BIRCH_N;attempt++){
+        const bca=Math.random()*Math.PI*2,bcd=15+Math.random()*140;
+        const bx=Math.cos(bca)*bcd,bz=Math.sin(bca)*bcd;
+        const bh=tH(bx,bz);
+        if(bh>22||bh<0||Math.sqrt((bx-80)**2+(bz-80)**2)<34||Math.sqrt(bx*bx+bz*bz)<10)continue;
+        const bsc=.8+Math.random()*.7,btrH=5*bsc,bgy=groundY(bx,bz,0);
+        treeDummy.position.set(bx,bgy+btrH/2,bz);treeDummy.scale.set(bsc,btrH,bsc);treeDummy.rotation.y=Math.random()*Math.PI*2;treeDummy.updateMatrix();
+        birchTrnk.setMatrixAt(bi,treeDummy.matrix);
+        treeDummy.position.set(bx,bgy+btrH+1.5*bsc,bz);treeDummy.scale.set(2.2*bsc,1.8*bsc,2.2*bsc);treeDummy.updateMatrix();
+        birchTop.setMatrixAt(bi,treeDummy.matrix);bi++;
+      }
+      for(let i=bi;i<BIRCH_N;i++){treeDummy.position.set(9999,0,9999);treeDummy.scale.setScalar(.001);treeDummy.updateMatrix();birchTrnk.setMatrixAt(i,treeDummy.matrix);birchTop.setMatrixAt(i,treeDummy.matrix);}
+      birchTrnk.instanceMatrix.needsUpdate=true;birchTop.instanceMatrix.needsUpdate=true;}
+
+      /* ── Dead/snag trees (bare, weathered, spooky) ─ */
+      const DEAD_N=isMob2?20:50;
+      const deadMat=new THREE.MeshStandardMaterial({color:0x4a3828,roughness:.98,metalness:0});
+      const deadTrnk=new THREE.InstancedMesh(new THREE.CylinderGeometry(.14,.22,1,6),deadMat,DEAD_N);
+      deadTrnk.castShadow=true; scene.add(deadTrnk);
+      // Bare branches via short cylinders
+      const deadBranchMat=new THREE.MeshStandardMaterial({color:0x3a2818,roughness:.98,metalness:0});
+      const deadBranch=new THREE.InstancedMesh(new THREE.CylinderGeometry(.04,.08,.8,5),deadBranchMat,DEAD_N*4);
+      deadBranch.castShadow=true; scene.add(deadBranch);
+      {let di=0,dbi=0;
+      for(let attempt=0;attempt<DEAD_N*6&&di<DEAD_N;attempt++){
+        const dca=Math.random()*Math.PI*2,dcd=20+Math.random()*130;
+        const dx2=Math.cos(dca)*dcd,dz2=Math.sin(dca)*dcd;
+        const dh=tH(dx2,dz2);
+        if(dh>28||dh<0||Math.sqrt((dx2-80)**2+(dz2-80)**2)<34)continue;
+        const dsc=.7+Math.random()*.8,dtrH=(4+Math.random()*3)*dsc,dgy=groundY(dx2,dz2,0);
+        treeDummy.position.set(dx2,dgy+dtrH/2,dz2);treeDummy.scale.set(dsc,dtrH,dsc);treeDummy.updateMatrix();
+        deadTrnk.setMatrixAt(di,treeDummy.matrix);
+        // 3-4 bare branches
+        for(let b=0;b<4&&dbi<DEAD_N*4;b++){
+          const ba=b/4*Math.PI*2+Math.random()*.5;
+          const brY=dgy+dtrH*(.5+Math.random()*.4);
+          const brL=.6+Math.random()*.8;
+          treeDummy.position.set(dx2+Math.cos(ba)*.5,brY,dz2+Math.sin(ba)*.5);
+          treeDummy.scale.set(1,brL,1);
+          treeDummy.rotation.z=Math.PI/2-(.3+Math.random()*.4);
+          treeDummy.rotation.y=ba;treeDummy.updateMatrix();
+          deadBranch.setMatrixAt(dbi,treeDummy.matrix);dbi++;
+        }
+        treeDummy.rotation.set(0,0,0);di++;
+      }
+      for(let i=di;i<DEAD_N;i++){treeDummy.position.set(9999,0,9999);treeDummy.scale.setScalar(.001);treeDummy.updateMatrix();deadTrnk.setMatrixAt(i,treeDummy.matrix);}
+      for(let i=dbi;i<DEAD_N*4;i++){treeDummy.position.set(9999,0,9999);treeDummy.scale.setScalar(.001);treeDummy.updateMatrix();deadBranch.setMatrixAt(i,treeDummy.matrix);}
+      deadTrnk.instanceMatrix.needsUpdate=true;deadBranch.instanceMatrix.needsUpdate=true;}
+
+      /* ── Undergrowth: ferns and shrubs ─ */
+      const UG_N=isMob2?800:2000;
+      const fernMat=new THREE.MeshStandardMaterial({color:0x1e6010,roughness:.92,side:THREE.DoubleSide});
+      const shrubMat=new THREE.MeshStandardMaterial({color:0x2a5a18,roughness:.90});
+      const fernIM=new THREE.InstancedMesh(new THREE.PlaneGeometry(.6,1.0),fernMat,UG_N);
+      const shrubIM=new THREE.InstancedMesh(new THREE.SphereGeometry(.4,5,4),shrubMat,UG_N);
+      scene.add(fernIM,shrubIM);
+      {for(let ui=0;ui<UG_N;ui++){
+        const ua=Math.random()*Math.PI*2,ud=3+Math.random()*160;
+        const ux=Math.cos(ua)*ud,uz=Math.sin(ua)*ud;
+        const uh=tH(ux,uz);
+        if(uh>22||uh<0||Math.sqrt((ux-80)**2+(uz-80)**2)<30){
+          treeDummy.position.set(9999,0,9999);treeDummy.scale.setScalar(.001);treeDummy.updateMatrix();
+          fernIM.setMatrixAt(ui,treeDummy.matrix);shrubIM.setMatrixAt(ui,treeDummy.matrix);continue;
+        }
+        const ugy=groundY(ux,uz,0);
+        const usc=.5+Math.random()*.8;
+        if(ui%3===0){// fern cross
+          treeDummy.position.set(ux,ugy+.5*usc,uz);treeDummy.scale.set(usc,usc,usc);treeDummy.rotation.y=Math.random()*Math.PI*2;treeDummy.updateMatrix();
+          fernIM.setMatrixAt(ui,treeDummy.matrix);
+          treeDummy.position.set(9999,0,9999);treeDummy.scale.setScalar(.001);treeDummy.updateMatrix();shrubIM.setMatrixAt(ui,treeDummy.matrix);
+        }else{
+          treeDummy.position.set(ux,ugy+.4*usc,uz);treeDummy.scale.setScalar(usc*.7);treeDummy.rotation.y=Math.random()*Math.PI;treeDummy.updateMatrix();
+          shrubIM.setMatrixAt(ui,treeDummy.matrix);
+          treeDummy.position.set(9999,0,9999);treeDummy.scale.setScalar(.001);treeDummy.updateMatrix();fernIM.setMatrixAt(ui,treeDummy.matrix);
+        }
+      }
+      fernIM.instanceMatrix.needsUpdate=true;shrubIM.instanceMatrix.needsUpdate=true;}
+
       /* ── Rocks ─────────────────────────────────────────── */
-      const rockMat=new THREE.MeshStandardMaterial({color:0x6a6a60,roughness:.85,metalness:.08});
+      const rockMat=new THREE.MeshPhysicalMaterial({color:0x6a6a60,roughness:.82,metalness:.12,clearcoat:.05,clearcoatRoughness:.8});
       for(let i=0;i<(isMob2?40:120);i++){
         const a=Math.random()*Math.PI*2,d=8+Math.random()*170;
         const rx=Math.cos(a)*d,rz=Math.sin(a)*d;
@@ -672,7 +892,16 @@ buildWeapon('pistol');
         ]);
         const comp=new (EffectComposer as any)(renderer);
         comp.addPass(new (RenderPass as any)(scene,camera));
-        comp.addPass(new (UnrealBloomPass as any)(new THREE.Vector2(innerWidth,innerHeight),isMob2?0.28:0.48,0.4,0.80));
+        // SSAO for ambient occlusion (desktop only — too heavy for mobile)
+        if(!isMob2){
+          try{
+            const {SSAOPass}=await import('three/examples/jsm/postprocessing/SSAOPass.js');
+            const ssao=new (SSAOPass as any)(scene,camera,innerWidth,innerHeight);
+            ssao.kernelRadius=14; ssao.minDistance=.004; ssao.maxDistance=.12;
+            comp.addPass(ssao);
+          }catch(e2){console.warn('SSAO:',e2);}
+        }
+        comp.addPass(new (UnrealBloomPass as any)(new THREE.Vector2(innerWidth,innerHeight),isMob2?0.28:0.52,0.38,0.76));
         comp.addPass(new (OutputPass as any)());
         (gs as any).composer=comp;
       }catch(ee){console.warn('Bloom:',ee);}})();
@@ -876,13 +1105,18 @@ buildWeapon('pistol');
         hemi.intensity=isDaytime?.2+sunH*.4:.06;
         const skyS=(isDaytime?new THREE.Color(0x4a82c8):new THREE.Color(0x050c20));
         const horS=(isDaytime?new THREE.Color(0xc8dce8):new THREE.Color(0x101828));
-        (skyMesh.material as any).uniforms.uSky.value.lerp(skyS,.04);
-        (skyMesh.material as any).uniforms.uHorizon.value.lerp(horS,.04);
+        // Update atmospheric sky uniforms
+        const skyMat2=skyMesh.material as any;
+        skyMat2.uniforms.uSunDir.value.copy(sun.position).normalize();
+        skyMat2.uniforms.uSunElev.value+=(sunH-skyMat2.uniforms.uSunElev.value)*.04;
+        skyMat2.uniforms.uDaytime.value+=(Number(isDaytime)-skyMat2.uniforms.uDaytime.value)*.04;
         const fogC=isDaytime?new THREE.Color(0x8aaa80):new THREE.Color(0x060c18);
         (scene.fog as any).color.lerp(fogC,.04);
-        (scene.fog as any).density=isDaytime?.004:.012;
+        (scene.fog as any).near=isDaytime?60:30;
+        (scene.fog as any).far=isDaytime?520:180;
         sunDisc.visible=isDaytime&&sunH>.1;
         waterMat.uniforms.uTime.value+=dt*.001;
+        if(terrainTimeUniform)terrainTimeUniform.value+=dt*.001;
 
         // Campfire flicker
         if(gs.campfire){fireLight.intensity=4+Math.sin(Date.now()*.014)*2+Math.random()*.6;fireLight.color.setHSL(.06+Math.random()*.04,1,.5);}
