@@ -45,7 +45,7 @@ export default function HuntingGame() {
 
       // ── Scene ─────────────────────────────────────────────
       scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x7a9e7a, 0.006);
+      scene.fog = new THREE.FogExp2(0x8aaa80, 0.004);
       scene.background = new THREE.Color(0x87ceeb);
 
       // ── Camera ────────────────────────────────────────────
@@ -106,14 +106,24 @@ export default function HuntingGame() {
       }
       terrainGeo.computeVertexNormals();
 
-      // Multi-texture terrain using vertex colors
+      // Realistic terrain vertex colors
       const colors = [];
       for (let i = 0; i < positions.count; i++) {
+        const x = positions.getX(i), z = positions.getZ(i);
         const y = positions.getY(i);
-        if (y < -0.3) { colors.push(0.2, 0.35, 0.6); } // water-ish low
-        else if (y < 1)  { colors.push(0.15, 0.45, 0.12); } // grass
-        else if (y < 3)  { colors.push(0.25, 0.52, 0.15); } // bright grass
-        else              { colors.push(0.35, 0.55, 0.22); } // high ground
+        // Subtle per-vertex variation for natural look
+        const n = (Math.sin(x * 0.3) * Math.cos(z * 0.28) * 0.5 + 0.5) * 0.06;
+        if (y < -0.2) {
+          colors.push(0.18 + n, 0.28 + n, 0.55); // wet mud / water edge
+        } else if (y < 0.6) {
+          colors.push(0.22 + n, 0.44 + n, 0.16); // dark rich grass
+        } else if (y < 1.8) {
+          colors.push(0.28 + n, 0.50 + n, 0.18); // mid grass
+        } else if (y < 3.5) {
+          colors.push(0.34 + n, 0.42 + n, 0.20); // drier highland
+        } else {
+          colors.push(0.42 + n, 0.38 + n, 0.24); // rocky peak dirt
+        }
       }
       terrainGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
@@ -168,7 +178,7 @@ export default function HuntingGame() {
         trunk.castShadow = true;
         group.add(trunk);
         // 3 cone layers
-        const greens = [0x1a5a0a, 0x2a7a12, 0x1e6a0e];
+        const greens = [0x1a5a08, 0x245a0c, 0x1a6a0a];
         for (let i = 0; i < 3; i++) {
           const coneH = (4 - i * 0.5) * scale;
           const coneR = (2.2 - i * 0.5) * scale;
@@ -587,7 +597,7 @@ export default function HuntingGame() {
       const groundDir = new THREE.Vector3(0, -1, 0);
 
       function update(dt: number) {
-        gs.tod = (gs.tod + dt / 120) % 1;
+        gs.tod = (gs.tod + dt / 480000) % 1; // 8-minute day cycle
 
         // Camera rotation
         gs.yaw   -= gs.mouse.dx; gs.mouse.dx = 0;
@@ -642,30 +652,49 @@ export default function HuntingGame() {
         camera.rotation.x = gs.pitch;
 
         // Sky color based on TOD
+        // TOD-based sky + fog — smooth interpolation with no wrap glitch
         const todColors = [
-          { t: 0.0,  sky: [0x050e1e, 0x0a1832], fog: 0x0a1428, exp: 0.015 },
-          { t: 0.15, sky: [0x1a1040, 0x2a1a20], fog: 0x201828, exp: 0.01  },
-          { t: 0.25, sky: [0x2a1a50, 0xe07040], fog: 0x705030, exp: 0.008 },
-          { t: 0.4,  sky: [0x1a4a9a, 0x7ab4e8], fog: 0x8aaa88, exp: 0.006 },
-          { t: 0.65, sky: [0x1840a0, 0x60a0e0], fog: 0x7a9e7a, exp: 0.006 },
-          { t: 0.78, sky: [0x180820, 0xe05020], fog: 0x704830, exp: 0.008 },
-          { t: 0.88, sky: [0x08081a, 0x101428], fog: 0x101420, exp: 0.012 },
+          { t: 0.00, sky: 0x030a18, fog: 0x060e20, exp: 0.012 }, // deep night
+          { t: 0.18, sky: 0x0a0a20, fog: 0x0a1020, exp: 0.010 }, // pre-dawn
+          { t: 0.27, sky: 0xc0602a, fog: 0x885530, exp: 0.007 }, // sunrise orange
+          { t: 0.35, sky: 0x6090d0, fog: 0x90a888, exp: 0.005 }, // morning blue
+          { t: 0.50, sky: 0x4a82c8, fog: 0x8aaa80, exp: 0.004 }, // midday bright
+          { t: 0.65, sky: 0x3a78c0, fog: 0x80a07a, exp: 0.004 }, // afternoon
+          { t: 0.76, sky: 0xd05018, fog: 0x885040, exp: 0.006 }, // sunset
+          { t: 0.84, sky: 0x1a0a30, fog: 0x201028, exp: 0.009 }, // dusk
+          { t: 0.92, sky: 0x050c18, fog: 0x060a18, exp: 0.011 }, // night
         ];
+        // Find current segment
         let ci2 = 0;
         for (let i = todColors.length - 1; i >= 0; i--) { if (gs.tod >= todColors[i].t) { ci2 = i; break; } }
         const c1e = todColors[ci2], c2e = todColors[(ci2 + 1) % todColors.length];
-        const tf = (gs.tod - c1e.t) / ((c2e.t <= c1e.t ? c2e.t + 1 : c2e.t) - c1e.t);
-        scene.background = new THREE.Color(c1e.sky[1]).lerp(new THREE.Color(c2e.sky[1]), Math.max(0, Math.min(1, tf)));
-        scene.fog = new THREE.FogExp2(
-          new THREE.Color(c1e.fog).lerp(new THREE.Color(c2e.fog), Math.max(0, Math.min(1, tf))).getHex(),
-          lerp(c1e.exp, c2e.exp, Math.max(0, Math.min(1, tf)))
-        );
+        const segLen = ci2 === todColors.length - 1 ? (1 - c1e.t + c2e.t) : (c2e.t - c1e.t);
+        const tf = Math.max(0, Math.min(1, (gs.tod - c1e.t) / Math.max(0.001, segLen)));
+        const skyCol = new THREE.Color(c1e.sky).lerp(new THREE.Color(c2e.sky), tf);
+        const fogCol = new THREE.Color(c1e.fog).lerp(new THREE.Color(c2e.fog), tf);
+        const fogDensity = lerp(c1e.exp, c2e.exp, tf);
+        scene.background = skyCol;
+        if (scene.fog) {
+          (scene.fog as any).color.copy(fogCol);
+          (scene.fog as any).density = fogDensity;
+        }
 
         // Dynamic light (sun position)
-        const sunAngle = gs.tod * Math.PI * 2 - Math.PI / 2;
-        sun.position.set(Math.cos(sunAngle) * 200, Math.sin(sunAngle) * 180, 60);
-        sun.intensity = Math.max(0.05, Math.sin(gs.tod * Math.PI));
-        ambientLight.intensity = 0.2 + Math.max(0, Math.sin(gs.tod * Math.PI)) * 0.6;
+        // Sun arc: rises at tod≈0.27, sets at tod≈0.76, centred at 0.515
+        const sunNorm = ((gs.tod - 0.27 + 1) % 1) / 0.49; // 0→1 from sunrise to sunset
+        const sunAngle = sunNorm * Math.PI;
+        const sunH = Math.sin(sunAngle);
+        sun.position.set(
+          Math.cos(sunAngle - Math.PI / 2) * 220,
+          sunH * 200 - 10,
+          80
+        );
+        const isDaytime = gs.tod > 0.27 && gs.tod < 0.76;
+        sun.intensity = isDaytime ? Math.max(0.05, sunH * 2.2) : 0.0;
+        sun.color.setHSL(isDaytime ? lerp(0.08, 0.15, sunH) : 0.6, 1, 0.8);
+        ambientLight.intensity = isDaytime ? 0.3 + sunH * 0.7 : 0.08;
+        ambientLight.color.set(isDaytime ? 0xfff8e8 : 0x101830);
+        hemiLight.intensity = isDaytime ? 0.2 + sunH * 0.4 : 0.05;
 
         // Campfire flicker
         if (gs.campfire) {
