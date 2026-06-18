@@ -225,32 +225,72 @@ export default function HuntingGame() {
       }
 
       /* ── Trees ─────────────────────────────────────────── */
-      const treeMats=[
-        new THREE.MeshStandardMaterial({color:0x1a5808,roughness:.88,metalness:0}),
-        new THREE.MeshStandardMaterial({color:0x1e6a0a,roughness:.88,metalness:0}),
-        new THREE.MeshStandardMaterial({color:0x245c0c,roughness:.88,metalness:0}),
-      ];
-      const trunkMat=new THREE.MeshStandardMaterial({color:0x4a2a0a,roughness:.95,metalness:0});
-      function makeTree(x:number,z:number,sc:number){
-        const g=new THREE.Group();
-        const trH=4*sc;
-        const tr=new THREE.Mesh(new THREE.CylinderGeometry(.16*sc,.28*sc,trH,7),trunkMat);
-        tr.position.y=trH/2;tr.castShadow=true;g.add(tr);
-        for(let i=0;i<3;i++){
-          const cH=(4.5-i*.6)*sc,cR=(2.4-i*.55)*sc;
-          const c=new THREE.Mesh(new THREE.ConeGeometry(cR,cH,8),treeMats[i]);
-          c.position.y=trH+(i*1.9+1.4)*sc;c.castShadow=true;g.add(c);
-        }
-        g.position.set(x,groundY(x,z,0),z);
-        scene.add(g);
+      // ── Instanced trees — 4 draw calls total regardless of tree count ──
+      const TREE_N = isMob2 ? 500 : 900;
+      const treeDummy = new THREE.Object3D();
+      const trnkIM = new THREE.InstancedMesh(
+        new THREE.CylinderGeometry(.17,.3,1,7), // unit height, scaled per instance
+        new THREE.MeshStandardMaterial({color:0x4a2808,roughness:.96,metalness:0}), TREE_N);
+      const cone1IM = new THREE.InstancedMesh(
+        new THREE.ConeGeometry(1,1,8),
+        new THREE.MeshStandardMaterial({color:0x18560a,roughness:.88,metalness:0}), TREE_N);
+      const cone2IM = new THREE.InstancedMesh(
+        new THREE.ConeGeometry(1,1,8),
+        new THREE.MeshStandardMaterial({color:0x1e680c,roughness:.88,metalness:0}), TREE_N);
+      const cone3IM = new THREE.InstancedMesh(
+        new THREE.ConeGeometry(1,1,8),
+        new THREE.MeshStandardMaterial({color:0x226010,roughness:.88,metalness:0}), TREE_N);
+      trnkIM.castShadow=true; cone1IM.castShadow=true;
+      scene.add(trnkIM,cone1IM,cone2IM,cone3IM);
+
+      // Forest cluster centers — natural groupings like real woods
+      const clusters:number[][]=[];
+      for(let c=0;c<28;c++){
+        const ca=Math.random()*Math.PI*2, cd=20+Math.random()*140;
+        clusters.push([Math.cos(ca)*cd, Math.sin(ca)*cd]);
       }
-      for(let i=0;i<(isMob2?140:280);i++){
-        const a=Math.random()*Math.PI*2,d=10+Math.random()*165;
-        const tx=Math.cos(a)*d,tz=Math.sin(a)*d;
+
+      let tIdx=0;
+      for(let attempt=0;attempt<TREE_N*4&&tIdx<TREE_N;attempt++){
+        // Pick a cluster and spread around it (forest clumping)
+        const cl=clusters[Math.floor(Math.random()*clusters.length)];
+        const spread=4+Math.random()*22;
+        const ang2=Math.random()*Math.PI*2;
+        const tx=cl[0]+Math.cos(ang2)*spread;
+        const tz=cl[1]+Math.sin(ang2)*spread;
         const ld=Math.sqrt((tx-80)**2+(tz-80)**2);
-        if(ld<35||Math.sqrt(tx*tx+tz*tz)<7)continue;
-        makeTree(tx,tz,.7+Math.random()*.9);
+        const pd=Math.sqrt(tx*tx+tz*tz);
+        if(ld<34||pd<10||Math.abs(tx)>178||Math.abs(tz)>178)continue;
+        const sc=0.65+Math.random()*1.1;
+        const trH=4.2*sc;
+        const gy=groundY(tx,tz,0);
+        // Trunk
+        treeDummy.position.set(tx,gy+trH/2,tz);
+        treeDummy.scale.set(sc,trH,sc);
+        treeDummy.rotation.set(0,Math.random()*Math.PI*2,0);
+        treeDummy.updateMatrix();
+        trnkIM.setMatrixAt(tIdx,treeDummy.matrix);
+        // 3 cone layers
+        [[2.4,4.5,0],[1.85,3.8,1.9],[1.3,3.0,3.6]].forEach(([cr,ch,yo],li)=>{
+          treeDummy.position.set(tx,gy+trH+(yo+1.3)*sc,tz);
+          treeDummy.scale.set(cr*sc,ch*sc,cr*sc);
+          treeDummy.updateMatrix();
+          [cone1IM,cone2IM,cone3IM][li].setMatrixAt(tIdx,treeDummy.matrix);
+        });
+        tIdx++;
       }
+      // Fill unused slots off-screen
+      for(let i=tIdx;i<TREE_N;i++){
+        treeDummy.position.set(9999,0,9999);treeDummy.scale.setScalar(.01);treeDummy.updateMatrix();
+        trnkIM.setMatrixAt(i,treeDummy.matrix);
+        cone1IM.setMatrixAt(i,treeDummy.matrix);
+        cone2IM.setMatrixAt(i,treeDummy.matrix);
+        cone3IM.setMatrixAt(i,treeDummy.matrix);
+      }
+      trnkIM.instanceMatrix.needsUpdate=true;
+      cone1IM.instanceMatrix.needsUpdate=true;
+      cone2IM.instanceMatrix.needsUpdate=true;
+      cone3IM.instanceMatrix.needsUpdate=true;
 
       /* ── Rocks ─────────────────────────────────────────── */
       const rockMat=new THREE.MeshStandardMaterial({color:0x6a6a60,roughness:.85,metalness:.08});
@@ -459,13 +499,17 @@ export default function HuntingGame() {
       }
 
       const animals:Animal3D[]=[];
-      const aDefs:[string,number,number,number][]=isMob2?[['deer',4,80,2],['bear',2,300,3],['turkey',4,50,1],['moose',2,220,4]]:[['deer',7,80,2],['bear',3,300,3],['turkey',7,50,1],['moose',3,220,4]];
+      const aDefs:[string,number,number,number][]=isMob2?[['deer',5,80,2],['bear',2,300,3],['turkey',5,50,1],['moose',2,220,4]]:[['deer',8,80,2],['bear',3,300,3],['turkey',8,50,1],['moose',3,220,4]];
       aDefs.forEach(([type,n,hp,meat])=>{
         for(let i=0;i<n;i++){
-          const a=Math.random()*Math.PI*2,d=22+Math.random()*100;
-          const ax=Math.cos(a)*d,az=Math.sin(a)*d;
+          // Place animals deep in forest clusters, hard to spot
+          const cl=clusters[Math.floor(Math.random()*clusters.length)];
+          const spread=8+Math.random()*18;
+          const ang3=Math.random()*Math.PI*2;
+          const ax=cl[0]+Math.cos(ang3)*spread;
+          const az=cl[1]+Math.sin(ang3)*spread;
           const ld=Math.sqrt((ax-80)**2+(az-80)**2);
-          if(ld<36)continue;
+          if(ld<38||Math.sqrt(ax*ax+az*az)<14)continue;
           const grp=makeAnimal(type);
           grp.position.set(ax,groundY(ax,az,0),az);
           scene.add(grp);
@@ -831,18 +875,7 @@ export default function HuntingGame() {
         hx.fillStyle='rgba(125,211,252,.7)';hx.font='8px sans-serif';hx.textAlign='center';hx.textBaseline='middle';hx.fillText('WIND',wx,wy+38);
         hx.restore();
 
-        // Animal detection meters
-        let detY=105;
-        animals.forEach(a=>{
-          if(a.alertLevel<=0||a.state==='dead')return;
-          const lbl=`${capitalize(a.type)} ${a.alertMethod}`;
-          const mw=130,mh=6;const mx2=(W-mw)/2;
-          hx.fillStyle='rgba(0,0,0,.55)';hx.fillRect(mx2-2,detY-2,mw+4,mh+14);
-          hx.fillStyle=a.alertLevel>.7?'#ef4444':a.alertLevel>.4?'#fb923c':'#fbbf24';
-          hx.fillRect(mx2,detY+10,mw*a.alertLevel,mh);
-          hx.fillStyle='white';hx.font='9px monospace';hx.textAlign='center';hx.fillText(lbl,W/2,detY+8);
-          detY+=26;
-        });
+        // Detection: no HUD — that's immersion breaking. Animals act on it silently.
 
         // HP bar (bottom left)
         const hpPct=Math.max(0,gs.hp/gs.maxHp);
