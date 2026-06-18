@@ -1,1023 +1,883 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import type * as THREEType from 'three';
+import type * as T from 'three';
 
 /* ═══════════════════════════════════════════════════════════════
-   WILDERNESS HUNT — First-Person 3D Hunting Game
-   Three.js + Canvas 2D HUD overlay
+   WILDERNESS HUNT — Call of the Wild for Mobile
+   Three.js PBR · Grass instancing · Wind/smell/sight/sound AI
    ═══════════════════════════════════════════════════════════════ */
 
 const QUESTS = [
-  { id:'q1', icon:'🦌', name:'First Blood',    desc:'Hunt 2 deer',      goal:2,  reward:'🎯 Hunting Rifle (60 dmg)',    key:'deer'    },
-  { id:'q2', icon:'🐻', name:'Bear Bane',       desc:'Hunt a bear',      goal:1,  reward:'💥 12-Gauge Shotgun (80 dmg)', key:'bear'    },
-  { id:'q3', icon:'🫎', name:'Moose Master',    desc:'Hunt a moose',     goal:1,  reward:'🔭 .308 Sniper (150 dmg)',     key:'moose'   },
-  { id:'q4', icon:'🐟', name:"Gone Fishin'",    desc:'Catch 3 fish',     goal:3,  reward:'📦 +60 Ammo',                 key:'fish'    },
-  { id:'q5', icon:'🦃', name:'Turkey Season',   desc:'Hunt 3 turkeys',   goal:3,  reward:'🦺 Hunting Vest (+50 HP)',    key:'turkey'  },
+  { id:'q1', icon:'🦌', name:'First Blood',    desc:'Hunt 2 deer',    goal:2, reward:'🎯 Hunting Rifle',      key:'deer'   },
+  { id:'q2', icon:'🐻', name:'Bear Bane',       desc:'Hunt a bear',    goal:1, reward:'💥 12-Gauge Shotgun',   key:'bear'   },
+  { id:'q3', icon:'🫎', name:'Moose Master',    desc:'Hunt a moose',   goal:1, reward:'🔭 .308 Sniper Rifle',  key:'moose'  },
+  { id:'q4', icon:'🐟', name:"Gone Fishin'",   desc:'Catch 3 fish',   goal:3, reward:'📦 +60 Ammo',           key:'fish'   },
+  { id:'q5', icon:'🦃', name:'Turkey Season',  desc:'Hunt 3 turkeys', goal:3, reward:'🦺 Hunting Vest +50HP', key:'turkey' },
 ];
 
+const ADEF: Record<string,{hp:number;meat:number;sightR:number;sightA:number;soundR:number;smellR:number;spd:number;aSpd:number}> = {
+  deer:   { hp:80,  meat:2, sightR:70, sightA:0.65, soundR:45, smellR:90,  spd:4.8, aSpd:0  },
+  bear:   { hp:300, meat:3, sightR:55, sightA:0.5,  soundR:65, smellR:110, spd:5.5, aSpd:6.5},
+  turkey: { hp:50,  meat:1, sightR:80, sightA:0.8,  soundR:35, smellR:60,  spd:6.2, aSpd:0  },
+  moose:  { hp:220, meat:4, sightR:50, sightA:0.5,  soundR:55, smellR:100, spd:5.0, aSpd:5.5},
+};
+
 export default function HuntingGame() {
-  const mountRef   = useRef<HTMLDivElement>(null);
-  const hudRef     = useRef<HTMLCanvasElement>(null);
-  const gameState  = useRef<any>(null);
-  const [showPanel, setShowPanel] = useState<'none'|'quests'|'inventory'>('none');
-  const [snapshot, setSnapshot]   = useState({ hp:100, ammo:18, maxAmmo:18, weapon:'pistol',
-    msg:'', msgTimer:0, quests:QUESTS.map(q=>({...q,prog:0,done:false})),
-    inventory:{deer:0,bear:0,turkey:0,moose:0,fish:0,cooked:0,wood:0},
-    campfire:false, tent:false });
+  const mountRef  = useRef<HTMLDivElement>(null);
+  const hudRef    = useRef<HTMLCanvasElement>(null);
+  const gsRef     = useRef<any>(null);
+  const [panel,   setPanel]   = useState<'none'|'quests'>('none');
+  const [snap,    setSnap]    = useState({
+    hp:100,maxHp:100,ammo:18,maxAmmo:18,weapon:'pistol',
+    quests:QUESTS.map(q=>({...q,prog:0,done:false})),
+    inv:{deer:0,bear:0,turkey:0,moose:0,fish:0,cooked:0},
+    campfire:false,tent:false,crouching:false,scoped:false,
+    msg:'',msgTimer:0,tod:0.55,windDeg:0,
+    trophies:[] as {type:string;rating:string;score:number}[],
+  });
 
-  useEffect(() => {
-    if (!mountRef.current) return;
-    let alive = true;
-    let THREE: any, renderer: any, scene: any, camera: any, raf = 0;
+  useEffect(()=>{
+    if(!mountRef.current)return;
+    let alive=true, raf=0;
+    let THREE:any, renderer:any, scene:any, camera:any;
 
-    async function init() {
+    async function init(){
       THREE = await import('three');
 
-      // ── Renderer ──────────────────────────────────────────
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-      renderer.setSize(innerWidth, innerHeight);
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.1;
+      /* ── Renderer ──────────────────────────────────────── */
+      renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+      renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+      renderer.setSize(innerWidth,innerHeight);
+      renderer.shadowMap.enabled=true;
+      renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+      renderer.toneMapping=THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure=1.15;
       mountRef.current!.appendChild(renderer.domElement);
 
-      // ── Scene ─────────────────────────────────────────────
+      /* ── Scene ─────────────────────────────────────────── */
       scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x8aaa80, 0.004);
-      scene.background = new THREE.Color(0x87ceeb);
+      scene.fog = new THREE.FogExp2(0x8aaa80,0.004);
 
-      // ── Camera ────────────────────────────────────────────
-      camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 800);
-      camera.position.set(0, 1.7, 0);
+      /* ── Camera ────────────────────────────────────────── */
+      camera = new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,800);
+      camera.position.set(0,1.75,0);
+      scene.add(camera);
 
-      // ── Lighting ──────────────────────────────────────────
-      const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
-      scene.add(ambientLight);
+      /* ── Lights ────────────────────────────────────────── */
+      const ambient  = new THREE.AmbientLight(0xfff8e8,0.5);
+      const hemi     = new THREE.HemisphereLight(0x87ceeb,0x3a5a2a,0.4);
+      const sun      = new THREE.DirectionalLight(0xfff5e0,2.2);
+      sun.castShadow=true;
+      sun.shadow.mapSize.set(2048,2048);
+      sun.shadow.camera.near=1;sun.shadow.camera.far=500;
+      sun.shadow.camera.left=-200;sun.shadow.camera.right=200;
+      sun.shadow.camera.top=200;sun.shadow.camera.bottom=-200;
+      sun.shadow.bias=-0.001;
+      const fill = new THREE.DirectionalLight(0x4466bb,0.25);
+      fill.position.set(-80,40,-100);
+      scene.add(ambient,hemi,sun,fill);
 
-      const sun = new THREE.DirectionalLight(0xfff5e0, 2.0);
-      sun.position.set(80, 120, 60);
-      sun.castShadow = true;
-      sun.shadow.mapSize.set(2048, 2048);
-      sun.shadow.camera.near = 0.5;
-      sun.shadow.camera.far = 500;
-      sun.shadow.camera.left = -200;
-      sun.shadow.camera.right = 200;
-      sun.shadow.camera.top = 200;
-      sun.shadow.camera.bottom = -200;
-      scene.add(sun);
+      /* ── Sky sphere ────────────────────────────────────── */
+      const skyMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(490,32,16),
+        new THREE.ShaderMaterial({
+          side:THREE.BackSide,
+          uniforms:{ uSky:{value:new THREE.Color(0x4a82c8)}, uHorizon:{value:new THREE.Color(0xc8dce8)}, uGround:{value:new THREE.Color(0x2a5a1a)} },
+          vertexShader:`varying vec3 vPos; void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+          fragmentShader:`uniform vec3 uSky,uHorizon,uGround; varying vec3 vPos; void main(){float h=normalize(vPos).y;vec3 c=h>0.0?mix(uHorizon,uSky,pow(h,0.5)):mix(uHorizon,uGround,-h*3.0);gl_FragColor=vec4(c,1.0);}`,
+        })
+      );
+      scene.add(skyMesh);
 
-      const fillLight = new THREE.DirectionalLight(0x4060ff, 0.3);
-      fillLight.position.set(-60, 30, -80);
-      scene.add(fillLight);
+      /* ── Sun disc ──────────────────────────────────────── */
+      const sunDisc = new THREE.Mesh(
+        new THREE.SphereGeometry(8,16,16),
+        new THREE.MeshBasicMaterial({color:0xfffae0})
+      );
+      scene.add(sunDisc);
 
-      const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x3a5a2a, 0.4);
-      scene.add(hemiLight);
-
-      // ── Sky ───────────────────────────────────────────────
-      const skyGeo = new THREE.SphereGeometry(500, 32, 16);
-      const skyMat = new THREE.ShaderMaterial({
-        side: THREE.BackSide,
-        uniforms: { topColor: { value: new THREE.Color(0x1a3a7a) }, bottomColor: { value: new THREE.Color(0x87ceeb) }, offset: { value: 33 }, exponent: { value: 0.6 } },
-        vertexShader: `varying vec3 vWorldPosition; void main() { vec4 worldPosition = modelMatrix * vec4(position, 1.0); vWorldPosition = worldPosition.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-        fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; uniform float offset; uniform float exponent; varying vec3 vWorldPosition; void main() { float h = normalize(vWorldPosition + offset).y; gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0); }`,
-      });
-      scene.add(new THREE.Mesh(skyGeo, skyMat));
-
-      // ── Terrain ───────────────────────────────────────────
-      const terrainSize = 400;
-      const terrainSegs = 128;
-      const terrainGeo  = new THREE.PlaneGeometry(terrainSize, terrainSize, terrainSegs, terrainSegs);
-      terrainGeo.rotateX(-Math.PI / 2);
-
-      // Procedural heightmap
-      const positions = terrainGeo.attributes.position;
-      for (let i = 0; i < positions.count; i++) {
-        const x = positions.getX(i), z = positions.getZ(i);
-        let h = 0;
-        h += Math.sin(x * 0.04) * Math.cos(z * 0.04) * 3;
-        h += Math.sin(x * 0.09 + 1.3) * Math.cos(z * 0.07 + 0.8) * 1.5;
-        h += (Math.random() - 0.5) * 0.4;
-        // Lake depression
-        const ld = Math.sqrt((x - 80) ** 2 + (z - 80) ** 2);
-        if (ld < 30) h = Math.min(h, -0.5 - (30 - ld) * 0.15);
-        positions.setY(i, h);
+      /* ── Terrain ───────────────────────────────────────── */
+      const tSz=400, tSeg=128;
+      const tGeo = new THREE.PlaneGeometry(tSz,tSz,tSeg,tSeg);
+      tGeo.rotateX(-Math.PI/2);
+      const tPos=tGeo.attributes.position;
+      for(let i=0;i<tPos.count;i++){
+        const x=tPos.getX(i),z=tPos.getZ(i);
+        let h=0;
+        h+=Math.sin(x*.038)*Math.cos(z*.032)*3.2;
+        h+=Math.sin(x*.082+1.2)*Math.cos(z*.075+0.7)*1.8;
+        h+=Math.sin(x*.16+2.1)*Math.cos(z*.14+1.4)*0.8;
+        h+=(Math.random()-.5)*.3;
+        const ld=Math.sqrt((x-80)**2+(z-80)**2);
+        if(ld<32) h=Math.min(h,-0.4-(32-ld)*.12);
+        const river=Math.abs(x+z*.4-20);
+        if(river<12) h=Math.min(h,-0.2-(12-river)*.08);
+        tPos.setY(i,h);
       }
-      terrainGeo.computeVertexNormals();
-
-      // Realistic terrain vertex colors
-      const colors = [];
-      for (let i = 0; i < positions.count; i++) {
-        const x = positions.getX(i), z = positions.getZ(i);
-        const y = positions.getY(i);
-        // Subtle per-vertex variation for natural look
-        const n = (Math.sin(x * 0.3) * Math.cos(z * 0.28) * 0.5 + 0.5) * 0.06;
-        if (y < -0.2) {
-          colors.push(0.18 + n, 0.28 + n, 0.55); // wet mud / water edge
-        } else if (y < 0.6) {
-          colors.push(0.22 + n, 0.44 + n, 0.16); // dark rich grass
-        } else if (y < 1.8) {
-          colors.push(0.28 + n, 0.50 + n, 0.18); // mid grass
-        } else if (y < 3.5) {
-          colors.push(0.34 + n, 0.42 + n, 0.20); // drier highland
-        } else {
-          colors.push(0.42 + n, 0.38 + n, 0.24); // rocky peak dirt
-        }
+      tGeo.computeVertexNormals();
+      // PBR vertex colors
+      const cols:number[]=[];
+      for(let i=0;i<tPos.count;i++){
+        const x=tPos.getX(i),z=tPos.getZ(i),y=tPos.getY(i);
+        const n=(Math.sin(x*.31)*Math.cos(z*.28)*.5+.5)*.07;
+        if(y<-0.25){ cols.push(.18+n,.28+n,.52); }
+        else if(y<.5){ cols.push(.2+n,.42+n,.14); }
+        else if(y<2){ cols.push(.26+n,.48+n,.16); }
+        else if(y<4){ cols.push(.35+n,.42+n,.2); }
+        else{ cols.push(.42,.38,.24); }
       }
-      terrainGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-      const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-      const terrain = new THREE.Mesh(terrainGeo, terrainMat);
-      terrain.receiveShadow = true;
+      tGeo.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));
+      const terrain = new THREE.Mesh(tGeo, new THREE.MeshStandardMaterial({ vertexColors:true, roughness:.92, metalness:0 }));
+      terrain.receiveShadow=true;
       scene.add(terrain);
 
-      // ── Lake ──────────────────────────────────────────────
-      const lakeGeo = new THREE.CircleGeometry(26, 64);
-      lakeGeo.rotateX(-Math.PI / 2);
-      const lakeMat = new THREE.MeshPhysicalMaterial({
-        color: 0x2255aa, transparent: true, opacity: 0.75,
-        roughness: 0.05, metalness: 0.1, reflectivity: 0.9,
+      /* ── Ground raycaster helper ───────────────────────── */
+      const gRay=new THREE.Raycaster(), gDir=new THREE.Vector3(0,-1,0);
+      function groundY(x:number,z:number,base=1.75){
+        gRay.set(new THREE.Vector3(x,60,z),gDir);
+        const hits=gRay.intersectObject(terrain);
+        return hits.length>0?hits[0].point.y+base:base;
+      }
+
+      /* ── Instanced Grass ───────────────────────────────── */
+      const GRASS_COUNT=8000;
+      const bladeGeo=new THREE.PlaneGeometry(.12,.45);
+      bladeGeo.translate(0,.225,0);
+      const bladeMat=new THREE.MeshStandardMaterial({
+        color:0x2a7218,side:THREE.DoubleSide,roughness:.95,metalness:0,alphaTest:.1,
       });
-      const lake = new THREE.Mesh(lakeGeo, lakeMat);
-      lake.position.set(80, 0.05, 80);
+      const grassMesh=new THREE.InstancedMesh(bladeGeo,bladeMat,GRASS_COUNT);
+      grassMesh.receiveShadow=true;
+      scene.add(grassMesh);
+      const grassPos:{x:number;z:number}[]=[];
+      for(let i=0;i<GRASS_COUNT;i++){
+        const a=Math.random()*Math.PI*2,d=Math.random()*32;
+        grassPos.push({x:Math.cos(a)*d,z:Math.sin(a)*d});
+      }
+      const dummy=new THREE.Object3D();
+      let lastGrassUpdate={x:9999,z:9999};
+      function updateGrass(px:number,pz:number){
+        if(Math.sqrt((px-lastGrassUpdate.x)**2+(pz-lastGrassUpdate.z)**2)<5)return;
+        lastGrassUpdate={x:px,z:pz};
+        for(let i=0;i<GRASS_COUNT;i++){
+          const gx=px+grassPos[i].x,gz=pz+grassPos[i].z;
+          const gy=groundY(gx,gz,0);
+          dummy.position.set(gx,gy,gz);
+          dummy.rotation.y=Math.random()*Math.PI*2;
+          dummy.scale.setScalar(.8+Math.random()*.5);
+          dummy.updateMatrix();
+          grassMesh.setMatrixAt(i,dummy.matrix);
+        }
+        grassMesh.instanceMatrix.needsUpdate=true;
+      }
+      updateGrass(0,0);
+
+      /* ── Water shader ──────────────────────────────────── */
+      const waterMat=new THREE.ShaderMaterial({
+        transparent:true,
+        uniforms:{uTime:{value:0},uSunDir:{value:new THREE.Vector3(.6,.4,.4)}},
+        vertexShader:`varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+        fragmentShader:`
+          uniform float uTime; uniform vec3 uSunDir; varying vec2 vUv;
+          void main(){
+            float w1=sin(vUv.x*12.0+uTime*.8)*.5+.5;
+            float w2=sin(vUv.y*9.0+uTime*.6+1.4)*.5+.5;
+            float w3=sin((vUv.x+vUv.y)*7.0+uTime*.4)*.5+.5;
+            vec3 deep=vec3(.06,.18,.55);vec3 shallow=vec3(.15,.42,.78);
+            float wv=w1*.4+w2*.35+w3*.25;
+            vec3 col=mix(deep,shallow,wv);
+            float spec=pow(max(0.0,wv-.3),8.0)*.6;
+            col+=vec3(spec);
+            gl_FragColor=vec4(col,.82);
+          }
+        `,
+      });
+      const lake=new THREE.Mesh(new THREE.CircleGeometry(28,64),waterMat);
+      lake.rotation.x=-Math.PI/2;lake.position.set(80,.08,80);
       scene.add(lake);
 
-      // ── Mountains ─────────────────────────────────────────
-      for (let m = 0; m < 20; m++) {
-        const angle = (m / 20) * Math.PI * 2;
-        const dist  = 200 + Math.random() * 120;
-        const mh    = 40 + Math.random() * 80;
-        const geo   = new THREE.ConeGeometry(30 + Math.random() * 25, mh, 8 + Math.floor(Math.random() * 6));
-        const r     = 0.28 + Math.random() * 0.12;
-        const gv    = 0.32 + Math.random() * 0.12;
-        const b     = 0.38 + Math.random() * 0.12;
-        const mat   = new THREE.MeshLambertMaterial({ color: new THREE.Color(r, gv, b) });
-        const mesh  = new THREE.Mesh(geo, mat);
-        mesh.position.set(Math.cos(angle) * dist, mh / 2 - 2, Math.sin(angle) * dist);
-        mesh.castShadow = true;
-        scene.add(mesh);
-        // Snow cap
-        const snowGeo = new THREE.ConeGeometry((30 + Math.random() * 25) * 0.35, mh * 0.25, 8);
-        const snowMat = new THREE.MeshLambertMaterial({ color: 0xf0f4ff });
-        const snow    = new THREE.Mesh(snowGeo, snowMat);
-        snow.position.set(mesh.position.x, mh * 0.88, mesh.position.z);
-        scene.add(snow);
+      /* ── Mountains ─────────────────────────────────────── */
+      // Mountains
+      for(let m=0;m<24;m++){
+        const ang=(m/24)*Math.PI*2,d=210+Math.random()*110;
+        const mh=50+Math.random()*90,mr=28+Math.random()*22;
+        const seg=7+Math.floor(Math.random()*5);
+        const mGeo=new THREE.ConeGeometry(mr,mh,seg);
+        const r=.28+Math.random()*.08,gv=.3+Math.random()*.08,b=.36+Math.random()*.1;
+        const mMesh=new THREE.Mesh(mGeo,new THREE.MeshStandardMaterial({color:new THREE.Color(r,gv,b),roughness:.9,metalness:.05}));
+        mMesh.position.set(Math.cos(ang)*d,mh/2-3,Math.sin(ang)*d);
+        mMesh.castShadow=true; scene.add(mMesh);
+        const sMesh=new THREE.Mesh(new THREE.ConeGeometry(mr*.38,mh*.28,seg),new THREE.MeshStandardMaterial({color:0xeef4ff,roughness:.7,metalness:.05}));
+        sMesh.position.set(mMesh.position.x,mh*.87,mMesh.position.z);
+        scene.add(sMesh);
       }
 
-      // ── Trees ─────────────────────────────────────────────
-      function makeTree(x: number, z: number, scale: number) {
-        const group = new THREE.Group();
-        const trunkH = 3.5 * scale;
-        // Trunk
-        const trunk = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.18 * scale, 0.28 * scale, trunkH, 8),
-          new THREE.MeshLambertMaterial({ color: 0x5a3010 })
-        );
-        trunk.position.y = trunkH / 2;
-        trunk.castShadow = true;
-        group.add(trunk);
-        // 3 cone layers
-        const greens = [0x1a5a08, 0x245a0c, 0x1a6a0a];
-        for (let i = 0; i < 3; i++) {
-          const coneH = (4 - i * 0.5) * scale;
-          const coneR = (2.2 - i * 0.5) * scale;
-          const cone  = new THREE.Mesh(
-            new THREE.ConeGeometry(coneR, coneH, 8),
-            new THREE.MeshLambertMaterial({ color: greens[i] })
-          );
-          cone.position.y = trunkH + (i * 1.8 + 1.5) * scale;
-          cone.castShadow = true;
-          group.add(cone);
-        }
-        group.position.set(x, 0, z);
-        // Snap to terrain height
-        const raycaster = new THREE.Raycaster(new THREE.Vector3(x, 30, z), new THREE.Vector3(0, -1, 0));
-        const hits = raycaster.intersectObject(terrain);
-        if (hits.length > 0) group.position.y = hits[0].point.y;
-        scene.add(group);
-        return group;
-      }
-
-      // Generate trees avoiding lake and start area
-      const treeMeshes: THREEType.Group[] = [];
-      for (let i = 0; i < 180; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const dist  = 12 + Math.random() * 160;
-        const x     = Math.cos(angle) * dist;
-        const z     = Math.sin(angle) * dist;
-        const ld    = Math.sqrt((x - 80) ** 2 + (z - 80) ** 2);
-        const pd    = Math.sqrt(x * x + z * z);
-        if (ld < 32 || pd < 6) continue;
-        const scale = 0.6 + Math.random() * 0.9;
-        treeMeshes.push(makeTree(x, z, scale));
-      }
-
-      // ── Animals ───────────────────────────────────────────
-      type AnimalType = 'deer'|'bear'|'turkey'|'moose';
-      interface Animal3D {
-        type: AnimalType; group: THREEType.Group; hp: number; maxHp: number;
-        state: 'idle'|'walk'|'flee'|'aggro'|'dead'; meat: number;
-        vx: number; vz: number; angle: number; anim: number; dieT: number;
-      }
-
-      function makeAnimalMesh(type: AnimalType): THREEType.Group {
-        const g = new THREE.Group();
-        const bodyMats: Record<AnimalType, number> = { deer: 0x8b6914, bear: 0x3a2a1a, turkey: 0x6a4a1a, moose: 0x4a3010 };
-        const bodyColor = new THREE.Color(bodyMats[type]);
-        const dark = bodyColor.clone().multiplyScalar(0.65);
-
-        if (type === 'deer') {
-          const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.9, 8, 8), new THREE.MeshLambertMaterial({ color: bodyColor }));
-          body.rotation.z = Math.PI / 2; body.position.y = 1.1; g.add(body);
-          // Legs
-          const legMat = new THREE.MeshLambertMaterial({ color: dark });
-          [[-0.25, -0.45], [-0.25, 0.25], [0.25, -0.45], [0.25, 0.25]].forEach(([x, z]) => {
-            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.9, 6), legMat);
-            leg.position.set(x, 0.45, z); g.add(leg);
-          });
-          // Neck
-          const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.7, 8), new THREE.MeshLambertMaterial({ color: bodyColor }));
-          neck.position.set(0, 1.55, -0.5); neck.rotation.x = -0.5; g.add(neck);
-          // Head
-          const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), new THREE.MeshLambertMaterial({ color: bodyColor }));
-          head.position.set(0, 1.95, -0.78); head.scale.z = 1.4; g.add(head);
-          // Antlers
-          const antlerMat = new THREE.MeshLambertMaterial({ color: 0x4a3010 });
-          const antlerGeo = new THREE.CylinderGeometry(0.025, 0.04, 0.5, 5);
-          [[-0.1, 2.15, -0.75], [0.1, 2.15, -0.75]].forEach(([x, y, z]) => {
-            const a = new THREE.Mesh(antlerGeo, antlerMat);
-            a.position.set(x, y, z); a.rotation.z = x * 0.8; g.add(a);
-          });
-        } else if (type === 'bear') {
-          const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.55, 0.9, 8, 8), new THREE.MeshLambertMaterial({ color: bodyColor }));
-          body.rotation.z = Math.PI / 2; body.position.y = 0.85; g.add(body);
-          const legMat2 = new THREE.MeshLambertMaterial({ color: dark });
-          [[-0.35, -0.4], [-0.35, 0.3], [0.35, -0.4], [0.35, 0.3]].forEach(([x, z]) => {
-            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.12, 0.65, 6), legMat2);
-            leg.position.set(x, 0.32, z); g.add(leg);
-          });
-          const head = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 8), new THREE.MeshLambertMaterial({ color: bodyColor }));
-          head.position.set(0, 1.35, -0.7); g.add(head);
-          const snout = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), new THREE.MeshLambertMaterial({ color: new THREE.Color(0x5a3a18) }));
-          snout.position.set(0, 1.28, -0.96); snout.scale.z = 1.4; g.add(snout);
-          const earMat = new THREE.MeshLambertMaterial({ color: dark });
-          [[-0.22, 1.66, -0.68], [0.22, 1.66, -0.68]].forEach(([x, y, z]) => {
-            const ear = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), earMat);
-            ear.position.set(x, y, z); g.add(ear);
-          });
-        } else if (type === 'turkey') {
-          const body = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 8), new THREE.MeshLambertMaterial({ color: bodyColor }));
-          body.position.y = 0.8; body.scale.z = 1.4; g.add(body);
-          const legMat3 = new THREE.MeshLambertMaterial({ color: 0xa08040 });
-          [[-0.12, 0.1], [0.12, 0.1]].forEach(([x, z]) => {
-            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.03, 0.55, 5), legMat3);
-            leg.position.set(x, 0.28, z); g.add(leg);
-          });
-          // Fan tail
-          for (let fi = 0; fi < 7; fi++) {
-            const fa = ((fi / 6) - 0.5) * Math.PI * 0.7;
-            const fan = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.6), new THREE.MeshLambertMaterial({ color: 0x8a5a10, side: THREE.DoubleSide }));
-            fan.position.set(Math.sin(fa) * 0.3, 0.9, Math.cos(fa) * 0.3 + 0.2);
-            fan.rotation.y = -fa; g.add(fan);
-          }
-          const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 6), new THREE.MeshLambertMaterial({ color: 0x3a2a0a }));
-          head.position.set(0, 1.12, -0.5); g.add(head);
-          // Wattle
-          const wattle = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 5), new THREE.MeshLambertMaterial({ color: 0xcc2222 }));
-          wattle.position.set(0, 1.02, -0.6); g.add(wattle);
-        } else { // moose
-          const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.6, 1.2, 8, 8), new THREE.MeshLambertMaterial({ color: bodyColor }));
-          body.rotation.z = Math.PI / 2; body.position.y = 1.4; g.add(body);
-          const legMat4 = new THREE.MeshLambertMaterial({ color: dark });
-          [[-0.35, -0.6], [-0.35, 0.35], [0.35, -0.6], [0.35, 0.35]].forEach(([x, z]) => {
-            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 1.2, 6), legMat4);
-            leg.position.set(x, 0.6, z); g.add(leg);
-          });
-          const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.25, 0.9, 8), new THREE.MeshLambertMaterial({ color: bodyColor }));
-          neck.position.set(0, 2.15, -0.7); neck.rotation.x = -0.6; g.add(neck);
-          const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.7), new THREE.MeshLambertMaterial({ color: bodyColor }));
-          head.position.set(0, 2.65, -1.15); g.add(head);
-          // Bell
-          const bell = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.25, 4, 6), new THREE.MeshLambertMaterial({ color: dark }));
-          bell.position.set(0, 2.38, -1.28); g.add(bell);
-          // Antlers (palmate)
-          const antMat = new THREE.MeshLambertMaterial({ color: 0x5a3a10 });
-          ([-0.2, 0.2] as number[]).forEach(xSign => {
-            const main = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.9, 5), antMat);
-            main.position.set(xSign * 0.22, 3.05, -1.15); main.rotation.z = xSign * 0.4;
-            g.add(main);
-            const palm = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 0.35), antMat);
-            palm.position.set(xSign * 0.5, 3.42, -1.15);
-            g.add(palm);
-          });
-        }
-        return g;
-      }
-
-      const animals3D: Animal3D[] = [];
-      const animalDefs: [AnimalType, number, number, number][] = [
-        ['deer', 6, 80, 2], ['bear', 3, 300, 3], ['turkey', 6, 50, 1], ['moose', 3, 220, 4],
+      /* ── Trees ─────────────────────────────────────────── */
+      const treeMats=[
+        new THREE.MeshStandardMaterial({color:0x1a5808,roughness:.88,metalness:0}),
+        new THREE.MeshStandardMaterial({color:0x1e6a0a,roughness:.88,metalness:0}),
+        new THREE.MeshStandardMaterial({color:0x245c0c,roughness:.88,metalness:0}),
       ];
-      animalDefs.forEach(([type, count, hp, meat]) => {
-        for (let i = 0; i < count; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const dist  = 18 + Math.random() * 90;
-          const x     = Math.cos(angle) * dist;
-          const z     = Math.sin(angle) * dist;
-          const ld    = Math.sqrt((x - 80) ** 2 + (z - 80) ** 2);
-          if (ld < 35) continue;
-          const group = makeAnimalMesh(type);
-          group.position.set(x, 0, z);
-          // Snap to terrain
-          const ray2 = new THREE.Raycaster(new THREE.Vector3(x, 30, z), new THREE.Vector3(0, -1, 0));
-          const h2 = ray2.intersectObject(terrain);
-          if (h2.length > 0) group.position.y = h2[0].point.y;
-          scene.add(group);
-          animals3D.push({ type, group, hp, maxHp: hp, meat, state: 'idle', vx: 0, vz: 0,
-            angle: Math.random() * Math.PI * 2, anim: Math.random() * 10, dieT: 0 });
+      const trunkMat=new THREE.MeshStandardMaterial({color:0x4a2a0a,roughness:.95,metalness:0});
+      function makeTree(x:number,z:number,sc:number){
+        const g=new THREE.Group();
+        const trH=4*sc;
+        const tr=new THREE.Mesh(new THREE.CylinderGeometry(.16*sc,.28*sc,trH,7),trunkMat);
+        tr.position.y=trH/2;tr.castShadow=true;g.add(tr);
+        for(let i=0;i<3;i++){
+          const cH=(4.5-i*.6)*sc,cR=(2.4-i*.55)*sc;
+          const c=new THREE.Mesh(new THREE.ConeGeometry(cR,cH,8),treeMats[i]);
+          c.position.y=trH+(i*1.9+1.4)*sc;c.castShadow=true;g.add(c);
         }
-      });
-
-      // HP bar sprites for animals
-      const hpBarCanvas = document.createElement('canvas');
-      hpBarCanvas.width = 128; hpBarCanvas.height = 16;
-
-      // ── Campfire ──────────────────────────────────────────
-      const campfireGroup = new THREE.Group();
-      campfireGroup.position.set(5, 0, 5);
-      campfireGroup.visible = false;
-      // Logs
-      const logMat = new THREE.MeshLambertMaterial({ color: 0x4a2808 });
-      for (let i = 0; i < 4; i++) {
-        const log = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.8, 6), logMat);
-        log.position.set(Math.cos(i/4*Math.PI*2)*0.3, 0.07, Math.sin(i/4*Math.PI*2)*0.3);
-        log.rotation.z = Math.PI/2; campfireGroup.add(log);
+        g.position.set(x,groundY(x,z,0),z);
+        scene.add(g);
       }
-      // Fire (point light)
-      const fireLight = new THREE.PointLight(0xff6620, 4, 8);
-      fireLight.position.y = 0.5;
-      campfireGroup.add(fireLight);
-      scene.add(campfireGroup);
+      for(let i=0;i<200;i++){
+        const a=Math.random()*Math.PI*2,d=10+Math.random()*165;
+        const tx=Math.cos(a)*d,tz=Math.sin(a)*d;
+        const ld=Math.sqrt((tx-80)**2+(tz-80)**2);
+        if(ld<35||Math.sqrt(tx*tx+tz*tz)<7)continue;
+        makeTree(tx,tz,.7+Math.random()*.9);
+      }
 
-      // ── Tent ──────────────────────────────────────────────
-      const tentGroup = new THREE.Group();
-      tentGroup.visible = false;
-      const tentMat = new THREE.MeshLambertMaterial({ color: 0x8a6040, side: THREE.DoubleSide });
-      const tentGeo = new THREE.ConeGeometry(2, 2.5, 4);
-      const tentMesh = new THREE.Mesh(tentGeo, tentMat);
-      tentMesh.position.y = 1.25; tentGroup.add(tentMesh);
+      /* ── Rocks ─────────────────────────────────────────── */
+      const rockMat=new THREE.MeshStandardMaterial({color:0x6a6a60,roughness:.85,metalness:.08});
+      for(let i=0;i<120;i++){
+        const a=Math.random()*Math.PI*2,d=8+Math.random()*170;
+        const rx=Math.cos(a)*d,rz=Math.sin(a)*d;
+        const rs=.3+Math.random()*1.8;
+        const r=new THREE.Mesh(new THREE.DodecahedronGeometry(rs,0),rockMat);
+        r.position.set(rx,groundY(rx,rz,rs*.4),rz);
+        r.rotation.set(Math.random(),Math.random(),Math.random());
+        r.castShadow=r.receiveShadow=true;scene.add(r);
+      }
+
+      /* ── Fallen logs ───────────────────────────────────── */
+      const logMat=new THREE.MeshStandardMaterial({color:0x3a2008,roughness:.98,metalness:0});
+      for(let i=0;i<25;i++){
+        const a=Math.random()*Math.PI*2,d=15+Math.random()*120;
+        const lx=Math.cos(a)*d,lz=Math.sin(a)*d;
+        const log=new THREE.Mesh(new THREE.CylinderGeometry(.18,.22,2+Math.random()*3,8),logMat);
+        log.position.set(lx,groundY(lx,lz,.15),lz);
+        log.rotation.z=Math.PI/2;log.rotation.y=Math.random()*Math.PI;
+        log.castShadow=log.receiveShadow=true;scene.add(log);
+      }
+
+      /* ── Campfire ──────────────────────────────────────── */
+      const cfGroup=new THREE.Group();cfGroup.visible=false;
+      const cfLogMat=new THREE.MeshStandardMaterial({color:0x3a1a04,roughness:.98,metalness:0});
+      for(let i=0;i<5;i++){
+        const la=(i/5)*Math.PI*2;
+        const cl=new THREE.Mesh(new THREE.CylinderGeometry(.065,.08,.7,6),cfLogMat);
+        cl.position.set(Math.cos(la)*.28,.065,Math.sin(la)*.28);cl.rotation.z=Math.PI/2;cfGroup.add(cl);
+      }
+      const fireLight=new THREE.PointLight(0xff6010,5,10);
+      fireLight.position.y=.5;cfGroup.add(fireLight);
+      scene.add(cfGroup);
+
+      /* ── Tent ──────────────────────────────────────────── */
+      const tentGroup=new THREE.Group();tentGroup.visible=false;
+      const tentMat=new THREE.MeshStandardMaterial({color:0x8a6040,roughness:.85,metalness:0,side:THREE.DoubleSide});
+      tentGroup.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(2.2,2.6,4),tentMat),{position:{y:1.3}}));
       scene.add(tentGroup);
 
-      // ── Fishing rod ───────────────────────────────────────
-      const rodGroup = new THREE.Group();
-      rodGroup.visible = false;
-      const rodMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.025, 2.2, 6), new THREE.MeshLambertMaterial({ color: 0x8a5020 }));
-      rodMesh.rotation.x = Math.PI / 4; rodMesh.position.set(0.35, -0.5, -0.4);
-      rodGroup.add(rodMesh);
-      camera.add(rodGroup); scene.add(camera);
-
-      // ── Weapon models (attached to camera) ───────────────
-      const weaponGroup = new THREE.Group();
-      scene.add(camera);
-      camera.add(weaponGroup);
-
-      function buildWeapon(type: string) {
-        while (weaponGroup.children.length) weaponGroup.remove(weaponGroup.children[0]);
-        const dark = 0x1a1a1a, wood = 0x5a3010;
-        if (type === 'pistol') {
-          const slide = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.09, 0.32), new THREE.MeshLambertMaterial({ color: dark }));
-          slide.position.set(0.2, -0.18, -0.38);
-          const grip = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.16, 0.12), new THREE.MeshLambertMaterial({ color: 0x3a3a3a }));
-          grip.position.set(0.2, -0.26, -0.28); grip.rotation.x = 0.2;
-          weaponGroup.add(slide, grip);
-        } else if (type === 'rifle') {
-          const stock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.55), new THREE.MeshLambertMaterial({ color: wood }));
-          stock.position.set(0.18, -0.2, -0.2);
-          const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.8, 6), new THREE.MeshLambertMaterial({ color: dark }));
-          barrel.rotation.x = Math.PI / 2; barrel.position.set(0.18, -0.18, -0.7);
-          const body = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.085, 0.45), new THREE.MeshLambertMaterial({ color: dark }));
-          body.position.set(0.18, -0.2, -0.5);
-          weaponGroup.add(stock, barrel, body);
-        } else if (type === 'shotgun') {
-          const stock2 = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 0.5), new THREE.MeshLambertMaterial({ color: wood }));
-          stock2.position.set(0.18, -0.2, -0.18);
-          const b1 = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.65, 6), new THREE.MeshLambertMaterial({ color: dark }));
-          b1.rotation.x = Math.PI / 2; b1.position.set(0.16, -0.17, -0.65);
-          const b2 = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.65, 6), new THREE.MeshLambertMaterial({ color: dark }));
-          b2.rotation.x = Math.PI / 2; b2.position.set(0.2, -0.17, -0.65);
-          weaponGroup.add(stock2, b1, b2);
-        } else { // sniper
-          const stock3 = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.075, 0.55), new THREE.MeshLambertMaterial({ color: dark }));
-          stock3.position.set(0.18, -0.2, -0.18);
-          const brl = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.0, 6), new THREE.MeshLambertMaterial({ color: dark }));
-          brl.rotation.x = Math.PI / 2; brl.position.set(0.18, -0.18, -0.85);
-          const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.35, 8), new THREE.MeshLambertMaterial({ color: 0x111111 }));
-          scope.rotation.x = Math.PI / 2; scope.position.set(0.18, -0.14, -0.55);
-          weaponGroup.add(stock3, brl, scope);
+      /* ── Weapon attached to camera ─────────────────────── */
+      const wGroup=new THREE.Group();camera.add(wGroup);
+      function buildWeapon(t:string){
+        while(wGroup.children.length)wGroup.remove(wGroup.children[0]);
+        const dm=new THREE.MeshStandardMaterial({color:0x1a1a1a,roughness:.3,metalness:.8});
+        const wm=new THREE.MeshStandardMaterial({color:0x4a2a0a,roughness:.9,metalness:0});
+        if(t==='pistol'){
+          const s=new THREE.Mesh(new THREE.BoxGeometry(.08,.09,.3),dm);s.position.set(.2,-.18,-.36);
+          const g=new THREE.Mesh(new THREE.BoxGeometry(.072,.15,.11),dm);g.position.set(.2,-.26,-.27);g.rotation.x=.18;
+          wGroup.add(s,g);
+        }else if(t==='rifle'){
+          const b=new THREE.Mesh(new THREE.CylinderGeometry(.016,.016,.85,6),dm);b.rotation.x=Math.PI/2;b.position.set(.18,-.18,-.75);
+          const s=new THREE.Mesh(new THREE.BoxGeometry(.062,.082,.48),wm);s.position.set(.18,-.21,-.22);
+          const r=new THREE.Mesh(new THREE.BoxGeometry(.064,.084,.42),dm);r.position.set(.18,-.2,-.52);
+          wGroup.add(b,s,r);
+        }else if(t==='shotgun'){
+          const b1=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,.68,6),dm);b1.rotation.x=Math.PI/2;b1.position.set(.16,-.17,-.68);
+          const b2=b1.clone();b2.position.x=.2;
+          const s=new THREE.Mesh(new THREE.BoxGeometry(.068,.088,.48),wm);s.position.set(.18,-.21,-.22);
+          wGroup.add(b1,b2,s);
+        }else{
+          const b=new THREE.Mesh(new THREE.CylinderGeometry(.013,.013,1.05,6),dm);b.rotation.x=Math.PI/2;b.position.set(.18,-.18,-.9);
+          const s=new THREE.Mesh(new THREE.BoxGeometry(.055,.075,.52),wm);s.position.set(.18,-.2,-.2);
+          const sc=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.32,8),dm);sc.rotation.x=Math.PI/2;sc.position.set(.18,-.14,-.55);
+          wGroup.add(b,s,sc);
         }
       }
       buildWeapon('pistol');
 
-      // ── Game state ────────────────────────────────────────
-      const gs = {
-        pos: new THREE.Vector3(0, 1.7, 0),
-        vel: new THREE.Vector3(),
-        yaw: 0, pitch: 0,
-        hp: 100, maxHp: 100,
-        ammo: 18, maxAmmo: 18,
-        weapon: 'pistol' as string,
-        weapons: new Set<string>(['pistol']),
-        quests: QUESTS.map(q => ({ ...q, prog: 0, done: false })),
-        inventory: { deer: 0, bear: 0, turkey: 0, moose: 0, fish: 0, cooked: 0, wood: 0 },
-        campfire: false, campfirePos: new THREE.Vector3(5, 0, 5),
-        tent: false, tentPos: new THREE.Vector3(),
-        fishing: false, fishTimer: 0, fishBite: false, fishBiteTimer: 0,
-        keys: new Set<string>(),
-        mouse: { dx: 0, dy: 0 },
-        joy1: { on: false, sx: 0, sy: 0, cx: 0, cy: 0, id: -1 },
-        joy2: { on: false, sx: 0, sy: 0, cx: 0, cy: 0, id: -1 },
-        shotAnim: 0, recoil: 0,
-        msg: '', msgTimer: 0,
-        tod: 0.55,
-        lastT: 0,
-        locked: false,
-      };
-      gameState.current = gs;
+      /* ── Animals ───────────────────────────────────────── */
+      interface Animal3D {
+        type:string; group:T.Group; hp:number; maxHp:number; meat:number;
+        state:'idle'|'alert'|'flee'|'aggro'|'dead';
+        alertLevel:number; alertMethod:string;
+        angle:number; anim:number; dieT:number;
+        trophyScore:number;
+      }
+      function makeAnimal(type:string):T.Group{
+        const g=new THREE.Group();
+        const bc:Record<string,number>={deer:0x8b6914,bear:0x2a1a0a,turkey:0x6a4a1a,moose:0x4a3010};
+        const bMat=new THREE.MeshStandardMaterial({color:bc[type],roughness:.9,metalness:0});
+        const dMat=new THREE.MeshStandardMaterial({color:new THREE.Color(bc[type]).multiplyScalar(.62),roughness:.9,metalness:0});
+        if(type==='deer'){
+          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.36,.9,8,8),bMat);body.rotation.z=Math.PI/2;body.position.y=1.1;body.castShadow=true;g.add(body);
+          [[-0.25,-0.45],[-0.25,.25],[.25,-.45],[.25,.25]].forEach(([x,z])=>{const l=new THREE.Mesh(new THREE.CylinderGeometry(.06,.05,.92,6),dMat);l.position.set(x,.46,z);l.castShadow=true;g.add(l);});
+          const neck=new THREE.Mesh(new THREE.CylinderGeometry(.11,.17,.72,7),bMat);neck.position.set(0,1.56,-.52);neck.rotation.x=-.5;neck.castShadow=true;g.add(neck);
+          const head=new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),bMat);head.position.set(0,1.98,-.8);head.scale.z=1.38;head.castShadow=true;g.add(head);
+          const eye1=new THREE.Mesh(new THREE.SphereGeometry(.04,6,6),new THREE.MeshStandardMaterial({color:0x111111,roughness:.2}));eye1.position.set(-.14,2.05,-.98);g.add(eye1);eye1.clone().position.set(.14,2.05,-.98);g.add(eye1.clone());
+          const aMat=new THREE.MeshStandardMaterial({color:0x4a3010,roughness:.95,metalness:0});
+          [-.1,.1].forEach(x=>{const a=new THREE.Mesh(new THREE.CylinderGeometry(.025,.04,.52,5),aMat);a.position.set(x,2.18,-.76);a.rotation.z=x*.8;g.add(a);});
+        }else if(type==='bear'){
+          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.58,.92,8,8),bMat);body.rotation.z=Math.PI/2;body.position.y=.88;body.castShadow=true;g.add(body);
+          [[-0.36,-.42],[-.36,.32],[.36,-.42],[.36,.32]].forEach(([x,z])=>{const l=new THREE.Mesh(new THREE.CylinderGeometry(.14,.12,.68,6),dMat);l.position.set(x,.34,z);l.castShadow=true;g.add(l);});
+          const head=new THREE.Mesh(new THREE.SphereGeometry(.4,8,8),dMat);head.position.set(0,1.38,-.72);head.castShadow=true;g.add(head);
+          const snout=new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),new THREE.MeshStandardMaterial({color:0x5a3a18,roughness:.9}));snout.position.set(0,1.3,-.98);snout.scale.z=1.4;g.add(snout);
+          [-.22,.22].forEach(x=>{const e=new THREE.Mesh(new THREE.SphereGeometry(.1,6,6),dMat);e.position.set(x,1.68,-.7);g.add(e);});
+        }else if(type==='turkey'){
+          const body=new THREE.Mesh(new THREE.SphereGeometry(.4,8,8),bMat);body.position.y=.8;body.scale.z=1.4;body.castShadow=true;g.add(body);
+          [-.12,.12].forEach(x=>{const l=new THREE.Mesh(new THREE.CylinderGeometry(.04,.03,.58,5),new THREE.MeshStandardMaterial({color:0xa08040,roughness:.9}));l.position.set(x,.29,x*.5);g.add(l);});
+          for(let fi=0;fi<8;fi++){const fa=((fi/7)-.5)*Math.PI*.72;const fan=new THREE.Mesh(new THREE.PlaneGeometry(.2,.58),new THREE.MeshStandardMaterial({color:0x8a5a10,side:THREE.DoubleSide,roughness:.9}));fan.position.set(Math.sin(fa)*.28,.9,Math.cos(fa)*.28+.2);fan.rotation.y=-fa;g.add(fan);}
+          const head=new THREE.Mesh(new THREE.SphereGeometry(.14,6,6),dMat);head.position.set(0,1.15,-.52);g.add(head);
+          const wattle=new THREE.Mesh(new THREE.SphereGeometry(.06,5,5),new THREE.MeshStandardMaterial({color:0xcc2222,roughness:.6}));wattle.position.set(0,1.05,-.62);g.add(wattle);
+        }else{
+          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.62,1.22,8,8),bMat);body.rotation.z=Math.PI/2;body.position.y=1.42;body.castShadow=true;g.add(body);
+          [[-0.36,-.62],[-.36,.36],[.36,-.62],[.36,.36]].forEach(([x,z])=>{const l=new THREE.Mesh(new THREE.CylinderGeometry(.1,.08,1.22,6),dMat);l.position.set(x,.61,z);l.castShadow=true;g.add(l);});
+          const neck=new THREE.Mesh(new THREE.CylinderGeometry(.16,.24,.9,7),bMat);neck.position.set(0,2.18,-.72);neck.rotation.x=-.58;g.add(neck);
+          const head=new THREE.Mesh(new THREE.BoxGeometry(.42,.42,.72),dMat);head.position.set(0,2.68,-1.18);g.add(head);
+          const bell=new THREE.Mesh(new THREE.CapsuleGeometry(.07,.28,4,6),dMat);bell.position.set(0,2.4,-1.3);g.add(bell);
+          const aMat=new THREE.MeshStandardMaterial({color:0x5a3a10,roughness:.95,metalness:0});
+          [-1,1].forEach(s=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(.04,.06,.95,5),aMat);m.position.set(s*.22,3.08,-1.16);m.rotation.z=s*.42;g.add(m);const p=new THREE.Mesh(new THREE.BoxGeometry(.72,.08,.36),aMat);p.position.set(s*.52,3.45,-1.16);g.add(p);});
+        }
+        return g;
+      }
 
-      // ── Input ─────────────────────────────────────────────
-      function shoot() {
-        if (gs.ammo <= 0) { setMsg('No ammo!'); return; }
-        gs.ammo--;
-        gs.shotAnim = 0.35;
-        gs.recoil = 0.18;
-        const dmg: Record<string, number> = { pistol: 25, rifle: 60, shotgun: 80, sniper: 150 };
-        const range: Record<string, number> = { pistol: 80, rifle: 200, shotgun: 50, sniper: 300 };
-        const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(gs.pitch, gs.yaw, 0, 'YXZ'));
-        const ray3 = new THREE.Raycaster(gs.pos.clone(), dir, 0.1, range[gs.weapon] || 100);
-        let hit = false;
-        animals3D.forEach(a => {
-          if (a.state === 'dead') return;
-          const hits2 = ray3.intersectObject(a.group, true);
-          if (hits2.length > 0) {
-            a.hp -= dmg[gs.weapon] || 25;
-            a.state = a.type === 'bear' && a.hp > 0 ? 'aggro' : 'flee';
-            hit = true;
-            if (a.hp <= 0) {
-              a.state = 'dead'; a.dieT = 3;
-              gs.inventory[a.type]++;
-              // Quest update
-              const q = gs.quests.find(q => q.key === a.type);
-              if (q && !q.done) { q.prog++; if (q.prog >= q.goal) { q.done = true; unlockReward(q); } }
-              setMsg(`${capitalize(a.type)} downed! +${a.meat} meat 🍖`);
-            }
+      const animals:Animal3D[]=[];
+      const aDefs:[string,number,number,number][]=[['deer',7,80,2],['bear',3,300,3],['turkey',7,50,1],['moose',3,220,4]];
+      aDefs.forEach(([type,n,hp,meat])=>{
+        for(let i=0;i<n;i++){
+          const a=Math.random()*Math.PI*2,d=22+Math.random()*100;
+          const ax=Math.cos(a)*d,az=Math.sin(a)*d;
+          const ld=Math.sqrt((ax-80)**2+(az-80)**2);
+          if(ld<36)continue;
+          const grp=makeAnimal(type);
+          grp.position.set(ax,groundY(ax,az,0),az);
+          scene.add(grp);
+          const ts=Math.random();
+          animals.push({type,group:grp,hp,maxHp:hp,meat,state:'idle',alertLevel:0,alertMethod:'',angle:Math.random()*Math.PI*2,anim:Math.random()*10,dieT:0,trophyScore:ts});
+        }
+      });
+
+      /* ── Blood drops ───────────────────────────────────── */
+      const bloodGeo=new THREE.SphereGeometry(.06,4,4);
+      const bloodMat=new THREE.MeshStandardMaterial({color:0x8a0000,roughness:.9,metalness:0});
+      const bloodDrops:{mesh:T.Mesh;life:number}[]=[];
+      function addBlood(x:number,y:number,z:number){
+        for(let i=0;i<5;i++){
+          const m=new THREE.Mesh(bloodGeo,bloodMat);
+          m.position.set(x+(Math.random()-.5)*.8,y+.01,z+(Math.random()-.5)*.8);
+          m.scale.setScalar(.5+Math.random()*.8);
+          scene.add(m);bloodDrops.push({mesh:m,life:30});
+        }
+      }
+
+      /* ── Game state ────────────────────────────────────── */
+      const gs={
+        pos:new THREE.Vector3(0,1.75,0), yaw:0, pitch:0,
+        hp:100, maxHp:100, ammo:18, maxAmmo:18, weapon:'pistol',
+        weapons:new Set<string>(['pistol']),
+        quests:QUESTS.map(q=>({...q,prog:0,done:false})),
+        inv:{deer:0,bear:0,turkey:0,moose:0,fish:0,cooked:0},
+        campfire:false, cfPos:new THREE.Vector3(4,0,4),
+        tent:false,
+        fishing:false, fishT:0, fishBite:false, fishBiteT:0,
+        tod:0.55, windAngle:Math.random()*Math.PI*2,
+        windT:0,
+        crouching:false, scoped:false, moving:false,
+        shotAnim:0, recoil:0, walkBob:0,
+        keys:new Set<string>(),
+        mouse:{dx:0,dy:0},
+        joy1:{on:false,sx:0,sy:0,cx:0,cy:0,id:-1},
+        joy2:{on:false,sx:0,sy:0,cx:0,cy:0,id:-1},
+        msg:'',msgT:0,
+        trophies:[] as {type:string;rating:string;score:number}[],
+        lastT:0,
+      };
+      gsRef.current=gs;
+
+      function setMsg(m:string){gs.msg=m;gs.msgT=4;}
+
+      /* ── Input ─────────────────────────────────────────── */
+      function shoot(){
+        if(gs.ammo<=0){setMsg('No ammo!');return;}
+        gs.ammo--;gs.shotAnim=.4;gs.recoil=.22;
+        const dmg:Record<string,number>={pistol:22,rifle:62,shotgun:85,sniper:155};
+        const rng:Record<string,number>={pistol:80,rifle:200,shotgun:55,sniper:320};
+        const dir=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(gs.pitch,gs.yaw,0,'YXZ'));
+        const ray=new THREE.Raycaster(gs.pos.clone(),dir,0.1,rng[gs.weapon]||80);
+        animals.forEach(a=>{
+          if(a.state==='dead')return;
+          const hits=ray.intersectObject(a.group,true);
+          if(!hits.length)return;
+          a.hp-=dmg[gs.weapon]||22;
+          const adef=ADEF[a.type];
+          a.state=a.type==='bear'&&a.hp>0?'aggro':'flee';
+          addBlood(hits[0].point.x,hits[0].point.y,hits[0].point.z);
+          if(a.hp<=0){
+            a.state='dead';a.dieT=4;
+            gs.inv[a.type as keyof typeof gs.inv]++;
+            const rating=a.trophyScore>.92?'💎 Diamond':a.trophyScore>.7?'🥇 Gold':a.trophyScore>.4?'🥈 Silver':'🥉 Bronze';
+            gs.trophies.push({type:a.type,rating,score:Math.round(a.trophyScore*100)});
+            const q=gs.quests.find(q=>q.key===a.type);
+            if(q&&!q.done){q.prog++;if(q.prog>=q.goal){q.done=true;unlockReward(q);}}
+            setMsg(`${a.type.charAt(0).toUpperCase()+a.type.slice(1)} downed! ${rating} trophy!`);
           }
         });
       }
 
-      function capitalize(s: string) { return s.charAt(0).toUpperCase() + s.slice(1); }
+      function capitalize(s:string){return s[0].toUpperCase()+s.slice(1);}
 
-      function unlockReward(q: typeof gs.quests[0]) {
-        if (q.id === 'q1' && !gs.weapons.has('rifle'))  { gs.weapons.add('rifle');   gs.weapon = 'rifle';   gs.ammo = gs.maxAmmo; buildWeapon('rifle');   setMsg('🎯 Hunting Rifle unlocked!'); }
-        if (q.id === 'q2' && !gs.weapons.has('shotgun')) { gs.weapons.add('shotgun'); gs.weapon = 'shotgun'; gs.ammo = gs.maxAmmo; buildWeapon('shotgun'); setMsg('💥 Shotgun unlocked!'); }
-        if (q.id === 'q3' && !gs.weapons.has('sniper'))  { gs.weapons.add('sniper');  gs.weapon = 'sniper';  gs.maxAmmo = 30; gs.ammo = 30; buildWeapon('sniper'); setMsg('🔭 Sniper unlocked!'); }
-        if (q.id === 'q4') { gs.maxAmmo += 60; gs.ammo = Math.min(gs.ammo + 60, gs.maxAmmo); setMsg('📦 +60 Ammo!'); }
-        if (q.id === 'q5') { gs.maxHp += 50; gs.hp = gs.maxHp; setMsg('🦺 Hunting Vest — +50 HP!'); }
+      function unlockReward(q:typeof gs.quests[0]){
+        if(q.id==='q1'&&!gs.weapons.has('rifle')){gs.weapons.add('rifle');gs.weapon='rifle';gs.ammo=gs.maxAmmo;buildWeapon('rifle');setMsg('🎯 Hunting Rifle unlocked!');}
+        if(q.id==='q2'&&!gs.weapons.has('shotgun')){gs.weapons.add('shotgun');gs.weapon='shotgun';gs.ammo=gs.maxAmmo;buildWeapon('shotgun');setMsg('💥 Shotgun unlocked!');}
+        if(q.id==='q3'&&!gs.weapons.has('sniper')){gs.weapons.add('sniper');gs.weapon='sniper';gs.maxAmmo=30;gs.ammo=30;buildWeapon('sniper');setMsg('🔭 Sniper unlocked!');}
+        if(q.id==='q4'){gs.maxAmmo+=60;gs.ammo=Math.min(gs.ammo+60,gs.maxAmmo);setMsg('📦 +60 Ammo!');}
+        if(q.id==='q5'){gs.maxHp+=50;gs.hp=gs.maxHp;setMsg('🦺 Hunting Vest — +50 HP!');}
       }
 
-      function interact() {
-        // Fishing
-        const lakePos = new THREE.Vector3(80, 0, 80);
-        if (gs.pos.distanceTo(lakePos) < 30) {
-          gs.fishing = !gs.fishing;
-          gs.fishTimer = 0; gs.fishBite = false;
-          setMsg(gs.fishing ? '🎣 Fishing... wait for a bite! Press [E] again to reel.' : 'Stopped fishing.');
-          return;
+      function interact(){
+        const lk=new THREE.Vector3(80,0,80);
+        const lakeDist=new THREE.Vector3(gs.pos.x,0,gs.pos.z).distanceTo(lk);
+        if(lakeDist<30){
+          gs.fishing=!gs.fishing;gs.fishT=0;gs.fishBite=false;
+          setMsg(gs.fishing?'🎣 Fishing... wait for a bite!':'Stopped fishing.');return;
         }
-        // Cook
-        const fire3 = new THREE.Vector3(gs.campfirePos.x, 0, gs.campfirePos.z);
-        if (gs.campfire && gs.pos.distanceTo(fire3) < 10) {
-          const raw = gs.inventory.deer + gs.inventory.bear + gs.inventory.turkey + gs.inventory.moose;
-          if (raw > 0) {
-            gs.inventory.cooked += raw;
-            gs.inventory.deer = gs.inventory.bear = gs.inventory.turkey = gs.inventory.moose = 0;
-            setMsg(`🍖 Cooked ${raw} meat!`);
-          } else { setMsg('Need raw meat to cook!'); }
-          return;
+        const fd=new THREE.Vector3(gs.pos.x,0,gs.pos.z).distanceTo(new THREE.Vector3(gs.cfPos.x,0,gs.cfPos.z));
+        if(gs.campfire&&fd<10){
+          const raw=Object.entries(gs.inv).filter(([k])=>['deer','bear','turkey','moose'].includes(k)).reduce((a,[,v])=>a+(v as number),0);
+          if(raw>0){gs.inv.cooked+=raw;(['deer','bear','turkey','moose'] as const).forEach(k=>gs.inv[k]=0);setMsg(`🍖 Cooked ${raw} meat!`);}
+          else if(gs.inv.cooked>0){gs.hp=Math.min(gs.maxHp,gs.hp+35);gs.inv.cooked--;setMsg('🍖 Ate cooked meat. +35 HP!');}
+          else setMsg('No meat to cook.');return;
         }
-        // Eat
-        if (gs.inventory.cooked > 0) { gs.inventory.cooked--; gs.hp = Math.min(gs.maxHp, gs.hp + 30); setMsg('🍖 Ate cooked meat +30 HP!'); return; }
       }
 
-      function placeTent() {
-        gs.tent = true;
-        tentGroup.position.copy(gs.pos).add(new THREE.Vector3(Math.sin(gs.yaw) * -4, -1.7, Math.cos(gs.yaw) * -4));
-        tentGroup.visible = true;
-        setMsg('⛺ Tent placed!');
-      }
-
-      function lightFire() {
-        gs.campfire = true;
-        gs.campfirePos.copy(gs.pos).add(new THREE.Vector3(Math.sin(gs.yaw) * -3, -1.7, Math.cos(gs.yaw) * -3));
-        campfireGroup.position.copy(gs.campfirePos);
-        campfireGroup.visible = true;
-        setMsg('🔥 Campfire lit!');
-      }
-
-      function setMsg(m: string) { gs.msg = m; gs.msgTimer = 3.5; }
-
-      // Keyboard
-      const onKD = (e: KeyboardEvent) => {
+      const onKD=(e:KeyboardEvent)=>{
         gs.keys.add(e.code);
-        if (e.code === 'KeyF') shoot();
-        if (e.code === 'KeyE') interact();
-        if (e.code === 'KeyT') placeTent();
-        if (e.code === 'KeyC') lightFire();
-        if (e.code === 'Tab') { e.preventDefault(); setShowPanel(p => p === 'none' ? 'quests' : 'none'); }
-        if (e.code === 'KeyG') { // switch weapon
-          const wArr = Array.from(gs.weapons);
-          const ci = wArr.indexOf(gs.weapon);
-          gs.weapon = wArr[(ci + 1) % wArr.length];
-          buildWeapon(gs.weapon);
-        }
+        if(e.code==='KeyF')shoot();
+        if(e.code==='KeyE')interact();
+        if(e.code==='KeyT'){gs.tent=true;tentGroup.position.set(gs.pos.x+Math.sin(gs.yaw)*-4,groundY(gs.pos.x,gs.pos.z,0),gs.pos.z+Math.cos(gs.yaw)*-4);tentGroup.visible=true;setMsg('⛺ Tent placed!');}
+        if(e.code==='KeyC'){gs.campfire=true;gs.cfPos.set(gs.pos.x+Math.sin(gs.yaw)*-3,0,gs.pos.z+Math.cos(gs.yaw)*-3);cfGroup.position.copy(gs.cfPos);cfGroup.visible=true;setMsg('🔥 Campfire lit!');}
+        if(e.code==='KeyQ')gs.crouching=!gs.crouching;
+        if(e.code==='KeyZ')gs.scoped=!gs.scoped;
+        if(e.code==='KeyG'){const w=Array.from(gs.weapons),ci=w.indexOf(gs.weapon);gs.weapon=w[(ci+1)%w.length];buildWeapon(gs.weapon);}
+        if(e.code==='Tab'){e.preventDefault();setPanel(p=>p==='none'?'quests':'none');}
       };
-      const onKU = (e: KeyboardEvent) => gs.keys.delete(e.code);
-      window.addEventListener('keydown', onKD);
-      window.addEventListener('keyup', onKU);
+      const onKU=(e:KeyboardEvent)=>gs.keys.delete(e.code);
+      window.addEventListener('keydown',onKD);window.addEventListener('keyup',onKU);
 
-      // Pointer lock mouse
-      const onMM = (e: MouseEvent) => {
-        if (document.pointerLockElement === renderer.domElement) {
-          gs.mouse.dx += e.movementX * 0.002;
-          gs.mouse.dy += e.movementY * 0.002;
-        }
-      };
-      renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock());
-      window.addEventListener('mousemove', onMM);
-      window.addEventListener('mousedown', (e) => { if (e.button === 0 && document.pointerLockElement === renderer.domElement) shoot(); });
+      const onMM=(e:MouseEvent)=>{if(document.pointerLockElement===renderer.domElement){gs.mouse.dx+=e.movementX*.002;gs.mouse.dy+=e.movementY*.002;}};
+      renderer.domElement.addEventListener('click',()=>renderer.domElement.requestPointerLock());
+      window.addEventListener('mousemove',onMM);
+      window.addEventListener('mousedown',(e)=>{if(e.button===0&&document.pointerLockElement===renderer.domElement)shoot();});
 
-      // Touch
-      const onTS = (e: TouchEvent) => {
+      // Touch input
+      const onTS=(e:TouchEvent)=>{
         e.preventDefault();
-        for (const t of Array.from(e.changedTouches)) {
-          if (t.clientX < innerWidth * 0.45 && gs.joy1.id === -1) {
-            gs.joy1 = { on: true, sx: t.clientX, sy: t.clientY, cx: t.clientX, cy: t.clientY, id: t.identifier };
-          } else if (t.clientX > innerWidth * 0.55 && gs.joy2.id === -1) {
-            gs.joy2 = { on: true, sx: t.clientX, sy: t.clientY, cx: t.clientX, cy: t.clientY, id: t.identifier };
-          }
-          // Fire button
-          if (t.clientX > innerWidth * 0.82 && t.clientY > innerHeight * 0.72) shoot();
+        for(const t of Array.from(e.changedTouches)){
+          if(t.clientX<innerWidth*.45&&gs.joy1.id===-1){gs.joy1={on:true,sx:t.clientX,sy:t.clientY,cx:t.clientX,cy:t.clientY,id:t.identifier};}
+          else if(t.clientX>innerWidth*.45&&gs.joy2.id===-1){gs.joy2={on:true,sx:t.clientX,sy:t.clientY,cx:t.clientX,cy:t.clientY,id:t.identifier};}
         }
       };
-      const onTM = (e: TouchEvent) => {
-        e.preventDefault();
-        for (const t of Array.from(e.changedTouches)) {
-          if (t.identifier === gs.joy1.id) { gs.joy1.cx = t.clientX; gs.joy1.cy = t.clientY; }
-          if (t.identifier === gs.joy2.id) {
-            gs.mouse.dx += (t.clientX - gs.joy2.cx) * 0.004;
-            gs.mouse.dy += (t.clientY - gs.joy2.cy) * 0.004;
-            gs.joy2.cx = t.clientX; gs.joy2.cy = t.clientY;
-          }
-        }
-      };
-      const onTE = (e: TouchEvent) => {
-        e.preventDefault();
-        for (const t of Array.from(e.changedTouches)) {
-          if (t.identifier === gs.joy1.id) gs.joy1 = { on: false, sx: 0, sy: 0, cx: 0, cy: 0, id: -1 };
-          if (t.identifier === gs.joy2.id) gs.joy2 = { on: false, sx: 0, sy: 0, cx: 0, cy: 0, id: -1 };
-        }
-      };
-      renderer.domElement.addEventListener('touchstart', onTS, { passive: false });
-      renderer.domElement.addEventListener('touchmove', onTM, { passive: false });
-      renderer.domElement.addEventListener('touchend', onTE, { passive: false });
-      renderer.domElement.addEventListener('touchcancel', onTE, { passive: false });
+      const onTM=(e:TouchEvent)=>{e.preventDefault();for(const t of Array.from(e.changedTouches)){if(t.identifier===gs.joy1.id){gs.joy1.cx=t.clientX;gs.joy1.cy=t.clientY;}if(t.identifier===gs.joy2.id){const dx=(t.clientX-gs.joy2.cx)*.0035,dy=(t.clientY-gs.joy2.cy)*.0035;gs.mouse.dx+=dx;gs.mouse.dy+=dy;gs.joy2.cx=t.clientX;gs.joy2.cy=t.clientY;}}};
+      const onTE=(e:TouchEvent)=>{e.preventDefault();for(const t of Array.from(e.changedTouches)){if(t.identifier===gs.joy1.id)gs.joy1={on:false,sx:0,sy:0,cx:0,cy:0,id:-1};if(t.identifier===gs.joy2.id)gs.joy2={on:false,sx:0,sy:0,cx:0,cy:0,id:-1};}};
+      renderer.domElement.addEventListener('touchstart',onTS,{passive:false});
+      renderer.domElement.addEventListener('touchmove',onTM,{passive:false});
+      renderer.domElement.addEventListener('touchend',onTE,{passive:false});
+      renderer.domElement.addEventListener('touchcancel',onTE,{passive:false});
 
-      // ── Update ────────────────────────────────────────────
-      const raycasterGround = new THREE.Raycaster();
-      const groundDir = new THREE.Vector3(0, -1, 0);
+      /* ── Resize ────────────────────────────────────────── */
+      function onResize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();if(hudRef.current){hudRef.current.width=innerWidth;hudRef.current.height=innerHeight;}}
+      window.addEventListener('resize',onResize);
+      if(hudRef.current){hudRef.current.width=innerWidth;hudRef.current.height=innerHeight;}
 
-      function update(dt: number) {
-        gs.tod = (gs.tod + dt / 480000) % 1; // 8-minute day cycle
+      /* ── Update ────────────────────────────────────────── */
+      function update(dt:number){
+        // TOD + wind
+        gs.tod=(gs.tod+dt/480000)%1;
+        gs.windT+=dt;
+        gs.windAngle+=Math.sin(gs.windT*.0001)*.0002+Math.cos(gs.windT*.00007)*.00015;
 
-        // Camera rotation
-        gs.yaw   -= gs.mouse.dx; gs.mouse.dx = 0;
-        gs.pitch  = Math.max(-0.8, Math.min(0.6, gs.pitch - gs.mouse.dy)); gs.mouse.dy = 0;
-        if (gs.keys.has('ArrowLeft'))  gs.yaw += dt * 0.002;
-        if (gs.keys.has('ArrowRight')) gs.yaw -= dt * 0.002;
+        // Camera look
+        gs.yaw-=gs.mouse.dx;gs.mouse.dx*=.15;
+        gs.pitch=Math.max(-.75,Math.min(.65,gs.pitch-gs.mouse.dy));gs.mouse.dy*=.15;
+        if(gs.keys.has('ArrowLeft'))gs.yaw+=dt*.002;
+        if(gs.keys.has('ArrowRight'))gs.yaw-=dt*.002;
 
         // Movement
-        const spd = 6 * (dt / 1000);
-        const fwd = new THREE.Vector3(Math.sin(gs.yaw), 0, Math.cos(gs.yaw));
-        const rgt = new THREE.Vector3().crossVectors(fwd, THREE.Object3D.DEFAULT_UP).normalize();
+        const fwd=new THREE.Vector3(Math.sin(gs.yaw),0,Math.cos(gs.yaw));
+        const rgt=new THREE.Vector3(Math.cos(gs.yaw),0,-Math.sin(gs.yaw));
+        const spd=(gs.crouching?2.8:5.2)*(dt/1000);
+        let moved=false;
+        if(gs.keys.has('KeyW')||gs.keys.has('ArrowUp')){gs.pos.addScaledVector(fwd,spd);moved=true;}
+        if(gs.keys.has('KeyS')||gs.keys.has('ArrowDown')){gs.pos.addScaledVector(fwd,-spd);moved=true;}
+        if(gs.keys.has('KeyA')){gs.pos.addScaledVector(rgt,-spd);moved=true;}
+        if(gs.keys.has('KeyD')){gs.pos.addScaledVector(rgt,spd);moved=true;}
+        if(gs.joy1.on){const jdx=gs.joy1.cx-gs.joy1.sx,jdy=gs.joy1.cy-gs.joy1.sy;const jd=Math.sqrt(jdx**2+jdy**2);if(jd>8){gs.pos.addScaledVector(fwd,-jdy/Math.max(jd,55)*spd*1.8);gs.pos.addScaledVector(rgt,jdx/Math.max(jd,55)*spd*1.8);moved=true;}}
+        gs.moving=moved;
+        gs.pos.x=Math.max(-180,Math.min(180,gs.pos.x));
+        gs.pos.z=Math.max(-180,Math.min(180,gs.pos.z));
 
-        if (gs.keys.has('KeyW') || gs.keys.has('ArrowUp'))   { gs.pos.addScaledVector(fwd, spd); }
-        if (gs.keys.has('KeyS') || gs.keys.has('ArrowDown'))  { gs.pos.addScaledVector(fwd, -spd); }
-        if (gs.keys.has('KeyA'))                               { gs.pos.addScaledVector(rgt, -spd); }
-        if (gs.keys.has('KeyD'))                               { gs.pos.addScaledVector(rgt, spd); }
+        // Terrain stick
+        const ty=groundY(gs.pos.x,gs.pos.z,gs.crouching?1.1:1.75);
+        gs.pos.y+=(ty-gs.pos.y)*.25;
 
-        // Touch joystick movement
-        if (gs.joy1.on) {
-          const jdx = gs.joy1.cx - gs.joy1.sx, jdy = gs.joy1.cy - gs.joy1.sy;
-          const jd = Math.sqrt(jdx * jdx + jdy * jdy);
-          if (jd > 8) {
-            const nx = jdx / Math.max(jd, 55), ny = jdy / Math.max(jd, 55);
-            gs.pos.addScaledVector(fwd, -ny * spd * 1.5);
-            gs.pos.addScaledVector(rgt, nx * spd * 1.5);
-          }
-        }
+        // Walk bob
+        if(moved)gs.walkBob+=dt*.008;
+        const bob=Math.sin(gs.walkBob)*( gs.crouching?.025:.05);
+        wGroup.position.set(Math.sin(Date.now()*.0009)*.006,-.0+bob*.5+(-gs.recoil),0);
+        gs.recoil=Math.max(0,gs.recoil-dt*.0012);
+        gs.shotAnim=Math.max(0,gs.shotAnim-dt*.002);
 
-        // Clamp world bounds
-        gs.pos.x = Math.max(-180, Math.min(180, gs.pos.x));
-        gs.pos.z = Math.max(-180, Math.min(180, gs.pos.z));
+        // Scope FOV
+        const targetFOV=gs.scoped?(gs.weapon==='sniper'?15:gs.weapon==='rifle'?30:50):72;
+        camera.fov+=(targetFOV-camera.fov)*.14;
+        camera.updateProjectionMatrix();
 
-        // Snap to terrain height
-        raycasterGround.set(new THREE.Vector3(gs.pos.x, 50, gs.pos.z), groundDir);
-        const terrHits = raycasterGround.intersectObject(terrain);
-        if (terrHits.length > 0) gs.pos.y = terrHits[0].point.y + 1.7;
+        // Camera
+        camera.position.copy(gs.pos).add(new THREE.Vector3(0,bob,0));
+        camera.rotation.order='YXZ';camera.rotation.y=gs.yaw;camera.rotation.x=gs.pitch;
 
-        // Weapon sway
-        const swayT = Date.now() * 0.001;
-        weaponGroup.position.set(
-          Math.sin(swayT * 1.1) * 0.005,
-          Math.sin(swayT * 0.8) * 0.005 - gs.recoil,
-          0
-        );
-        gs.recoil = Math.max(0, gs.recoil - dt * 0.0008);
-        if (gs.shotAnim > 0) { gs.shotAnim = Math.max(0, gs.shotAnim - dt * 0.001); }
-
-        // Update camera
-        camera.position.copy(gs.pos);
-        camera.rotation.order = 'YXZ';
-        camera.rotation.y = gs.yaw;
-        camera.rotation.x = gs.pitch;
-
-        // Sky color based on TOD
-        // TOD-based sky + fog — smooth interpolation with no wrap glitch
-        const todColors = [
-          { t: 0.00, sky: 0x030a18, fog: 0x060e20, exp: 0.012 }, // deep night
-          { t: 0.18, sky: 0x0a0a20, fog: 0x0a1020, exp: 0.010 }, // pre-dawn
-          { t: 0.27, sky: 0xc0602a, fog: 0x885530, exp: 0.007 }, // sunrise orange
-          { t: 0.35, sky: 0x6090d0, fog: 0x90a888, exp: 0.005 }, // morning blue
-          { t: 0.50, sky: 0x4a82c8, fog: 0x8aaa80, exp: 0.004 }, // midday bright
-          { t: 0.65, sky: 0x3a78c0, fog: 0x80a07a, exp: 0.004 }, // afternoon
-          { t: 0.76, sky: 0xd05018, fog: 0x885040, exp: 0.006 }, // sunset
-          { t: 0.84, sky: 0x1a0a30, fog: 0x201028, exp: 0.009 }, // dusk
-          { t: 0.92, sky: 0x050c18, fog: 0x060a18, exp: 0.011 }, // night
-        ];
-        // Find current segment
-        let ci2 = 0;
-        for (let i = todColors.length - 1; i >= 0; i--) { if (gs.tod >= todColors[i].t) { ci2 = i; break; } }
-        const c1e = todColors[ci2], c2e = todColors[(ci2 + 1) % todColors.length];
-        const segLen = ci2 === todColors.length - 1 ? (1 - c1e.t + c2e.t) : (c2e.t - c1e.t);
-        const tf = Math.max(0, Math.min(1, (gs.tod - c1e.t) / Math.max(0.001, segLen)));
-        const skyCol = new THREE.Color(c1e.sky).lerp(new THREE.Color(c2e.sky), tf);
-        const fogCol = new THREE.Color(c1e.fog).lerp(new THREE.Color(c2e.fog), tf);
-        const fogDensity = lerp(c1e.exp, c2e.exp, tf);
-        scene.background = skyCol;
-        if (scene.fog) {
-          (scene.fog as any).color.copy(fogCol);
-          (scene.fog as any).density = fogDensity;
-        }
-
-        // Dynamic light (sun position)
-        // Sun arc: rises at tod≈0.27, sets at tod≈0.76, centred at 0.515
-        const sunNorm = ((gs.tod - 0.27 + 1) % 1) / 0.49; // 0→1 from sunrise to sunset
-        const sunAngle = sunNorm * Math.PI;
-        const sunH = Math.sin(sunAngle);
-        sun.position.set(
-          Math.cos(sunAngle - Math.PI / 2) * 220,
-          sunH * 200 - 10,
-          80
-        );
-        const isDaytime = gs.tod > 0.27 && gs.tod < 0.76;
-        sun.intensity = isDaytime ? Math.max(0.05, sunH * 2.2) : 0.0;
-        sun.color.setHSL(isDaytime ? lerp(0.08, 0.15, sunH) : 0.6, 1, 0.8);
-        ambientLight.intensity = isDaytime ? 0.3 + sunH * 0.7 : 0.08;
-        ambientLight.color.set(isDaytime ? 0xfff8e8 : 0x101830);
-        hemiLight.intensity = isDaytime ? 0.2 + sunH * 0.4 : 0.05;
+        // TOD lighting
+        const todNorm=(gs.tod+.5)%1; // 0=midnight, .5=noon
+        const sunPhi=todNorm*Math.PI*2; // full circle
+        const isDaytime=gs.tod>.25&&gs.tod<.78;
+        const sunH=Math.max(0,Math.sin((gs.tod-.25)/(.78-.25)*Math.PI));
+        sun.position.set(Math.cos(sunPhi)*220,Math.sin(sunPhi)*180,60);
+        sunDisc.position.copy(sun.position).normalize().multiplyScalar(460);
+        sun.intensity=isDaytime?Math.max(0,sunH*2.4):0;
+        sun.color.setHSL(isDaytime?(.12+sunH*.04):0,.9,.85);
+        ambient.intensity=isDaytime?.3+sunH*.7:.1;
+        ambient.color.set(isDaytime?0xfff8e0:0x101828);
+        hemi.intensity=isDaytime?.2+sunH*.4:.06;
+        const skyS=(isDaytime?new THREE.Color(0x4a82c8):new THREE.Color(0x050c20));
+        const horS=(isDaytime?new THREE.Color(0xc8dce8):new THREE.Color(0x101828));
+        (skyMesh.material as any).uniforms.uSky.value.lerp(skyS,.04);
+        (skyMesh.material as any).uniforms.uHorizon.value.lerp(horS,.04);
+        const fogC=isDaytime?new THREE.Color(0x8aaa80):new THREE.Color(0x060c18);
+        (scene.fog as any).color.lerp(fogC,.04);
+        (scene.fog as any).density=isDaytime?.004:.012;
+        sunDisc.visible=isDaytime&&sunH>.1;
+        waterMat.uniforms.uTime.value+=dt*.001;
 
         // Campfire flicker
-        if (gs.campfire) {
-          fireLight.intensity = 3 + Math.sin(Date.now() * 0.012) * 1.5 + Math.random() * 0.5;
-          fireLight.color.setHSL(0.06 + Math.random() * 0.04, 1, 0.5);
-        }
+        if(gs.campfire){fireLight.intensity=4+Math.sin(Date.now()*.014)*2+Math.random()*.6;fireLight.color.setHSL(.06+Math.random()*.04,1,.5);}
 
-        // Animal AI
-        animals3D.forEach(a => {
-          if (a.state === 'dead') {
-            a.dieT = Math.max(0, a.dieT - dt * 0.001);
-            if (a.dieT < 1.5) { a.group.rotation.z = Math.min(Math.PI / 2, a.group.rotation.z + dt * 0.003); a.group.position.y -= dt * 0.0005; }
+        // Grass update
+        updateGrass(gs.pos.x,gs.pos.z);
+
+        // Animal detection (wind/sight/sound)
+        const windX=Math.cos(gs.windAngle),windZ=Math.sin(gs.windAngle);
+        animals.forEach(a=>{
+          if(a.state==='dead'){
+            a.dieT=Math.max(0,a.dieT-dt*.001);
+            if(a.dieT<2){a.group.rotation.z=Math.min(Math.PI/2,a.group.rotation.z+dt*.002);a.group.position.y-=dt*.0003;}
             return;
           }
-          a.anim += dt * 0.003;
-          const dp = gs.pos.clone().sub(a.group.position); dp.y = 0;
-          const dist3 = dp.length();
+          a.anim+=dt*.003;
+          const adef=ADEF[a.type];
+          const dx=gs.pos.x-a.group.position.x,dz=gs.pos.z-a.group.position.z;
+          const dist=Math.sqrt(dx*dx+dz*dz)||.01;
 
-          if (a.state === 'aggro' && dist3 < 3) {
-            gs.hp = Math.max(0, gs.hp - 15 * (dt / 1000));
+          // Detection
+          if(a.state!=='flee'&&a.state!=='aggro'){
+            let detected=false;let method='';
+            // Smell (wind-based)
+            const toPlayer=new THREE.Vector2(dx,dz).normalize();
+            const wind2=new THREE.Vector2(windX,windZ);
+            const windDot=toPlayer.dot(wind2); // >0 = player upwind (safe)
+            const smellFactor=Math.max(0,-windDot);
+            if(smellFactor>.55&&dist<adef.smellR*smellFactor){detected=true;method='smell 💨';}
+            // Sound
+            const soundRad=gs.crouching?adef.soundR*.25:gs.moving?adef.soundR*.75:adef.soundR*.08;
+            if(!detected&&dist<soundRad){detected=true;method='sound 👂';}
+            // Sight
+            if(!detected){
+              const animalFwd=new THREE.Vector2(Math.sin(a.angle),Math.cos(a.angle));
+              const toP=new THREE.Vector2(-dx,-dz).normalize();
+              const dot=animalFwd.dot(toP);
+              if(dot>Math.cos(adef.sightA)&&dist<adef.sightR){detected=true;method='sight 👁️';}
+            }
+            if(detected){
+              a.alertLevel=Math.min(1,a.alertLevel+dt*.0015);
+              a.alertMethod=method;
+              if(a.alertLevel>1){a.state=a.type==='bear'?'aggro':'flee';a.alertLevel=0;setMsg(`${capitalize(a.type)} spooked! (${method})`);}
+            }else{
+              a.alertLevel=Math.max(0,a.alertLevel-dt*.0008);
+            }
           }
 
-          const moveSpd = (a.state === 'flee' ? 4.5 : a.state === 'aggro' ? 5.5 : 0.6) * (dt / 1000);
-
-          if (a.state === 'flee') {
-            dp.normalize().negate();
-            a.group.position.addScaledVector(dp, moveSpd);
-            a.angle = Math.atan2(dp.x, dp.z);
-          } else if (a.state === 'aggro') {
-            dp.normalize();
-            a.group.position.addScaledVector(dp, moveSpd);
-            a.angle = Math.atan2(dp.x, dp.z);
-          } else {
-            if (Math.random() < 0.004) a.angle += (Math.random() - 0.5) * 1.2;
-            a.group.position.x += Math.sin(a.angle) * moveSpd;
-            a.group.position.z += Math.cos(a.angle) * moveSpd;
+          // Move
+          const mSpd=(a.state==='flee'?adef.spd:a.state==='aggro'?adef.aSpd||5:.6)*(dt/1000);
+          if(a.state==='flee'){
+            const fd=Math.sqrt(dx*dx+dz*dz)||1;
+            a.group.position.x-=dx/fd*mSpd;a.group.position.z-=dz/fd*mSpd;a.angle=Math.atan2(-dx,-dz);
+          }else if(a.state==='aggro'){
+            const fd=Math.sqrt(dx*dx+dz*dz)||1;
+            a.group.position.x+=dx/fd*mSpd;a.group.position.z+=dz/fd*mSpd;a.angle=Math.atan2(dx,dz);
+            if(dist<3&&gs.hp>0){gs.hp=Math.max(0,gs.hp-14*(dt/1000));}
+          }else{
+            if(Math.random()<.004)a.angle+=(Math.random()-.5)*1.4;
+            a.group.position.x+=Math.sin(a.angle)*mSpd*.4;
+            a.group.position.z+=Math.cos(a.angle)*mSpd*.4;
           }
-
-          a.group.position.x = Math.max(-170, Math.min(170, a.group.position.x));
-          a.group.position.z = Math.max(-170, Math.min(170, a.group.position.z));
-          a.group.rotation.y = a.angle;
-
-          // Snap animal to terrain
-          raycasterGround.set(new THREE.Vector3(a.group.position.x, 50, a.group.position.z), groundDir);
-          const ah = raycasterGround.intersectObject(terrain);
-          if (ah.length > 0) a.group.position.y = ah[0].point.y;
-
-          // Animal body bob
-          a.group.children.forEach((child: any, i) => {
-            if (child.isGroup) return;
-            child.position.y += Math.sin(a.anim * 2 + i) * 0.002;
-          });
-
-          // Flee if player close
-          if (dist3 < 25 && a.state === 'idle' && a.type !== 'bear') a.state = 'flee';
-          if (dist3 > 50 && a.state === 'flee') a.state = 'idle';
-          if (a.type === 'bear' && dist3 < 30 && a.hp < a.maxHp) a.state = 'aggro';
+          a.group.position.x=Math.max(-170,Math.min(170,a.group.position.x));
+          a.group.position.z=Math.max(-170,Math.min(170,a.group.position.z));
+          a.group.position.y=groundY(a.group.position.x,a.group.position.z,0);
+          a.group.rotation.y=a.angle;
+          // Body bob
+          a.group.children.forEach((c:any,i)=>{if(i<3)c.position.y+=Math.sin(a.anim*2+i)*.003;});
+          // Reset flee if far enough
+          if(a.state==='flee'&&dist>80)a.state='idle';
         });
 
+        // Blood cleanup
+        for(let i=bloodDrops.length-1;i>=0;i--){bloodDrops[i].life--;if(bloodDrops[i].life<=0){scene.remove(bloodDrops[i].mesh);bloodDrops.splice(i,1);}}
+
         // Fishing
-        if (gs.fishing) {
-          gs.fishTimer += dt;
-          if (!gs.fishBite && gs.fishTimer > 3000 + Math.random() * 4000) {
-            gs.fishBite = true; gs.fishBiteTimer = 1800;
-            setMsg('🎣 BITE! Press [E] to catch!');
-          }
-          if (gs.fishBite) {
-            gs.fishBiteTimer -= dt;
-            if (gs.fishBiteTimer <= 0) { gs.fishBite = false; gs.fishTimer = 0; setMsg('The fish got away...'); }
-          }
-          if (gs.fishBite && gs.keys.has('KeyE')) {
-            gs.fishBite = false; gs.fishTimer = 0;
-            gs.inventory.fish++;
-            const q4 = gs.quests.find(q => q.id === 'q4');
-            if (q4 && !q4.done) { q4.prog++; if (q4.prog >= q4.goal) { q4.done = true; unlockReward(q4); } }
-            setMsg(`🐟 Caught a fish! (${gs.inventory.fish} total)`);
-          }
+        if(gs.fishing){
+          gs.fishT+=dt;
+          if(!gs.fishBite&&gs.fishT>3000+Math.random()*4000){gs.fishBite=true;gs.fishBiteT=1800;setMsg('🎣 BITE! Press [E]!');}
+          if(gs.fishBite){gs.fishBiteT-=dt;if(gs.fishBiteT<=0){gs.fishBite=false;gs.fishT=0;setMsg('It got away...');}}
+          if(gs.fishBite&&gs.keys.has('KeyE')){gs.fishBite=false;gs.fishT=0;gs.inv.fish++;const q=gs.quests.find(q=>q.id==='q4');if(q&&!q.done){q.prog++;if(q.prog>=q.goal){q.done=true;unlockReward(q);}}setMsg(`🐟 Caught one! (${gs.inv.fish} total)`);}
         }
 
         // Timers
-        if (gs.msgTimer > 0) gs.msgTimer = Math.max(0, gs.msgTimer - dt * 0.001);
+        if(gs.msgT>0)gs.msgT=Math.max(0,gs.msgT-dt*.001);
 
         // Sync snapshot
-        setSnapshot({
-          hp: Math.round(gs.hp), ammo: gs.ammo, maxAmmo: gs.maxAmmo, weapon: gs.weapon,
-          msg: gs.msg, msgTimer: gs.msgTimer,
-          quests: gs.quests.map(q => ({ ...q })),
-          inventory: { ...gs.inventory },
-          campfire: gs.campfire, tent: gs.tent,
+        setSnap({hp:Math.round(gs.hp),maxHp:gs.maxHp,ammo:gs.ammo,maxAmmo:gs.maxAmmo,weapon:gs.weapon,quests:gs.quests.map(q=>({...q})),inv:{...gs.inv},campfire:gs.campfire,tent:gs.tent,crouching:gs.crouching,scoped:gs.scoped,msg:gs.msg,msgTimer:gs.msgT,tod:gs.tod,windDeg:Math.round((gs.windAngle*180/Math.PI+360)%360),trophies:gs.trophies});
+      }
+
+      /* ── HUD ───────────────────────────────────────────── */
+      const hud=hudRef.current!;
+      const hx=hud.getContext('2d')!;
+      function drawHUD(){
+        hx.clearRect(0,0,hud.width,hud.height);
+        const W=hud.width,H=hud.height;
+        const mob='ontouchstart' in window;
+
+        // Scope overlay
+        if(gs.scoped){
+          hx.fillStyle='rgba(0,0,0,.88)';
+          hx.fillRect(0,0,W,H);
+          const r=Math.min(W,H)*.38;
+          hx.save();hx.beginPath();hx.arc(W/2,H/2,r,0,Math.PI*2);hx.clip();hx.clearRect(W/2-r,H/2-r,r*2,r*2);hx.restore();
+          hx.strokeStyle='rgba(255,255,255,.6)';hx.lineWidth=1.5;
+          hx.beginPath();hx.arc(W/2,H/2,r,0,Math.PI*2);hx.stroke();
+          hx.beginPath();hx.moveTo(W/2-r,H/2);hx.lineTo(W/2+r,H/2);hx.moveTo(W/2,H/2-r);hx.lineTo(W/2,H/2+r);hx.stroke();
+          for(let i=-4;i<=4;i++){if(i===0)continue;hx.fillStyle='rgba(255,255,255,.5)';hx.font='10px monospace';hx.textAlign='center';hx.fillText(`${i}`,W/2+i*r/5,H/2+14);}
+          hx.fillStyle='rgba(0,255,0,.12)';hx.fillRect(W/2-r,H/2-1.5,r*2,3);
+        }else{
+          // Crosshair
+          const cx=W/2,cy=H/2,cs=11;
+          hx.strokeStyle='rgba(255,255,255,.88)';hx.lineWidth=1.4;hx.lineCap='round';
+          hx.beginPath();hx.moveTo(cx-cs,cy);hx.lineTo(cx-3,cy);hx.moveTo(cx+3,cy);hx.lineTo(cx+cs,cy);hx.moveTo(cx,cy-cs);hx.lineTo(cx,cy-3);hx.moveTo(cx,cy+3);hx.lineTo(cx,cy+cs);hx.stroke();
+          hx.beginPath();hx.arc(cx,cy,2.2,0,Math.PI*2);hx.fillStyle='rgba(255,255,255,.5)';hx.fill();
+        }
+
+        // Compass (top center)
+        const compR=36, compX=W/2, compY=50;
+        hx.save();hx.fillStyle='rgba(0,0,0,.55)';hx.beginPath();hx.arc(compX,compY,compR+4,0,Math.PI*2);hx.fill();
+        hx.strokeStyle='rgba(255,255,255,.2)';hx.lineWidth=1;hx.beginPath();hx.arc(compX,compY,compR+4,0,Math.PI*2);hx.stroke();
+        // Cardinal labels
+        ['N','E','S','W'].forEach((d,i)=>{const a=(i/4)*Math.PI*2-gs.yaw;const lx=compX+Math.sin(a)*compR,ly=compY-Math.cos(a)*compR;hx.fillStyle=d==='N'?'#ef4444':'rgba(255,255,255,.7)';hx.font=`bold ${d==='N'?13:10}px sans-serif`;hx.textAlign='center';hx.textBaseline='middle';hx.fillText(d,lx,ly);});
+        // Forward indicator
+        hx.strokeStyle='rgba(255,200,50,.9)';hx.lineWidth=2;hx.beginPath();hx.moveTo(compX,compY-8);hx.lineTo(compX,compY-compR+6);hx.stroke();
+        hx.restore();
+
+        // Wind indicator (top right)
+        const wx=W-65,wy=52;
+        hx.save();hx.fillStyle='rgba(0,0,0,.5)';hx.beginPath();hx.arc(wx,wy,28,0,Math.PI*2);hx.fill();
+        hx.strokeStyle='rgba(255,255,255,.15)';hx.lineWidth=1;hx.beginPath();hx.arc(wx,wy,28,0,Math.PI*2);hx.stroke();
+        // Wind arrow
+        const wa=gs.windAngle-gs.yaw;
+        hx.strokeStyle='#7dd3fc';hx.lineWidth=2;hx.lineCap='round';
+        hx.beginPath();hx.moveTo(wx+Math.sin(wa+Math.PI)*18,wy-Math.cos(wa+Math.PI)*18);hx.lineTo(wx+Math.sin(wa)*18,wy-Math.cos(wa)*18);hx.stroke();
+        hx.fillStyle='#7dd3fc';hx.beginPath();hx.moveTo(wx+Math.sin(wa)*22,wy-Math.cos(wa)*22);hx.lineTo(wx+Math.sin(wa+2.5)*12,wy-Math.cos(wa+2.5)*12);hx.lineTo(wx+Math.sin(wa-2.5)*12,wy-Math.cos(wa-2.5)*12);hx.fill();
+        hx.fillStyle='rgba(125,211,252,.7)';hx.font='8px sans-serif';hx.textAlign='center';hx.textBaseline='middle';hx.fillText('WIND',wx,wy+38);
+        hx.restore();
+
+        // Animal detection meters
+        let detY=105;
+        animals.forEach(a=>{
+          if(a.alertLevel<=0||a.state==='dead')return;
+          const lbl=`${capitalize(a.type)} ${a.alertMethod}`;
+          const mw=130,mh=6;const mx2=(W-mw)/2;
+          hx.fillStyle='rgba(0,0,0,.55)';hx.fillRect(mx2-2,detY-2,mw+4,mh+14);
+          hx.fillStyle=a.alertLevel>.7?'#ef4444':a.alertLevel>.4?'#fb923c':'#fbbf24';
+          hx.fillRect(mx2,detY+10,mw*a.alertLevel,mh);
+          hx.fillStyle='white';hx.font='9px monospace';hx.textAlign='center';hx.fillText(lbl,W/2,detY+8);
+          detY+=26;
         });
-      }
 
-      function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
+        // HP bar (bottom left)
+        const hpPct=Math.max(0,gs.hp/gs.maxHp);
+        hx.fillStyle='rgba(0,0,0,.6)';hx.fillRect(14,H-52,155,22);
+        const hpG=hx.createLinearGradient(16,0,152,0);hpG.addColorStop(0,'#dc2626');hpG.addColorStop(.5,'#ea580c');hpG.addColorStop(1,'#16a34a');
+        hx.fillStyle=hpG;hx.fillRect(16,H-50,142*hpPct,18);
+        hx.fillStyle='white';hx.font='bold 11px monospace';hx.textAlign='left';hx.fillText(`❤️  ${Math.ceil(gs.hp)} / ${gs.maxHp}`,18,H-35);
 
-      // ── Resize ────────────────────────────────────────────
-      function onResize() {
-        renderer.setSize(innerWidth, innerHeight);
-        camera.aspect = innerWidth / innerHeight;
-        camera.updateProjectionMatrix();
-      }
-      window.addEventListener('resize', onResize);
+        // Ammo bottom right
+        hx.fillStyle='rgba(0,0,0,.6)';hx.fillRect(W-175,H-52,163,22);
+        hx.fillStyle=gs.scoped?'#fbbf24':'#f8f8f8';hx.font='bold 13px monospace';hx.textAlign='right';
+        hx.fillText(`${gs.weapon.toUpperCase()}  ${gs.ammo}/${gs.maxAmmo}`,W-16,H-34);
+        if(gs.crouching){hx.fillStyle='#4ade80';hx.font='bold 10px monospace';hx.textAlign='left';hx.fillText('🦆 CROUCHING',16,H-55);}
 
-      // ── HUD Canvas ────────────────────────────────────────
-      const hud = hudRef.current!;
-      const hctx = hud.getContext('2d')!;
-      hud.width = innerWidth; hud.height = innerHeight;
-
-      function drawHUD() {
-        hctx.clearRect(0, 0, hud.width, hud.height);
-        const W = hud.width, H = hud.height;
-
-        // Crosshair
-        const cx3 = W / 2, cy3 = H / 2, cs = 13;
-        hctx.strokeStyle = 'rgba(255,255,255,0.88)'; hctx.lineWidth = 1.5; hctx.lineCap = 'round';
-        hctx.beginPath(); hctx.moveTo(cx3 - cs, cy3); hctx.lineTo(cx3 - 3, cy3); hctx.moveTo(cx3 + 3, cy3); hctx.lineTo(cx3 + cs, cy3);
-        hctx.moveTo(cx3, cy3 - cs); hctx.lineTo(cx3, cy3 - 3); hctx.moveTo(cx3, cy3 + 3); hctx.lineTo(cx3, cy3 + cs);
-        hctx.stroke();
-        hctx.beginPath(); hctx.arc(cx3, cy3, 2.5, 0, Math.PI * 2);
-        hctx.fillStyle = 'rgba(255,255,255,0.5)'; hctx.fill();
-
-        // HP (bottom left)
-        const hpPct = gs.hp / gs.maxHp;
-        hctx.fillStyle = 'rgba(0,0,0,0.55)'; hctx.fillRect(14, H - 48, 145, 20);
-        const hpG = hctx.createLinearGradient(16, 0, 150, 0);
-        hpG.addColorStop(0, '#ef4444'); hpG.addColorStop(0.5, '#f97316'); hpG.addColorStop(1, '#22c55e');
-        hctx.fillStyle = hpG; hctx.fillRect(16, H - 46, 132 * hpPct, 16);
-        hctx.fillStyle = 'white'; hctx.font = 'bold 11px monospace'; hctx.textAlign = 'left';
-        hctx.fillText(`❤️  ${Math.ceil(gs.hp)} / ${gs.maxHp}`, 18, H - 32);
-
-        // Ammo (bottom right)
-        hctx.fillStyle = 'rgba(0,0,0,0.55)'; hctx.fillRect(W - 158, H - 48, 146, 20);
-        hctx.fillStyle = '#fbbf24'; hctx.font = 'bold 13px monospace'; hctx.textAlign = 'right';
-        hctx.fillText(`${gs.weapon.toUpperCase()}  ${gs.ammo}/${gs.maxAmmo}`, W - 16, H - 31);
-
-        // Time of day indicator
-        const todPct = gs.tod;
-        const todEmoji = todPct < 0.22 ? '🌙' : todPct < 0.3 ? '🌅' : todPct < 0.72 ? '☀️' : todPct < 0.85 ? '🌇' : '🌙';
-        hctx.fillStyle = 'rgba(0,0,0,.45)'; hctx.fillRect(W / 2 - 50, 8, 100, 22);
-        hctx.fillStyle = 'rgba(255,255,255,0.8)'; hctx.font = '12px sans-serif'; hctx.textAlign = 'center';
-        hctx.fillText(todEmoji + ' ' + (gs.tod < 0.5 ? '🌡️' : ''), W / 2, 23);
-
-        // Controls hint
-        hctx.fillStyle = 'rgba(0,0,0,.42)'; hctx.fillRect(14, H - 78, 200, 26);
-        hctx.fillStyle = 'rgba(255,255,255,.55)'; hctx.font = '10px monospace'; hctx.textAlign = 'left';
-        hctx.fillText('[F] Shoot · [E] Interact · [T] Tent · [C] Fire · [G] Weapon', 18, H - 60);
-
-        // Quest notifications
-        hctx.fillStyle = 'rgba(0,0,0,.48)'; hctx.fillRect(W - 202, 8, 190, 22);
-        hctx.fillStyle = 'rgba(255,255,255,.65)'; hctx.font = '10px monospace'; hctx.textAlign = 'right';
-        hctx.fillText('[TAB] Quests', W - 12, 23);
+        // Status (time/weather)
+        const hr=Math.floor(gs.tod*24);const ampm=hr<12?'AM':'PM';const h12=(hr%12||12);
+        hx.fillStyle='rgba(0,0,0,.48)';hx.fillRect(W/2-60,H-40,120,22);
+        hx.fillStyle='rgba(255,255,255,.75)';hx.font='11px monospace';hx.textAlign='center';hx.fillText(`⏰ ${h12}:00 ${ampm}`,W/2,H-23);
 
         // Message
-        if (gs.msgTimer > 0) {
-          const alpha = Math.min(1, gs.msgTimer);
-          hctx.globalAlpha = alpha;
-          hctx.fillStyle = 'rgba(0,0,0,0.6)'; hctx.fillRect(W / 2 - 220, H * 0.34 - 18, 440, 30);
-          hctx.fillStyle = '#ffd700'; hctx.font = 'bold 15px sans-serif'; hctx.textAlign = 'center';
-          hctx.fillText(gs.msg, W / 2, H * 0.34);
-          hctx.globalAlpha = 1;
+        if(gs.msgT>0){hx.globalAlpha=Math.min(1,gs.msgT);hx.fillStyle='rgba(0,0,0,.62)';hx.fillRect(W/2-240,H*.32-18,480,32);hx.fillStyle='#ffd700';hx.font='bold 15px sans-serif';hx.textAlign='center';hx.fillText(gs.msg,W/2,H*.32);hx.globalAlpha=1;}
+
+        // Fishing
+        if(gs.fishing){hx.fillStyle='rgba(20,60,140,.78)';hx.fillRect(W/2-155,H*.27-16,310,26);hx.fillStyle=gs.fishBite?'#ffd700':'#7dd3fc';hx.font='bold 13px sans-serif';hx.textAlign='center';hx.fillText(gs.fishBite?'🎣 BITE! Press [E] now!':'🎣 Fishing — waiting for bite...',W/2,H*.27);}
+
+        // Keys hint (desktop)
+        if(!mob){
+          hx.fillStyle='rgba(0,0,0,.45)';hx.fillRect(14,H-82,230,26);
+          hx.fillStyle='rgba(255,255,255,.5)';hx.font='9px monospace';hx.textAlign='left';
+          hx.fillText('[F]=Shoot [E]=Act [T]=Tent [C]=Fire [Q]=Crouch [Z]=Scope [G]=Gun [TAB]=Quests',18,H-63);
         }
 
-        // Fishing indicator
-        if (gs.fishing) {
-          hctx.fillStyle = 'rgba(20,60,140,.75)'; hctx.fillRect(W / 2 - 145, H * 0.26 - 16, 290, 26);
-          hctx.fillStyle = gs.fishBite ? '#ffd700' : '#7dd3fc'; hctx.font = 'bold 13px sans-serif'; hctx.textAlign = 'center';
-          hctx.fillText(gs.fishBite ? '🎣 BITE! Press [E]!' : '🎣 Fishing — waiting for bite...', W / 2, H * 0.26);
-        }
+        // Mobile UI
+        if(mob){
+          // Move stick
+          hx.globalAlpha=.28;hx.fillStyle='white';hx.beginPath();hx.arc(80,H-95,48,0,Math.PI*2);hx.fill();
+          if(gs.joy1.on){const jdx=gs.joy1.cx-gs.joy1.sx,jdy=gs.joy1.cy-gs.joy1.sy,jd=Math.sqrt(jdx**2+jdy**2);const cx2=gs.joy1.sx+jdx*(jd>48?48/jd:1),cy2=gs.joy1.sy+jdy*(jd>48?48/jd:1);hx.globalAlpha=.5;hx.beginPath();hx.arc(cx2,cy2,24,0,Math.PI*2);hx.fill();}
+          hx.globalAlpha=1;hx.fillStyle='rgba(255,255,255,.38)';hx.font='10px sans-serif';hx.textAlign='center';hx.fillText('MOVE',80,H-92);
 
-        // Lake proximity hint
-        const lakeDist = gs.pos.distanceTo(new THREE.Vector3(80, 0, 80));
-        if (lakeDist < 30 && !gs.fishing) {
-          hctx.fillStyle = 'rgba(20,60,140,.65)'; hctx.fillRect(W / 2 - 120, H * 0.32 - 14, 240, 22);
-          hctx.fillStyle = '#7dd3fc'; hctx.font = '12px sans-serif'; hctx.textAlign = 'center';
-          hctx.fillText('[E] Start fishing', W / 2, H * 0.32);
-        }
-
-        // Touch controls
-        if ('ontouchstart' in window) {
-          hctx.globalAlpha = 0.35; hctx.fillStyle = 'white';
-          hctx.beginPath(); hctx.arc(80, H - 90, 46, 0, Math.PI * 2); hctx.fill();
-          hctx.globalAlpha = 0.55; hctx.font = '11px sans-serif'; hctx.textAlign = 'center';
-          hctx.fillText('MOVE', 80, H - 88);
-          hctx.fillStyle = 'rgba(200,0,0,.6)';
-          hctx.beginPath(); hctx.arc(W - 60, H - 80, 38, 0, Math.PI * 2); hctx.fill();
-          hctx.fillStyle = 'white'; hctx.font = 'bold 22px sans-serif';
-          hctx.fillText('🔫', W - 60, H - 73);
-          hctx.globalAlpha = 1;
+          // Action buttons (right side)
+          const btns=[
+            {x:W-62,y:H-200,lbl:'🔫',act:'shoot',col:'rgba(200,0,0,.7)',r:36},
+            {x:W-130,y:H-130,lbl:'🔭',act:'scope',col:gs.scoped?'rgba(251,191,36,.7)':'rgba(50,80,50,.6)',r:26},
+            {x:W-62,y:H-130,lbl:'🦆',act:'crouch',col:gs.crouching?'rgba(74,222,128,.6)':'rgba(50,60,50,.6)',r:26},
+            {x:W-130,y:H-200,lbl:'🎯',act:'interact',col:'rgba(60,80,200,.6)',r:26},
+          ];
+          btns.forEach(b=>{
+            hx.globalAlpha=.88;hx.fillStyle=b.col;hx.beginPath();hx.arc(b.x,b.y,b.r,0,Math.PI*2);hx.fill();
+            hx.globalAlpha=1;hx.font=`${b.r*.9}px sans-serif`;hx.textAlign='center';hx.textBaseline='middle';hx.fillText(b.lbl,b.x,b.y);hx.textBaseline='alphabetic';
+          });
         }
       }
 
-      // ── Render loop ───────────────────────────────────────
-      let lastTime = 0;
-      function loop(time: number) {
-        if (!alive) return;
-        const dt = Math.min(time - lastTime, 80);
-        lastTime = time;
-        update(dt);
-        renderer.render(scene, camera);
-        drawHUD();
-        raf = requestAnimationFrame(loop);
-      }
-      raf = requestAnimationFrame(loop);
+      // Mobile button tap handler
+      renderer.domElement.addEventListener('touchstart',(e:TouchEvent)=>{
+        e.preventDefault();
+        const W=innerWidth,H=innerHeight;
+        for(const t of Array.from(e.changedTouches)){
+          const tx=t.clientX,ty=t.clientY;
+          // Fire
+          if(Math.sqrt((tx-(W-62))**2+(ty-(H-200))**2)<36)shoot();
+          // Scope
+          if(Math.sqrt((tx-(W-130))**2+(ty-(H-130))**2)<26)gs.scoped=!gs.scoped;
+          // Crouch
+          if(Math.sqrt((tx-(W-62))**2+(ty-(H-130))**2)<26)gs.crouching=!gs.crouching;
+          // Interact
+          if(Math.sqrt((tx-(W-130))**2+(ty-(H-200))**2)<26)interact();
+        }
+      },{passive:false});
 
-      // ── Cleanup ───────────────────────────────────────────
-      return () => {
-        window.removeEventListener('keydown', onKD);
-        window.removeEventListener('keyup', onKU);
-        window.removeEventListener('mousemove', onMM);
-        window.removeEventListener('resize', onResize);
+      /* ── Render loop ───────────────────────────────────── */
+      let lastT=0;
+      function loop(t:number){
+        if(!alive)return;
+        const dt=Math.min(t-lastT,80);lastT=t;
+        update(dt);renderer.render(scene,camera);drawHUD();
+        raf=requestAnimationFrame(loop);
+      }
+      raf=requestAnimationFrame(loop);
+
+      return()=>{
+        window.removeEventListener('keydown',onKD);window.removeEventListener('keyup',onKU);
+        window.removeEventListener('mousemove',onMM);window.removeEventListener('resize',onResize);
       };
     }
 
-    const cleanup = init();
-    return () => {
-      alive = false;
-      cancelAnimationFrame(raf);
+    const cleanup=init();
+    return()=>{
+      alive=false;cancelAnimationFrame(raf);
       renderer?.dispose();
-      if (renderer?.domElement && mountRef.current?.contains(renderer.domElement)) {
-        mountRef.current.removeChild(renderer.domElement);
-      }
-      cleanup.then(fn => fn?.());
+      if(renderer?.domElement&&mountRef.current?.contains(renderer.domElement))mountRef.current.removeChild(renderer.domElement);
+      cleanup.then(fn=>fn?.());
     };
-  }, []);
-
-  const activeQuests = snapshot.quests.filter(q => !q.done);
-  const doneQuests   = snapshot.quests.filter(q => q.done);
+  },[]);
 
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100dvh', overflow: 'hidden', background: '#000', userSelect: 'none' }}>
-      {/* Three.js canvas mount */}
-      <div ref={mountRef} style={{ position: 'absolute', inset: 0 }} />
+    <div style={{position:'relative',width:'100vw',height:'100dvh',overflow:'hidden',background:'#000',userSelect:'none',WebkitUserSelect:'none' as 'none'}}>
+      <div ref={mountRef} style={{position:'absolute',inset:0}}/>
+      <canvas ref={hudRef} style={{position:'absolute',inset:0,pointerEvents:'none',width:'100%',height:'100%'}}/>
 
-      {/* HUD overlay */}
-      <canvas ref={hudRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', width: '100%', height: '100%' }} />
-
-      {/* Quests panel */}
-      {showPanel === 'quests' && (
-        <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 'min(380px, 100vw)', background: 'rgba(10,15,8,0.94)', backdropFilter: 'blur(12px)', borderLeft: '1px solid rgba(80,120,60,.4)', display: 'flex', flexDirection: 'column', fontFamily: 'system-ui, sans-serif', zIndex: 10 }}>
-          <div style={{ padding: '16px 18px 12px', borderBottom: '1px solid rgba(80,120,60,.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ color: '#4ade80', fontWeight: 'bold', fontSize: 16 }}>🗺️ Quest Log</div>
-            <button onClick={() => setShowPanel('none')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.5)', fontSize: 18, cursor: 'pointer', padding: '2px 6px' }}>✕</button>
+      {/* Quest panel */}
+      {panel==='quests'&&(
+        <div style={{position:'absolute',top:0,right:0,bottom:0,width:'min(400px,100vw)',background:'rgba(5,12,6,.95)',backdropFilter:'blur(12px)',borderLeft:'1px solid rgba(74,222,128,.2)',display:'flex',flexDirection:'column',fontFamily:'system-ui,sans-serif',zIndex:10,overflowY:'auto'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 18px',borderBottom:'1px solid rgba(74,222,128,.18)'}}>
+            <div style={{color:'#4ade80',fontWeight:'bold',fontSize:16}}>🗺️ Quest Log</div>
+            <button onClick={()=>setPanel('none')} style={{background:'none',border:'none',color:'rgba(255,255,255,.5)',fontSize:20,cursor:'pointer',padding:'2px 6px'}}>✕</button>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {activeQuests.map(q => (
-              <div key={q.id} style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(80,120,60,.3)', borderRadius: 10, padding: '12px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 20 }}>{q.icon}</span>
+          <div style={{padding:'12px 14px',flex:1,display:'flex',flexDirection:'column',gap:10}}>
+            {snap.quests.map(q=>(
+              <div key={q.id} style={{background:q.done?'rgba(22,163,74,.12)':'rgba(255,255,255,.05)',border:`1px solid ${q.done?'rgba(22,163,74,.3)':'rgba(74,222,128,.15)'}`,borderRadius:10,padding:'11px 14px'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:q.done?0:8}}>
+                  <span style={{fontSize:20}}>{q.icon}</span>
                   <div>
-                    <div style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>{q.name}</div>
-                    <div style={{ color: 'rgba(255,255,255,.5)', fontSize: 11 }}>{q.desc}</div>
+                    <div style={{color:q.done?'#4ade80':'white',fontWeight:'bold',fontSize:13}}>{q.done?'✓ ':''}{q.name}</div>
+                    <div style={{color:'rgba(255,255,255,.45)',fontSize:11}}>{q.desc}</div>
                   </div>
                 </div>
-                <div style={{ height: 6, background: 'rgba(255,255,255,.12)', borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
-                  <div style={{ height: '100%', width: `${Math.min(100, (q.prog / q.goal) * 100)}%`, background: 'linear-gradient(90deg,#16a34a,#4ade80)', borderRadius: 3, transition: 'width .4s' }} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                  <span style={{ color: '#86efac' }}>{q.prog} / {q.goal}</span>
-                  <span style={{ color: '#fbbf24' }}>Reward: {q.reward}</span>
-                </div>
+                {!q.done&&<><div style={{height:5,background:'rgba(255,255,255,.1)',borderRadius:3,overflow:'hidden',marginBottom:5}}><div style={{height:'100%',width:`${Math.min(100,(q.prog/q.goal)*100)}%`,background:'linear-gradient(90deg,#16a34a,#4ade80)',borderRadius:3}}/></div><div style={{display:'flex',justifyContent:'space-between',fontSize:11}}><span style={{color:'#86efac'}}>{q.prog}/{q.goal}</span><span style={{color:'#fbbf24'}}>Reward: {q.reward}</span></div></>}
               </div>
             ))}
-            {doneQuests.length > 0 && (
-              <>
-                <div style={{ color: 'rgba(255,255,255,.3)', fontSize: 11, marginTop: 4 }}>COMPLETED</div>
-                {doneQuests.map(q => (
-                  <div key={q.id} style={{ background: 'rgba(22,163,74,.1)', border: '1px solid rgba(22,163,74,.3)', borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8, opacity: 0.7 }}>
-                    <span style={{ fontSize: 18 }}>{q.icon}</span>
-                    <div>
-                      <div style={{ color: '#4ade80', fontWeight: 'bold', fontSize: 12 }}>✓ {q.name}</div>
-                      <div style={{ color: 'rgba(255,255,255,.4)', fontSize: 10 }}>Reward earned: {q.reward}</div>
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
           </div>
           {/* Inventory */}
-          <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(80,120,60,.3)' }}>
-            <div style={{ color: 'rgba(255,255,255,.6)', fontSize: 11, marginBottom: 8, fontWeight: 'bold' }}>🎒 INVENTORY</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
-              {[
-                ['🦌', 'Deer', snapshot.inventory.deer],
-                ['🐻', 'Bear', snapshot.inventory.bear],
-                ['🦃', 'Turkey', snapshot.inventory.turkey],
-                ['🫎', 'Moose', snapshot.inventory.moose],
-                ['🐟', 'Fish', snapshot.inventory.fish],
-                ['🍖', 'Cooked', snapshot.inventory.cooked],
-              ].map(([icon, label, count]) => (
-                <div key={label as string} style={{ background: 'rgba(255,255,255,.05)', borderRadius: 6, padding: '5px 8px', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ fontSize: 14 }}>{icon}</span>
-                  <span style={{ color: 'rgba(255,255,255,.6)', fontSize: 11 }}>{label}</span>
-                  <span style={{ color: 'white', fontWeight: 'bold', fontSize: 12, marginLeft: 'auto' }}>{count as number}</span>
+          <div style={{padding:'12px 14px',borderTop:'1px solid rgba(74,222,128,.18)'}}>
+            <div style={{color:'rgba(255,255,255,.5)',fontSize:11,fontWeight:'bold',marginBottom:8}}>🎒 INVENTORY</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+              {([['🦌','Deer',snap.inv.deer],['🐻','Bear',snap.inv.bear],['🦃','Turkey',snap.inv.turkey],['🫎','Moose',snap.inv.moose],['🐟','Fish',snap.inv.fish],['🍖','Cooked',snap.inv.cooked]] as [string,string,number][]).map(([ico,lbl,cnt])=>(
+                <div key={lbl} style={{background:'rgba(255,255,255,.05)',borderRadius:6,padding:'5px 8px',display:'flex',alignItems:'center',gap:5}}>
+                  <span style={{fontSize:13}}>{ico}</span><span style={{color:'rgba(255,255,255,.55)',fontSize:11,flex:1}}>{lbl}</span><span style={{color:'white',fontWeight:'bold',fontSize:12}}>{cnt}</span>
                 </div>
               ))}
             </div>
-            <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {['pistol', 'rifle', 'shotgun', 'sniper'].filter(w => snapshot.weapon === w || gameState.current?.weapons?.has(w)).map(w => (
-                <div key={w} style={{ background: snapshot.weapon === w ? 'rgba(251,191,36,.25)' : 'rgba(255,255,255,.06)', border: `1px solid ${snapshot.weapon === w ? 'rgba(251,191,36,.5)' : 'rgba(255,255,255,.15)'}`, borderRadius: 6, padding: '3px 8px', fontSize: 10, color: snapshot.weapon === w ? '#fbbf24' : 'rgba(255,255,255,.5)' }}>
-                  {snapshot.weapon === w ? '▶ ' : ''}{w.toUpperCase()}
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 8, fontSize: 10, color: 'rgba(255,255,255,.3)' }}>[G] to switch weapon · [E] near fire to cook · [E] near lake to fish</div>
           </div>
+          {/* Trophies */}
+          {snap.trophies.length>0&&<div style={{padding:'12px 14px',borderTop:'1px solid rgba(74,222,128,.18)'}}>
+            <div style={{color:'rgba(255,255,255,.5)',fontSize:11,fontWeight:'bold',marginBottom:8}}>🏆 TROPHIES</div>
+            <div style={{display:'flex',flexDirection:'column',gap:4}}>
+              {snap.trophies.map((t,i)=><div key={i} style={{fontSize:12,color:'rgba(255,255,255,.7)'}}>
+                {t.rating} {t.type.charAt(0).toUpperCase()+t.type.slice(1)} — Score: {t.score}
+              </div>)}
+            </div>
+          </div>}
         </div>
       )}
 
-      {/* Intro overlay (no pointer lock yet) */}
-      <div id="intro-overlay" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(4px)', zIndex: 5, pointerEvents: 'none' }}
-        onClick={(e) => { (e.currentTarget as HTMLDivElement).style.display = 'none'; }}>
-        <div style={{ textAlign: 'center', color: 'white', padding: 32, pointerEvents: 'all' }}
-          onClick={(e) => { e.stopPropagation(); (document.getElementById('intro-overlay') as HTMLDivElement).style.display = 'none'; }}>
-          <div style={{ fontSize: 'clamp(28px,5vw,42px)', fontWeight: 'bold', marginBottom: 12, textShadow: '0 0 20px rgba(74,222,128,.5)' }}>🌲 WILDERNESS HUNT</div>
-          <div style={{ fontSize: 14, color: 'rgba(255,255,255,.7)', marginBottom: 20, maxWidth: 380, lineHeight: 1.6 }}>First-person 3D open-world hunting. Hunt deer, bears, turkey & moose. Fish at the lake. Make camp and cook your meat. Complete quests for better weapons.</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, color: 'rgba(255,255,255,.6)', marginBottom: 20, textAlign: 'left', maxWidth: 300, margin: '0 auto 20px' }}>
-            {[['WASD', 'Move'], ['Mouse', 'Look'], ['F / Click', 'Shoot'], ['E', 'Interact/Fish'], ['T', 'Place Tent'], ['C', 'Light Fire'], ['G', 'Switch Gun'], ['TAB', 'Quests']].map(([k, v]) => (
-              <div key={k} style={{ display: 'flex', gap: 6 }}>
-                <span style={{ color: '#fbbf24', minWidth: 60 }}>{k}</span>
-                <span>{v}</span>
-              </div>
-            ))}
+      {/* Start overlay */}
+      <div id="start-ov" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.75)',backdropFilter:'blur(4px)',zIndex:5}}>
+        <div style={{textAlign:'center',color:'white',padding:28,maxWidth:500}}>
+          <div style={{fontSize:'clamp(26px,5vw,42px)',fontWeight:'bold',color:'#4ade80',marginBottom:10,textShadow:'0 0 30px rgba(74,222,128,.5)'}}>🌲 WILDERNESS HUNT</div>
+          <div style={{fontSize:13,color:'rgba(255,255,255,.65)',marginBottom:16,lineHeight:1.6}}>Open-world first-person hunting. Animals have real sight, hearing, and smell. Use the wind.</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 16px',fontSize:11,color:'rgba(255,255,255,.55)',textAlign:'left',maxWidth:340,margin:'0 auto 18px',lineHeight:1.8}}>
+            {[['WASD','Move'],['Mouse drag','Look'],['F / Tap🔫','Shoot'],['Q / Tap🦆','Crouch (quiet)'],['Z / Tap🔭','Scope'],['E / Tap🎯','Interact'],['T','Place Tent'],['C','Light Fire'],['G','Switch Weapon'],['TAB','Quest Log'],['Wind arrow','Top right']].map(([k,v])=><><span style={{color:'#fbbf24'}}>{k}</span><span>{v}</span></>)}
           </div>
-          <button style={{ padding: '14px 44px', fontSize: 18, fontWeight: 'bold', background: 'linear-gradient(135deg,#16a34a,#4ade80)', color: 'white', border: 'none', borderRadius: 14, cursor: 'pointer', boxShadow: '0 0 24px rgba(74,222,128,.4)' }}>
+          <div style={{background:'rgba(74,222,128,.1)',border:'1px solid rgba(74,222,128,.3)',borderRadius:8,padding:'8px 16px',fontSize:12,color:'#86efac',marginBottom:18}}>
+            💡 Crouch + move upwind of animals for the best approach. Bears charge when wounded!
+          </div>
+          <button onClick={()=>{const el=document.getElementById('start-ov');if(el)el.style.display='none';}} style={{padding:'14px 48px',fontSize:18,fontWeight:'bold',background:'linear-gradient(135deg,#16a34a,#4ade80)',color:'white',border:'none',borderRadius:14,cursor:'pointer',boxShadow:'0 0 28px rgba(74,222,128,.45)',touchAction:'manipulation'}}>
             🎯 Enter the Wild
           </button>
         </div>
