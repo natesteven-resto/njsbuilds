@@ -17,6 +17,7 @@
     "@stripe/stripe-js": "^8.9.0",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.98.0",
+    "@types/three": "^0.184.1",
     "@vercel/analytics": "^2.0.0",
     "@vercel/kv": "^3.0.0",
     "ai": "^4.3.19",
@@ -33,6 +34,7 @@
     "resend": "^6.9.3",
     "stripe": "^20.4.0",
     "tailwind-merge": "^3.5.0",
+    "three": "^0.184.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
