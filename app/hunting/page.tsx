@@ -717,7 +717,7 @@ buildWeapon('pistol');
       const animals:Animal3D[]=[];
 
       // Sparse population — animals are rare finds, like real hunting
-      const aDefs:[string,number,number,number][]=isMob2?[['deer',3,80,2],['bear',1,300,3],['turkey',2,50,1],['moose',1,220,4]]:[['deer',4,80,2],['bear',2,300,3],['turkey',3,50,1],['moose',2,220,4]];
+      const aDefs:[string,number,number,number][]=isMob2?[['deer',2,80,2],['bear',1,300,3],['turkey',1,50,1],['moose',1,220,4]]:[['deer',3,80,2],['bear',1,300,3],['turkey',2,50,1],['moose',1,220,4]];
       aDefs.forEach(([type,n,hp,meat])=>{
         for(let i=0;i<n;i++){
           // Place animals deep in forest clusters, hard to spot
@@ -743,7 +743,7 @@ buildWeapon('pistol');
       });
 
       // Mountain goats — spawn specifically on high-elevation terrain
-      const goatCount=isMob2?2:4;
+      const goatCount=isMob2?1:2;
       for(let gi=0;gi<goatCount*8&&animals.filter(a=>a.type==='goat').length<goatCount;gi++){
         const ga=Math.random()*Math.PI*2;
         const gd=155+Math.random()*85; // mountain zone
@@ -1074,19 +1074,26 @@ buildWeapon('pistol');
             // Sight
             if(!detected){
               const animalFwd=new THREE.Vector2(Math.sin(a.angle),Math.cos(a.angle));
-              const toP=new THREE.Vector2(-dx,-dz).normalize();
+              const toP=new THREE.Vector2(dx,dz).normalize();
               const dot=animalFwd.dot(toP);
               if(dot>Math.cos(adef.sightA)&&dist<adef.sightR){detected=true;method='sight 👁️';}
             }
             if(detected){
-              // Slower alert buildup — animal investigates before fully spooking
-              a.alertLevel=Math.min(1,a.alertLevel+dt*.0008);
+              // Alert builds — no cap, threshold at 1 fires the flee
+              a.alertLevel+=dt*.0008;
               a.alertMethod=method;
-              if(a.alertLevel>1){a.state=a.type==='bear'?'aggro':'flee';a.alertLevel=0;setMsg(`${capitalize(a.type)} spooked!`);}
+              if(a.alertLevel>=1){a.state=a.type==='bear'?'aggro':'flee';a.alertLevel=0;setMsg(`${capitalize(a.type)} spooked!`);}
             }else{
               // Alert decays fairly fast — if you stop moving they calm down
               a.alertLevel=Math.max(0,a.alertLevel-dt*.0012);
             }
+          }
+
+          // Panic zone — walking right up to an animal instantly spooks it
+          if((a.state==='idle'||a.state==='alert')&&dist<(gs.crouching?5:10)&&gs.moving){
+            a.state=a.type==='bear'?'aggro':'flee';
+            a.alertLevel=0;
+            setMsg(`${capitalize(a.type)} spooked!`);
           }
 
           // Dawn/dusk: animals more active; midday/night they rest
@@ -1129,7 +1136,8 @@ buildWeapon('pistol');
           a.group.position.x=Math.max(-300,Math.min(300,a.group.position.x));
           a.group.position.z=Math.max(-300,Math.min(300,a.group.position.z));
           a.group.position.y=groundY(a.group.position.x,a.group.position.z,0);
-          a.group.rotation.y=a.angle;
+          // +PI flips head to face movement direction (model head is at local -Z)
+          a.group.rotation.y=a.angle+Math.PI;
           // Bleed-out: lose HP over time when bleeding, drop blood trail
           if(a.bleedRate>0&&a.state!=='dead'){
             a.hp-=a.bleedRate*(dt/1000);
