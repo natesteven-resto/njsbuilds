@@ -716,7 +716,8 @@ buildWeapon('pistol');
 
       const animals:Animal3D[]=[];
 
-      const aDefs:[string,number,number,number][]=isMob2?[['deer',5,80,2],['bear',2,300,3],['turkey',5,50,1],['moose',2,220,4]]:[['deer',8,80,2],['bear',3,300,3],['turkey',8,50,1],['moose',3,220,4]];
+      // Sparse population — animals are rare finds, like real hunting
+      const aDefs:[string,number,number,number][]=isMob2?[['deer',3,80,2],['bear',1,300,3],['turkey',2,50,1],['moose',1,220,4]]:[['deer',4,80,2],['bear',2,300,3],['turkey',3,50,1],['moose',2,220,4]];
       aDefs.forEach(([type,n,hp,meat])=>{
         for(let i=0;i<n;i++){
           // Place animals deep in forest clusters, hard to spot
@@ -742,7 +743,7 @@ buildWeapon('pistol');
       });
 
       // Mountain goats — spawn specifically on high-elevation terrain
-      const goatCount=isMob2?5:10;
+      const goatCount=isMob2?2:4;
       for(let gi=0;gi<goatCount*8&&animals.filter(a=>a.type==='goat').length<goatCount;gi++){
         const ga=Math.random()*Math.PI*2;
         const gd=155+Math.random()*85; // mountain zone
@@ -1067,8 +1068,8 @@ buildWeapon('pistol');
             const windDot=toPlayer.dot(wind2); // >0 = player upwind (safe)
             const smellFactor=Math.max(0,-windDot);
             if(smellFactor>.55&&dist<adef.smellR*smellFactor){detected=true;method='smell 💨';}
-            // Sound
-            const soundRad=gs.crouching?adef.soundR*.25:gs.moving?adef.soundR*.75:adef.soundR*.08;
+            // Sound — only triggers when actively moving; crouching is nearly silent
+            const soundRad=gs.crouching?adef.soundR*.08:gs.moving?adef.soundR*.38:adef.soundR*.03;
             if(!detected&&dist<soundRad){detected=true;method='sound 👂';}
             // Sight
             if(!detected){
@@ -1078,11 +1079,13 @@ buildWeapon('pistol');
               if(dot>Math.cos(adef.sightA)&&dist<adef.sightR){detected=true;method='sight 👁️';}
             }
             if(detected){
-              a.alertLevel=Math.min(1,a.alertLevel+dt*.0015);
+              // Slower alert buildup — animal investigates before fully spooking
+              a.alertLevel=Math.min(1,a.alertLevel+dt*.0008);
               a.alertMethod=method;
-              if(a.alertLevel>1){a.state=a.type==='bear'?'aggro':'flee';a.alertLevel=0;setMsg(`${capitalize(a.type)} spooked! (${method})`);}
+              if(a.alertLevel>1){a.state=a.type==='bear'?'aggro':'flee';a.alertLevel=0;setMsg(`${capitalize(a.type)} spooked!`);}
             }else{
-              a.alertLevel=Math.max(0,a.alertLevel-dt*.0008);
+              // Alert decays fairly fast — if you stop moving they calm down
+              a.alertLevel=Math.max(0,a.alertLevel-dt*.0012);
             }
           }
 
@@ -1147,7 +1150,8 @@ buildWeapon('pistol');
             else if(ci===0) c.rotation.x=Math.sin(a.anim*1.5)*.04; // alert: slight head bob
           });
           // Reset flee if far enough
-          if(a.state==='flee'&&dist>85)a.state='idle';
+          // Stop fleeing once they've put enough distance between them and you
+          if(a.state==='flee'&&dist>120)a.state='idle';
         });
 
         // Blood cleanup
