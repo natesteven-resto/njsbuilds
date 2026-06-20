@@ -176,7 +176,13 @@ function StreamEmbed() {
 // ─── GALLERY ─────────────────────────────────────────────────────────────────
 
 // Add puppy photo paths here as they arrive, e.g. '/puppies/gallery/photo1.jpg'
-const GALLERY_IMAGES: string[] = []
+const GALLERY_IMAGES: string[] = [
+  '/puppies/gallery/gallery1.jpg',
+  '/puppies/gallery/gallery2.jpg',
+  '/puppies/gallery/gallery3.jpg',
+  '/puppies/gallery/gallery4.jpg',
+  '/puppies/gallery/gallery5.jpg',
+]
 
 function GalleryLightbox({ images, index, onClose, onPrev, onNext }: {
   images: string[]
