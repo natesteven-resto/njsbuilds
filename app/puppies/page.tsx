@@ -18,6 +18,7 @@ const CONFIG = {
     'English-type Silver Lab — blocky build, calm temperament, and 85 lbs of pure Labrador personality. Bold, gentle, and built for the show ring.',
 
   expectedDate: 'May 30, 2026',
+  goHomeDate: 'July 18, 2026',
   litterSize: '7 puppies',
   estimatedPuppies: 7,
   colors: ['Silver', 'Charcoal'],
@@ -172,7 +173,131 @@ function StreamEmbed() {
 }
 
 
-// ─── FAQ ──────────────────────────────────────────────────────────────────────
+// ─── GALLERY ─────────────────────────────────────────────────────────────────
+
+// Add puppy photo paths here as they arrive, e.g. '/puppies/gallery/photo1.jpg'
+const GALLERY_IMAGES: string[] = []
+
+function GalleryLightbox({ images, index, onClose, onPrev, onNext }: {
+  images: string[]
+  index: number
+  onClose: () => void
+  onPrev: () => void
+  onNext: () => void
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft') onPrev()
+      if (e.key === 'ArrowRight') onNext()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose, onPrev, onNext])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      {/* Close */}
+      <button
+        onClick={onClose}
+        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center rounded-full border border-white/10 text-slate-400 hover:text-white hover:border-white/30 transition-all text-2xl z-10"
+      >×</button>
+
+      {/* Prev */}
+      <button
+        onClick={onPrev}
+        className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full border border-white/10 bg-black/50 text-white/60 hover:text-white hover:border-white/30 transition-all text-xl z-10"
+      >‹</button>
+
+      {/* Image */}
+      <motion.img
+        key={index}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.25 }}
+        src={images[index]}
+        alt={`Puppy photo ${index + 1}`}
+        className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl"
+      />
+
+      {/* Next */}
+      <button
+        onClick={onNext}
+        className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full border border-white/10 bg-black/50 text-white/60 hover:text-white hover:border-white/30 transition-all text-xl z-10"
+      >›</button>
+
+      {/* Counter */}
+      <p className="absolute bottom-5 left-1/2 -translate-x-1/2 text-slate-600 text-xs tracking-widest">
+        {index + 1} / {images.length}
+      </p>
+    </motion.div>
+  )
+}
+
+function PuppyGallery() {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+
+  if (GALLERY_IMAGES.length === 0) return null
+
+  const open = (i: number) => setLightboxIndex(i)
+  const close = () => setLightboxIndex(null)
+  const prev = () => setLightboxIndex(i => i === null ? null : (i - 1 + GALLERY_IMAGES.length) % GALLERY_IMAGES.length)
+  const next = () => setLightboxIndex(i => i === null ? null : (i + 1) % GALLERY_IMAGES.length)
+
+  return (
+    <section className="py-10 pb-24">
+      <div className="max-w-5xl mx-auto px-6">
+        <Reveal className="mb-8">
+          <p className="text-slate-600 text-xs tracking-[0.3em] uppercase mb-2">Photos</p>
+          <h2 className="text-4xl font-black tracking-tight">The Litter</h2>
+          <p className="text-slate-500 mt-2 text-sm">{GALLERY_IMAGES.length} photos · Click to enlarge</p>
+        </Reveal>
+
+        <div className="columns-2 sm:columns-3 gap-3 space-y-3">
+          {GALLERY_IMAGES.map((src, i) => (
+            <Reveal key={src} delay={i * 0.03}>
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.2 }}
+                className="relative cursor-pointer rounded-2xl overflow-hidden border border-white/[0.06] break-inside-avoid"
+                onClick={() => open(i)}
+              >
+                <img
+                  src={src}
+                  alt={`Puppy ${i + 1}`}
+                  className="w-full object-cover"
+                  style={{ display: 'block' }}
+                />
+                <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-200" />
+              </motion.div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {lightboxIndex !== null && (
+          <GalleryLightbox
+            images={GALLERY_IMAGES}
+            index={lightboxIndex}
+            onClose={close}
+            onPrev={prev}
+            onNext={next}
+          />
+        )}
+      </AnimatePresence>
+    </section>
+  )
+}
+
+// ─── FAQ ───────────────────────────────────────────────────────────────────────
 
 function FAQItem({ q, a, index }: { q: string; a: string; index: number }) {
   const [open, setOpen] = useState(false)
@@ -467,6 +592,8 @@ function KenBurnsHero({ onReserve }: { onReserve: () => void }) {
         >
           Family raised. AKC registered.<br />
           <span className="text-slate-400">Born {CONFIG.expectedDate} · {CONFIG.estimatedPuppies} Healthy Puppies</span>
+          <br />
+          <span className="text-amber-400/80">Goes home {CONFIG.goHomeDate}</span>
         </motion.p>
 
         <motion.div
@@ -547,6 +674,7 @@ export default function PuppiesPage() {
                 `✦ ${CONFIG.location}`,
                 `✦ 24/7 Live Puppy Cam`,
                 `✦ Born ${CONFIG.expectedDate}`,
+                `✦ Goes Home ${CONFIG.goHomeDate}`,
                 `✦ 2 Silver · 5 Charcoal`,
               ].map(item => <span key={item}>{item}</span>)}
             </div>
@@ -562,6 +690,7 @@ export default function PuppiesPage() {
             <div className="text-center">
               <p className="text-4xl font-black text-emerald-400 tracking-tight">They&apos;re Here</p>
               <p className="text-slate-500 mt-2 text-sm tracking-widest uppercase">Born {CONFIG.expectedDate} · Watch the live feed</p>
+              <p className="text-amber-400/70 mt-3 text-sm font-semibold tracking-widest uppercase">Goes home {CONFIG.goHomeDate}</p>
             </div>
           </Reveal>
         </div>
@@ -601,6 +730,9 @@ export default function PuppiesPage() {
           </Reveal>
         </div>
       </section>
+
+      {/* ── GALLERY */}
+      <PuppyGallery />
 
       {/* ── PARENTS — MMA POSTER ─────────────────────────────────────────── */}
       <section className="py-24 relative overflow-hidden">
@@ -736,7 +868,7 @@ export default function PuppiesPage() {
           <div>
             {[
               { q: 'How do I reserve a puppy?', a: `A ${CONFIG.depositAmount} non-refundable deposit holds your puppy. Contact us by phone or use the inquiry form. Deposits are taken in order of inquiry.` },
-              { q: 'When can puppies go home?', a: 'Puppies go home at 7 weeks old.' },
+              { q: 'When can puppies go home?', a: `Puppies go home at 7 weeks old — ${CONFIG.goHomeDate}.` },
               { q: 'Do you ship?', a: 'No. In-person pickup only so you can meet the parents.' },
               { q: 'Are silver Labs actually purebred?', a: "Yes. Silver Labradors are dilute chocolate Labs — a recessive gene that's always existed in the breed. AKC registers them as Black or Chocolate Labrador Retrievers depending on the lineage." },
               { q: 'Can I visit before the puppies arrive?', a: 'Absolutely. We encourage it. Contact us to schedule a time to meet the parents.' },
