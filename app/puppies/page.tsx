@@ -23,13 +23,13 @@ const CONFIG = {
   estimatedPuppies: 7,
   colors: ['Silver', 'Charcoal'],
   litter: [
-    { color: 'Silver', sex: 'Female' },
-    { color: 'Silver', sex: 'Female' },
-    { color: 'Charcoal', sex: 'Male' },
-    { color: 'Charcoal', sex: 'Female' },
-    { color: 'Charcoal', sex: 'Female' },
-    { color: 'Charcoal', sex: 'Male' },
-    { color: 'Charcoal', sex: 'Female' },
+    { color: 'Silver', sex: 'Female', reserved: true },
+    { color: 'Silver', sex: 'Female', reserved: true },
+    { color: 'Charcoal', sex: 'Male', reserved: false },
+    { color: 'Charcoal', sex: 'Female', reserved: false },
+    { color: 'Charcoal', sex: 'Female', reserved: false },
+    { color: 'Charcoal', sex: 'Male', reserved: false },
+    { color: 'Charcoal', sex: 'Female', reserved: false },
   ],
   price: '$1,000',
   depositAmount: '$300',
@@ -681,7 +681,7 @@ export default function PuppiesPage() {
                 `✦ 24/7 Live Puppy Cam`,
                 `✦ Born ${CONFIG.expectedDate}`,
                 `✦ Goes Home ${CONFIG.goHomeDate}`,
-                `✦ 2 Silver · 5 Charcoal`,
+                `✦ 2 Silver Reserved · 5 Charcoal Available`,
               ].map(item => <span key={item}>{item}</span>)}
             </div>
           ))}
@@ -817,9 +817,15 @@ export default function PuppiesPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {CONFIG.litter.map((pup, i) => (
               <Reveal key={i} delay={i * 0.04}>
-                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-5 flex flex-col items-center gap-3 text-center">
+                <div className={`border rounded-2xl p-5 flex flex-col items-center gap-3 text-center transition-all ${
+                  pup.reserved
+                    ? 'bg-white/[0.01] border-white/[0.03] opacity-50'
+                    : 'bg-white/[0.02] border-white/[0.06]'
+                }`}>
                   <span className="text-3xl">{pup.sex === 'Female' ? '🎀' : '🐾'}</span>
-                  <span className="text-emerald-400 text-xs font-bold uppercase tracking-widest">Available</span>
+                  <span className={`text-xs font-bold uppercase tracking-widest ${
+                    pup.reserved ? 'text-rose-400' : 'text-emerald-400'
+                  }`}>{pup.reserved ? 'Reserved' : 'Available'}</span>
                   <span className="text-white text-sm font-semibold">{pup.color}</span>
                   <span className="text-slate-500 text-xs">{pup.sex}</span>
                 </div>
@@ -829,7 +835,7 @@ export default function PuppiesPage() {
 
           <Reveal delay={0.2}>
             <p className="text-slate-600 text-xs text-center mt-8">
-              2 Silver · 5 Charcoal · {CONFIG.depositAmount} deposit reserves your spot
+              2 Silver (reserved) · 5 Charcoal available · {CONFIG.depositAmount} deposit reserves your spot
             </p>
           </Reveal>
         </div>
