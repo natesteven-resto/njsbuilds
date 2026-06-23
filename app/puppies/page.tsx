@@ -23,13 +23,13 @@ const CONFIG = {
   estimatedPuppies: 7,
   colors: ['Silver', 'Charcoal'],
   litter: [
-    { color: 'Silver', sex: 'Female', reserved: true },
-    { color: 'Silver', sex: 'Female', reserved: true },
-    { color: 'Charcoal', sex: 'Male', reserved: true },
-    { color: 'Charcoal', sex: 'Female', reserved: false },
-    { color: 'Charcoal', sex: 'Female', reserved: false },
-    { color: 'Charcoal', sex: 'Male', reserved: false },
-    { color: 'Charcoal', sex: 'Female', reserved: false },
+    { color: 'Silver',   sex: 'Female', reserved: true,  collar: 'Gold',   collarHex: '#f59e0b' },
+    { color: 'Silver',   sex: 'Female', reserved: true,  collar: 'Purple', collarHex: '#a855f7' },
+    { color: 'Charcoal', sex: 'Male',   reserved: true,  collar: 'Blue',   collarHex: '#3b82f6' },
+    { color: 'Charcoal', sex: 'Female', reserved: false, collar: '',        collarHex: '' },
+    { color: 'Charcoal', sex: 'Female', reserved: false, collar: '',        collarHex: '' },
+    { color: 'Charcoal', sex: 'Male',   reserved: false, collar: '',        collarHex: '' },
+    { color: 'Charcoal', sex: 'Female', reserved: false, collar: '',        collarHex: '' },
   ],
   price: '$1,000',
   depositAmount: '$300',
@@ -822,6 +822,20 @@ export default function PuppiesPage() {
                     ? 'bg-white/[0.01] border-white/[0.03] opacity-50'
                     : 'bg-white/[0.02] border-white/[0.06]'
                 }`}>
+                  {/* Collar color dot */}
+                  {pup.collar ? (
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="inline-block w-3 h-3 rounded-full ring-1 ring-white/20"
+                        style={{ background: pup.collarHex }}
+                      />
+                      <span className="text-xs font-semibold" style={{ color: pup.collarHex }}>
+                        {pup.collar} Collar
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="h-[18px]" /> /* spacer so cards align */
+                  )}
                   <span className="text-3xl">{pup.sex === 'Female' ? '🎀' : '🐾'}</span>
                   <span className={`text-xs font-bold uppercase tracking-widest ${
                     pup.reserved ? 'text-rose-400' : 'text-emerald-400'
