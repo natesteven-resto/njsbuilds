@@ -25,7 +25,7 @@ const CONFIG = {
   litter: [
     { color: 'Silver', sex: 'Female', reserved: true },
     { color: 'Silver', sex: 'Female', reserved: true },
-    { color: 'Charcoal', sex: 'Male', reserved: false },
+    { color: 'Charcoal', sex: 'Male', reserved: true },
     { color: 'Charcoal', sex: 'Female', reserved: false },
     { color: 'Charcoal', sex: 'Female', reserved: false },
     { color: 'Charcoal', sex: 'Male', reserved: false },
@@ -681,7 +681,7 @@ export default function PuppiesPage() {
                 `✦ 24/7 Live Puppy Cam`,
                 `✦ Born ${CONFIG.expectedDate}`,
                 `✦ Goes Home ${CONFIG.goHomeDate}`,
-                `✦ 2 Silver Reserved · 5 Charcoal Available`,
+                `✦ 2 Silver Reserved · 1 Charcoal Reserved · 4 Charcoal Available`,`
               ].map(item => <span key={item}>{item}</span>)}
             </div>
           ))}
@@ -835,7 +835,7 @@ export default function PuppiesPage() {
 
           <Reveal delay={0.2}>
             <p className="text-slate-600 text-xs text-center mt-8">
-              2 Silver (reserved) · 5 Charcoal available · {CONFIG.depositAmount} deposit reserves your spot
+              2 Silver · 1 Charcoal Male (reserved) · 4 Charcoal available · {CONFIG.depositAmount} deposit reserves your spot
             </p>
           </Reveal>
         </div>
