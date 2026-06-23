@@ -681,7 +681,7 @@ export default function PuppiesPage() {
                 `✦ 24/7 Live Puppy Cam`,
                 `✦ Born ${CONFIG.expectedDate}`,
                 `✦ Goes Home ${CONFIG.goHomeDate}`,
-                `✦ 2 Silver Reserved · 1 Charcoal Reserved · 4 Charcoal Available`,`
+                `✦ 2 Silver Reserved · 1 Charcoal Reserved · 4 Charcoal Available`,
               ].map(item => <span key={item}>{item}</span>)}
             </div>
           ))}
