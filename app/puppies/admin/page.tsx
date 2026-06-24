@@ -12,7 +12,21 @@ type Signup = {
   colorPref: string
   notes: string
   status: 'new' | 'contacted' | 'reserved' | 'pass'
+  collar: string
   createdAt: string
+}
+
+const COLLAR_COLORS: Record<string, string> = {
+  gold: '#f59e0b',
+  purple: '#a855f7',
+  blue: '#3b82f6',
+  red: '#ef4444',
+  green: '#22c55e',
+  orange: '#f97316',
+  pink: '#ec4899',
+  black: '#6b7280',
+  white: '#e5e7eb',
+  yellow: '#eab308',
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -29,6 +43,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [updating, setUpdating] = useState<string | null>(null)
+  const [collarEdits, setCollarEdits] = useState<Record<string, string>>({})
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,6 +61,15 @@ export default function AdminPage() {
       setError('Wrong password')
     }
     setLoading(false)
+  }
+
+  const updateCollar = async (id: string, collar: string) => {
+    await fetch('/api/puppies/admin', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, collar, password }),
+    })
+    setSignups(prev => prev.map(s => s.id === id ? { ...s, collar } : s))
   }
 
   const updateStatus = async (id: string, status: string) => {
@@ -137,6 +161,28 @@ export default function AdminPage() {
                       <span style={{ color: '#4b5563' }}>{new Date(s.createdAt).toLocaleDateString()}</span>
                     </div>
                     {s.notes && <div style={{ fontSize: 13, color: '#9ca3af', fontStyle: 'italic' }}>"{s.notes}"</div>}
+                    {/* Collar assignment */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                      <span style={{ fontSize: 12, color: '#6B7280', fontWeight: 600 }}>🏷️ Collar:</span>
+                      {(() => {
+                        const currentCollar = collarEdits[s.id] ?? s.collar ?? ''
+                        const swatchColor = COLLAR_COLORS[currentCollar.toLowerCase().trim()]
+                        return (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {swatchColor && <div style={{ width: 12, height: 12, borderRadius: '50%', background: swatchColor, border: '1px solid rgba(255,255,255,0.2)', flexShrink: 0 }} />}
+                            <input
+                              type="text"
+                              placeholder="e.g. Gold, Blue, Purple"
+                              value={currentCollar}
+                              onChange={e => setCollarEdits(prev => ({ ...prev, [s.id]: e.target.value }))}
+                              onBlur={() => updateCollar(s.id, (collarEdits[s.id] ?? s.collar ?? '').trim())}
+                              onKeyDown={e => { if (e.key === 'Enter') { updateCollar(s.id, (collarEdits[s.id] ?? s.collar ?? '').trim());(e.target as HTMLInputElement).blur() } }}
+                              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '4px 10px', color: swatchColor ?? '#F1F3F5', fontSize: 13, fontWeight: swatchColor ? 700 : 400, outline: 'none', width: 180 }}
+                            />
+                          </div>
+                        )
+                      })()}
+                    </div>
                   </div>
                   {/* Status buttons */}
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
