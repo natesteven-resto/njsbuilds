@@ -38,7 +38,7 @@ const CONFIG = {
 
   // YouTube Live: channel ID auto-detects current live stream
   streamType: 'youtube' as 'youtube' | 'twitch' | 'none',
-  youtubeVideoId: 'rdWdFNhNPJM',
+  youtubeVideoId: 'NJd6UsE2lPw',
   youtubeChannelId: 'UCL-gUi48gxBCadGyV-ujL7w',
 
 
