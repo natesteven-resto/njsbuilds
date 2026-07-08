@@ -33,7 +33,7 @@
     html { scroll-behavior: smooth; }
     body { background-color: #050505; color: #fff; font-family: 'Inter', system-ui, sans-serif; margin: 0; }
 
-    /* ── Photo background with Ken Burns ── */
+    /*  Photo background with Ken Burns  */
     .photo-bg {
       position: absolute;
       inset: 0;
@@ -60,7 +60,7 @@
       100% { transform: scale(1.10) translate(-2%, -1%); }
     }
 
-    /* ── Glass card ── */
+    /*  Glass card  */
     .glass-card {
       background: rgba(255,255,255,0.06);
       backdrop-filter: blur(20px) saturate(1.4);
@@ -69,11 +69,11 @@
       border-radius: 1.25rem;
     }
 
-    /* ── Booking steps ── */
+    /*  Booking steps  */
     .step { display: none; }
     .step.active { display: block; }
 
-    /* ── Trust badges ── */
+    /*  Trust badges  */
     .trust-badge {
       display: inline-flex;
       align-items: center;
@@ -88,7 +88,7 @@
       white-space: nowrap;
     }
 
-    /* ── Service card hover ── */
+    /*  Service card hover  */
     .service-card {
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.08);
@@ -107,7 +107,7 @@
       box-shadow: 0 12px 40px rgba(232,25,44,0.18);
     }
 
-    /* ── Step indicator ── */
+    /*  Step indicator  */
     .step-dot {
       width: 8px; height: 8px; border-radius: 50%;
       background: rgba(255,255,255,0.25);
@@ -115,7 +115,7 @@
     }
     .step-dot.active { background: #E8192C; }
 
-    /* ── Address option ── */
+    /*  Address option  */
     .address-option {
       background: rgba(255,255,255,0.05);
       border: 1px solid rgba(255,255,255,0.1);
@@ -132,7 +132,7 @@
       border-color: rgba(232,25,44,0.5);
     }
 
-    /* ── Time pref buttons ── */
+    /*  Time pref buttons  */
     .pref-btn {
       display: flex;
       flex-direction: column;
@@ -156,7 +156,7 @@
     .pref-btn .pref-label { font-size: 0.8rem; font-weight: 600; }
     .pref-btn .pref-sub { font-size: 0.7rem; color: rgba(255,255,255,0.55); }
 
-    /* ── Inputs ── */
+    /*  Inputs  */
     .form-input {
       width: 100%;
       padding: 0.75rem 1rem;
@@ -172,7 +172,7 @@
     .form-input:focus { border-color: #E8192C; }
     .form-input::placeholder { color: rgba(255,255,255,0.35); }
 
-    /* ── Primary button ── */
+    /*  Primary button  */
     .btn-primary {
       display: flex;
       align-items: center;
@@ -195,7 +195,7 @@
     .btn-primary:active { transform: translateY(0); }
     .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
-    /* ── Stat card ── */
+    /*  Stat card  */
     .stat-card {
       background: linear-gradient(135deg, rgba(232,25,44,0.12) 0%, rgba(232,25,44,0.04) 100%);
       border: 1px solid rgba(232,25,44,0.25);
@@ -204,7 +204,7 @@
       text-align: center;
     }
 
-    /* ── How-it-works step ── */
+    /*  How-it-works step  */
     .hiw-step {
       position: relative;
       display: flex;
@@ -222,7 +222,7 @@
       position: relative; z-index: 1;
     }
 
-    /* ── Nav ── */
+    /*  Nav  */
     nav {
       position: fixed; top: 0; left: 0; right: 0; z-index: 100;
       background: rgba(5,5,5,0.85);
@@ -231,7 +231,7 @@
       border-bottom: 1px solid rgba(255,255,255,0.07);
     }
 
-    /* ── Spinner ── */
+    /*  Spinner  */
     .spinner {
       width: 20px; height: 20px;
       border: 2.5px solid rgba(255,255,255,0.25);
@@ -242,7 +242,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Error message ── */
+    /*  Error message  */
     .error-msg {
       color: #ff6b7a;
       font-size: 0.8rem;
@@ -251,7 +251,7 @@
     }
     .error-msg.visible { display: block; }
 
-    /* ── Success checkmark ── */
+    /*  Success checkmark  */
     .checkmark-circle {
       width: 72px; height: 72px;
       border-radius: 50%;
@@ -262,7 +262,7 @@
     }
     .checkmark-circle svg { color: #22c55e; }
 
-    /* ── Section divider ── */
+    /*  Section divider  */
     .section-divider {
       height: 1px;
       background: linear-gradient(90deg, transparent, rgba(232,25,44,0.3), transparent);
@@ -280,9 +280,9 @@
 </head>
 <body class="bg-bg text-white">
 
-<!-- ═══════════════════════════════════════════════
+<!-- 
      NAV
-═══════════════════════════════════════════════ -->
+ -->
 <nav>
   <div class="max-w-7xl mx-auto px-5 py-3 flex items-center justify-between">
     <!-- Logo -->
@@ -304,9 +304,9 @@
   </div>
 </nav>
 
-<!-- ═══════════════════════════════════════════════
+<!-- 
      HERO
-═══════════════════════════════════════════════ -->
+ -->
 <section class="relative min-h-screen flex items-center pt-16" style="min-height:100svh;">
   <!-- Photo BG + Ken Burns -->
   <div class="photo-bg">
@@ -322,7 +322,7 @@
         <!-- Badge -->
         <div class="inline-flex items-center gap-2 self-start rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest"
              style="background:rgba(232,25,44,0.18);border:1px solid rgba(232,25,44,0.35);color:#ff6b7a;">
-          Winterization Season is Coming Fast
+           Winterization Season is Coming Fast
         </div>
 
         <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-tight">
@@ -338,10 +338,10 @@
 
         <!-- Trust badges -->
         <div class="flex flex-wrap gap-2 hero-badges">
-          <span class="trust-badge">Trusted Since 1957</span>
-          <span class="trust-badge">Fast Scheduling</span>
-          <span class="trust-badge">Licensed &amp; Insured</span>
-          <span class="trust-badge">Local Wichita Team</span>
+          <span class="trust-badge"> Trusted Since 1957</span>
+          <span class="trust-badge"> Fast Scheduling</span>
+          <span class="trust-badge"> Licensed & Insured</span>
+          <span class="trust-badge"> Local Wichita Team</span>
         </div>
 
         <!-- Phone CTA -->
@@ -374,6 +374,9 @@
             <div class="step-dot" id="dot-2"></div>
             <div class="step-dot" id="dot-3"></div>
             <div class="step-dot" id="dot-4"></div>
+            <div class="step-dot" id="dot-5"></div>
+            <div class="step-dot" id="dot-6"></div>
+            <div class="step-dot" id="dot-7"></div>
           </div>
 
           <!-- STEP 1: Phone -->
@@ -399,25 +402,96 @@
             <p class="text-sm text-gray-300 mb-3">We found your account. Select the address to winterize:</p>
             <div id="address-list" class="flex flex-col gap-2 max-h-56 overflow-y-auto"></div>
             <div class="error-msg" id="address-error">Please select an address.</div>
-            <button class="btn-primary mt-4" onclick="goToPreference()">
+            <button class="btn-primary mt-4" onclick="goToWaterSource()">
               Continue
             </button>
           </div>
 
-          <!-- STEP 3: AM/PM Preference -->
+          <!-- STEP 3: Water Source -->
+          <div class="step" id="step-water">
+            <p class="text-sm font-medium text-gray-300 mb-1">Is your sprinkler system on City or Well water?</p>
+            <p class="text-xs text-gray-500 mb-4">This helps our tech prepare the right equipment.</p>
+            <div class="flex flex-col gap-3">
+              <button class="pref-btn" id="water-city" onclick="selectWater('city')">
+                <span class="pref-icon"></span>
+                <span class="pref-label">City Water</span>
+              </button>
+              <button class="pref-btn" id="water-well" onclick="selectWater('well')">
+                <span class="pref-icon"></span>
+                <span class="pref-label">Well Water</span>
+              </button>
+              <button class="pref-btn" id="water-idk" onclick="selectWater('idk')">
+                <span class="pref-icon"></span>
+                <span class="pref-label">I'm Not Sure</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- STEP 4: Control Box -->
+          <div class="step" id="step-controlbox">
+            <p class="text-sm font-medium text-gray-300 mb-1">Is the sprinkler control box inside or outside?</p>
+            <p class="text-xs text-gray-500 mb-4">This helps our tech locate the system quickly.</p>
+            <div class="flex flex-col gap-3">
+              <button class="pref-btn" id="ctrl-inside" onclick="selectControl('inside')">
+                <span class="pref-icon"></span>
+                <span class="pref-label">Inside</span>
+                <span class="pref-sub">Garage, basement, or utility room</span>
+              </button>
+              <button class="pref-btn" id="ctrl-outside" onclick="selectControl('outside')">
+                <span class="pref-icon"></span>
+                <span class="pref-label">Outside</span>
+                <span class="pref-sub">Exterior wall or yard</span>
+              </button>
+              <button class="pref-btn" id="ctrl-idk" onclick="selectControl('idk')">
+                <span class="pref-icon"></span>
+                <span class="pref-label">I'm Not Sure</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- STEP 5: Shutoff Valve Map -->
+          <div class="step" id="step-shutoff">
+            <p class="text-sm font-medium text-gray-300 mb-1">Where is your shutoff valve located?</p>
+            <p class="text-xs text-gray-500 mb-3">Tap on the map to mark the location, or describe it below.</p>
+            <!-- Satellite map -->
+            <div style="position:relative;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);margin-bottom:12px;">
+              <div id="shutoff-map" style="width:100%;height:240px;background:#1a1a1a;display:flex;align-items:center;justify-content:center;">
+                <span style="color:rgba(255,255,255,0.3);font-size:13px;">Loading map…</span>
+              </div>
+              <canvas id="shutoff-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;cursor:crosshair;"></canvas>
+              <div id="shutoff-pin" style="display:none;position:absolute;transform:translate(-50%,-100%);font-size:28px;pointer-events:none;"></div>
+            </div>
+            <p class="text-xs text-gray-500 mb-2">Or describe the location:</p>
+            <textarea
+              id="shutoff-notes"
+              class="form-input"
+              rows="2"
+              placeholder="e.g. Near the AC unit on the north side of the house"
+              style="resize:none;font-size:13px;"
+            ></textarea>
+            <div class="flex gap-2 mt-4">
+              <button class="btn-primary" onclick="goFromShutoff()" style="flex:1;">Continue</button>
+              <button onclick="skipShutoff()" style="flex:0 0 auto;padding:0.85rem 1rem;border-radius:0.65rem;border:1px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.5);font-family:inherit;cursor:pointer;font-size:13px;">Skip</button>
+            </div>
+          </div>
+
+          <!-- STEP 6: AM/PM Preference (was 3) -->
           <div class="step" id="step-preference">
             <p class="text-sm font-medium text-gray-300 mb-1">Time Preference</p>
             <p class="text-xs text-gray-500 mb-4">We'll do our best to accommodate your choice. We'll call to confirm the exact time.</p>
             <div class="grid grid-cols-3 gap-2">
               <button class="pref-btn" id="pref-am" onclick="selectPref('AM')">
+                <span class="pref-icon"></span>
                 <span class="pref-label">Morning</span>
                 <span class="pref-sub">8am – 12pm</span>
               </button>
               <button class="pref-btn" id="pref-pm" onclick="selectPref('PM')">
+                <span class="pref-icon"></span>
                 <span class="pref-label">Afternoon</span>
                 <span class="pref-sub">12pm – 5pm</span>
               </button>
               <button class="pref-btn" id="pref-any" onclick="selectPref('any')">
+                <span class="pref-icon"></span>
                 <span class="pref-label">No Preference</span>
                 <span class="pref-sub">Anytime</span>
               </button>
@@ -478,9 +552,9 @@
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════
+<!-- 
      WHY WINTERIZE
-═══════════════════════════════════════════════ -->
+ -->
 <div class="section-divider"></div>
 <section class="max-w-7xl mx-auto px-5 py-24">
   <div class="text-center mb-14">
@@ -491,7 +565,7 @@
 
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
     <div class="stat-card">
-      <div class="text-4xl font-black text-reddi mb-2">One Low Price</div>
+      <div class="text-4xl font-black text-reddi mb-2">one low price</div>
       <div class="text-sm font-semibold text-white mb-1">Professional Blowout</div>
       <div class="text-xs text-gray-400">One-time seasonal service that takes under an hour</div>
     </div>
@@ -523,9 +597,9 @@
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════
+<!-- 
      HOW IT WORKS
-═══════════════════════════════════════════════ -->
+ -->
 <div class="section-divider"></div>
 <section style="background:rgba(255,255,255,0.02);">
   <div class="max-w-7xl mx-auto px-5 py-24">
@@ -539,24 +613,28 @@
       <!-- Step 1 -->
       <div class="hiw-step">
         <div class="hiw-num">1</div>
+        <div class="text-2xl mb-2"></div>
         <h3 class="text-lg font-bold mb-2">Sign Up</h3>
         <p class="text-sm text-gray-400 text-center">Enter your phone number above. We'll find your account and get you on the schedule.</p>
       </div>
       <!-- Step 2 -->
       <div class="hiw-step">
         <div class="hiw-num">2</div>
+        <div class="text-2xl mb-2"></div>
         <h3 class="text-lg font-bold mb-2">Pick a Date</h3>
         <p class="text-sm text-gray-400 text-center">Choose your time preference and pick from available dates on our live calendar.</p>
       </div>
       <!-- Step 3 -->
       <div class="hiw-step">
         <div class="hiw-num">3</div>
+        <div class="text-2xl mb-2"></div>
         <h3 class="text-lg font-bold mb-2">Tech Arrives</h3>
         <p class="text-sm text-gray-400 text-center">A licensed Reddi technician shows up with professional-grade compressed air equipment.</p>
       </div>
       <!-- Step 4 -->
       <div class="hiw-step">
         <div class="hiw-num">4</div>
+        <div class="text-2xl mb-2"></div>
         <h3 class="text-lg font-bold mb-2">System Protected</h3>
         <p class="text-sm text-gray-400 text-center">Every zone is blown out. Your system is ready for winter. Peace of mind guaranteed.</p>
       </div>
@@ -564,9 +642,9 @@
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════
+<!-- 
      REDDI SERVICES
-═══════════════════════════════════════════════ -->
+ -->
 <div class="section-divider"></div>
 <section class="max-w-7xl mx-auto px-5 py-24">
   <div class="text-center mb-14">
@@ -577,50 +655,63 @@
 
   <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
     <a href="https://reddi.com/plumbing" target="_blank" class="service-card">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">Plumbing</div>
     </a>
     <a href="https://reddi.com/hvac/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">HVAC</div>
     </a>
     <a href="https://reddi.com/electrical/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">Electrical</div>
     </a>
     <a href="https://reddi.com/garage-doors/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">Garage Doors</div>
     </a>
     <a href="https://reddi.com/fencing/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">Fencing</div>
     </a>
     <a href="https://reddi.com/sprinklers/" target="_blank" class="service-card" style="background:rgba(232,25,44,0.1);border-color:rgba(232,25,44,0.3);">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">Sprinklers</div>
     </a>
     <a href="https://reddi.com/lawn-care/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">Lawn Care</div>
     </a>
     <a href="https://reddi.com/appliance-repair/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">Appliance Repair</div>
     </a>
     <a href="https://reddi.com/excavation-utility" target="_blank" class="service-card">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">Excavation</div>
     </a>
     <a href="https://reddi.com/exteriors-baths" target="_blank" class="service-card">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">Roofing &amp; Exteriors</div>
     </a>
     <a href="https://reddi.com/environmental" target="_blank" class="service-card">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">Environmental</div>
     </a>
     <a href="https://reddi.com/flooring" target="_blank" class="service-card">
+      <div class="text-3xl mb-2"></div>
       <div class="font-semibold text-sm">Flooring</div>
     </a>
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════
+<!-- 
      FINAL CTA
-═══════════════════════════════════════════════ -->
+ -->
 <div class="section-divider"></div>
 <section style="background:linear-gradient(135deg, #E8192C 0%, #8b0f1a 100%);">
   <div class="max-w-4xl mx-auto px-5 py-20 text-center">
+    <div class="text-5xl mb-4"></div>
     <h2 class="text-3xl sm:text-4xl font-black text-white mb-4">Don't Wait Until It Freezes</h2>
     <p class="text-red-100 text-lg mb-8 max-w-xl mx-auto">
       Wichita winters hit fast. Once temps drop below freezing, it's too late.
@@ -632,7 +723,7 @@
         class="btn-primary"
         style="width:auto;padding:1rem 2.5rem;font-size:1rem;"
       >
-        Book Online Now
+         Book Online Now
       </button>
       <a
         href="tel:3168582083"
@@ -649,9 +740,9 @@
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════
+<!-- 
      FOOTER
-═══════════════════════════════════════════════ -->
+ -->
 <footer style="background:#000;border-top:1px solid rgba(255,255,255,0.07);">
   <div class="max-w-7xl mx-auto px-5 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
     <a href="https://reddi.com" class="flex items-center gap-2 text-white no-underline">
@@ -666,9 +757,9 @@
   </div>
 </footer>
 
-<!-- ═══════════════════════════════════════════════
+<!-- 
      SCROLL TO TOP BUTTON
-═══════════════════════════════════════════════ -->
+ -->
 <button
   id="scroll-top-btn"
   onclick="window.scrollTo({top:0,behavior:'smooth'})"
@@ -681,13 +772,13 @@
   </svg>
 </button>
 
-<!-- ═══════════════════════════════════════════════
+<!-- 
      JAVASCRIPT
-═══════════════════════════════════════════════ -->
+ -->
 <script>
   const API = 'https://rd.ngrok.app/api/winterization/public';
 
-  // ── State ──
+  //  State 
   let currentStep = 0;
   let selectedSM = null;
   let selectedPref = null;
@@ -695,8 +786,14 @@
   let availableDates = [];   // AvailableDate[]
   let lookupResults = [];
   let phoneRaw = '';
+  // New fields
+  let selectedWater = null;   // 'city' | 'well' | 'idk'
+  let selectedControl = null; // 'inside' | 'outside' | 'idk'
+  let shutoffPin = null;      // { x: pct, y: pct } relative position on map image
+  let shutoffImageBase64 = null; // captured canvas screenshot
+  const GMAPS_KEY = 'AIzaSyAJevy694OrjsZ67Bm_iuwRJFgxR3ju6lk';
 
-  // ── Phone formatting ──
+  //  Phone formatting 
   const phoneInput = document.getElementById('phone-input');
   phoneInput.addEventListener('input', function(e) {
     let v = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -709,8 +806,8 @@
     if (e.key === 'Enter') doLookup();
   });
 
-  // ── Step management ──
-  // Steps: 0=phone, 1=address, 2=preference, 3=date, 4=confirm
+  //  Step management 
+  // Steps: 0=phone, 1=address, 2=water, 3=controlbox, 4=shutoff, 5=preference, 6=date, 7=confirm
   function showStep(n) {
     document.querySelectorAll('.step').forEach((el, i) => {
       el.classList.toggle('active', i === n);
@@ -721,7 +818,7 @@
     currentStep = n;
   }
 
-  // ── Lookup ──
+  //  Lookup 
   async function doLookup() {
     const raw = phoneInput.value.replace(/\D/g, '');
     const err = document.getElementById('phone-error');
@@ -772,7 +869,7 @@
     }
   }
 
-  // ── Render address list ──
+  //  Render address list 
   function renderAddresses(sms) {
     const list = document.getElementById('address-list');
     list.innerHTML = '';
@@ -790,18 +887,123 @@
     });
   }
 
-  function goToPreference() {
+  //  Water Source 
+  function goToWaterSource() {
     const err = document.getElementById('address-error');
-    if (!selectedSM) {
-      err.classList.add('visible');
-      return;
-    }
+    if (!selectedSM) { err.classList.add('visible'); return; }
     err.classList.remove('visible');
     showStep(2);
+  }
+
+  function selectWater(val) {
+    selectedWater = val;
+    ['city','well','idk'].forEach(v => {
+      document.getElementById('water-' + v).classList.toggle('selected', v === val);
+    });
+    setTimeout(() => showStep(3), 300);
+  }
+
+  //  Control Box 
+  function selectControl(val) {
+    selectedControl = val;
+    ['inside','outside','idk'].forEach(v => {
+      document.getElementById('ctrl-' + v).classList.toggle('selected', v === val);
+    });
+    setTimeout(() => { showStep(4); initShutoffMap(); }, 300);
+  }
+
+  //  Shutoff Valve Map 
+  function initShutoffMap() {
+    if (!selectedSM) return;
+    const mapDiv = document.getElementById('shutoff-map');
+    const canvas = document.getElementById('shutoff-canvas');
+    const pin = document.getElementById('shutoff-pin');
+
+    // Build address string for geocoding
+    const addr = encodeURIComponent(`${selectedSM.address}, ${selectedSM.city}, ${selectedSM.state} ${selectedSM.zip}`);
+    const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${addr}&zoom=19&size=600x300&maptype=satellite&key=${GMAPS_KEY}`;
+
+    // Show satellite image
+    mapDiv.innerHTML = `<img id="shutoff-img" src="${mapUrl}" style="width:100%;height:100%;object-fit:cover;display:block;" crossorigin="anonymous" />`;
+
+    // Set up canvas for click-to-pin
+    const rect = mapDiv.getBoundingClientRect();
+    canvas.width = mapDiv.offsetWidth;
+    canvas.height = mapDiv.offsetHeight;
+
+    canvas.addEventListener('click', function(e) {
+      const r = canvas.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+      shutoffPin = { x: x / r.width, y: y / r.height };
+
+      // Move pin emoji
+      pin.style.display = 'block';
+      pin.style.left = x + 'px';
+      pin.style.top = y + 'px';
+
+      // Capture canvas screenshot with pin drawn
+      captureShutoffImage(x, y);
+    });
+  }
+
+  function captureShutoffImage(pinX, pinY) {
+    const img = document.getElementById('shutoff-img');
+    if (!img) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth || img.offsetWidth;
+    canvas.height = img.naturalHeight || img.offsetHeight;
+    const ctx = canvas.getContext('2d');
+    try {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      // Draw red circle at pin location
+      const px = (pinX / img.offsetWidth) * canvas.width;
+      const py = (pinY / img.offsetHeight) * canvas.height;
+      ctx.beginPath();
+      ctx.arc(px, py, 14, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(232,25,44,0.7)';
+      ctx.fill();
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      shutoffImageBase64 = canvas.toDataURL('image/png');
+    } catch(e) {
+      // CORS issue — skip image capture, notes still saved
+      shutoffImageBase64 = null;
+    }
+  }
+
+  function goFromShutoff() {
+    // Grab notes text
+    const notes = document.getElementById('shutoff-notes').value.trim();
+    if (shutoffPin) {
+      const pctX = Math.round(shutoffPin.x * 100);
+      const pctY = Math.round(shutoffPin.y * 100);
+      window._shutoffNotesText = notes || `Marked on map (${pctX}% from left, ${pctY}% from top)`;
+    } else {
+      window._shutoffNotesText = notes || null;
+    }
+    showStep(5);
     renderPreference();
   }
 
-  // ── Date Picker ──
+  function skipShutoff() {
+    window._shutoffNotesText = null;
+    shutoffImageBase64 = null;
+    shutoffPin = null;
+    showStep(5);
+    renderPreference();
+  }
+
+  function goToPreference() {
+    const err = document.getElementById('address-error');
+    if (!selectedSM) { err.classList.add('visible'); return; }
+    err.classList.remove('visible');
+    showStep(5);
+    renderPreference();
+  }
+
+  //  Date Picker 
   async function goToDatePicker() {
     const err = document.getElementById('pref-error');
     if (!selectedPref) {
@@ -810,7 +1012,7 @@
       return;
     }
     err.classList.remove('visible');
-    showStep(3);
+    showStep(6);
     await loadAvailableDates();
   }
 
@@ -890,7 +1092,7 @@
     });
   }
 
-  // ── Preference ──
+  //  Preference 
   function renderPreference() {
     selectedPref = null;
     ['am','pm','any'].forEach(p => {
@@ -906,7 +1108,7 @@
     document.getElementById('pref-error').classList.remove('visible');
   }
 
-  // ── Book ──
+  //  Book 
   async function doBook() {
     const err = document.getElementById('date-error');
 
@@ -928,7 +1130,11 @@
         phone: phoneRaw,
         serviceMasterId: selectedSM.id || selectedSM.serviceMasterId || selectedSM._id,
         amPm: selectedPref,
-        date: selectedDate
+        date: selectedDate,
+        waterSource: selectedWater !== 'idk' ? selectedWater : undefined,
+        controlBox: selectedControl !== 'idk' ? selectedControl : undefined,
+        shutoffNotes: window._shutoffNotesText || undefined,
+        shutoffImageBase64: shutoffImageBase64 || undefined,
       };
 
       const res = await fetch(`${API}/book`, {
@@ -961,7 +1167,7 @@
         document.getElementById('wo-badge').style.display = 'inline-block';
       }
 
-      showStep(4);
+      showStep(7);
     } catch (ex) {
       err.textContent = 'Connection error. Please try again or call (316) 858-2083.';
       err.classList.add('visible');
@@ -972,7 +1178,7 @@
     }
   }
 
-  // ── Scroll to top button ──
+  //  Scroll to top button 
   const scrollTopBtn = document.getElementById('scroll-top-btn');
   window.addEventListener('scroll', function() {
     if (window.scrollY > 400) {
