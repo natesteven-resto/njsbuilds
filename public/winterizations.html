@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sprinkler Winterization | Reddi Industries</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            reddi: '#E8192C',
+            'reddi-dark': '#b5101f',
+            'reddi-light': '#ff3347',
+            bg: '#050505',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          backdropBlur: {
+            xs: '2px',
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { background-color: #050505; color: #fff; font-family: 'Inter', system-ui, sans-serif; margin: 0; }
+
+    /* ── Video background ── */
+    .video-wrapper {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      z-index: 0;
+    }
+    .video-wrapper::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(5,5,5,0.85) 0%, rgba(5,5,5,0.55) 50%, rgba(5,5,5,0.75) 100%);
+      z-index: 1;
+    }
+    .video-wrapper iframe {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 177.78vh; /* 16/9 aspect */
+      height: 100vh;
+      min-width: 100%;
+      min-height: 56.25vw; /* 9/16 aspect */
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      border: none;
+    }
+
+    /* ── Glass card ── */
+    .glass-card {
+      background: rgba(255,255,255,0.06);
+      backdrop-filter: blur(20px) saturate(1.4);
+      -webkit-backdrop-filter: blur(20px) saturate(1.4);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 1.25rem;
+    }
+
+    /* ── Booking steps ── */
+    .step { display: none; }
+    .step.active { display: block; }
+
+    /* ── Trust badges ── */
+    .trust-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.14);
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: rgba(255,255,255,0.85);
+      white-space: nowrap;
+    }
+
+    /* ── Service card hover ── */
+    .service-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 1rem;
+      padding: 1.5rem 1rem;
+      text-align: center;
+      transition: all 0.25s ease;
+      text-decoration: none;
+      color: #fff;
+      display: block;
+    }
+    .service-card:hover {
+      background: rgba(232,25,44,0.12);
+      border-color: rgba(232,25,44,0.4);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 40px rgba(232,25,44,0.18);
+    }
+
+    /* ── Step indicator ── */
+    .step-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,0.25);
+      transition: background 0.3s;
+    }
+    .step-dot.active { background: #E8192C; }
+
+    /* ── Address option ── */
+    .address-option {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 0.75rem;
+      padding: 0.85rem 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+      width: 100%;
+      color: #fff;
+    }
+    .address-option:hover, .address-option.selected {
+      background: rgba(232,25,44,0.15);
+      border-color: rgba(232,25,44,0.5);
+    }
+
+    /* ── Time pref buttons ── */
+    .pref-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 1rem;
+      border-radius: 0.85rem;
+      border: 2px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #fff;
+      width: 100%;
+      font-family: inherit;
+    }
+    .pref-btn:hover, .pref-btn.selected {
+      background: rgba(232,25,44,0.18);
+      border-color: #E8192C;
+    }
+    .pref-btn .pref-icon { font-size: 1.75rem; }
+    .pref-btn .pref-label { font-size: 0.8rem; font-weight: 600; }
+    .pref-btn .pref-sub { font-size: 0.7rem; color: rgba(255,255,255,0.55); }
+
+    /* ── Inputs ── */
+    .form-input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border-radius: 0.65rem;
+      border: 1.5px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      font-size: 1rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus { border-color: #E8192C; }
+    .form-input::placeholder { color: rgba(255,255,255,0.35); }
+
+    /* ── Primary button ── */
+    .btn-primary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      width: 100%;
+      padding: 0.85rem 1.5rem;
+      border-radius: 0.65rem;
+      background: #E8192C;
+      color: #fff !important;
+      font-weight: 700;
+      font-size: 0.95rem;
+      border: none;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+      font-family: inherit;
+      text-decoration: none;
+    }
+    .btn-primary:hover { background: #b5101f; transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+    /* ── Stat card ── */
+    .stat-card {
+      background: linear-gradient(135deg, rgba(232,25,44,0.12) 0%, rgba(232,25,44,0.04) 100%);
+      border: 1px solid rgba(232,25,44,0.25);
+      border-radius: 1.2rem;
+      padding: 2rem 1.5rem;
+      text-align: center;
+    }
+
+    /* ── How-it-works step ── */
+    .hiw-step {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .hiw-num {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: #E8192C;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; font-weight: 900;
+      margin-bottom: 1rem;
+      position: relative; z-index: 1;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(5,5,5,0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2.5px solid rgba(255,255,255,0.25);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error message ── */
+    .error-msg {
+      color: #ff6b7a;
+      font-size: 0.8rem;
+      margin-top: 0.4rem;
+      display: none;
+    }
+    .error-msg.visible { display: block; }
+
+    /* ── Success checkmark ── */
+    .checkmark-circle {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: rgba(34,197,94,0.15);
+      border: 2px solid rgba(34,197,94,0.5);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 1.25rem;
+    }
+    .checkmark-circle svg { color: #22c55e; }
+
+    /* ── Section divider ── */
+    .section-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(232,25,44,0.3), transparent);
+      margin: 0;
+    }
+
+    /* Mobile adjustments */
+    @media (max-width: 1023px) {
+      .hero-layout { flex-direction: column; }
+      .hero-content { text-align: center; align-items: center; }
+      .hero-badges { justify-content: center; }
+      .booking-card-wrap { width: 100%; max-width: 480px; margin: 0 auto; }
+    }
+  </style>
+</head>
+<body class="bg-bg text-white">
+
+<!-- ═══════════════════════════════════════════════
+     NAV
+═══════════════════════════════════════════════ -->
+<nav>
+  <div class="max-w-7xl mx-auto px-5 py-3 flex items-center justify-between">
+    <!-- Logo -->
+    <a href="https://reddi.com" class="flex items-center gap-2 text-white no-underline">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="#E8192C"/>
+        <path d="M19 6L10 17h7l-4 9 13-14h-8l2-6z" fill="white"/>
+      </svg>
+      <span class="text-xl font-black tracking-widest text-white" style="letter-spacing:0.22em;">REDDI</span>
+    </a>
+    <!-- Phone -->
+    <a href="tel:3168582083" class="flex items-center gap-2 text-white no-underline hover:text-red-400 transition-colors">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-reddi" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C10.61 21 3 13.39 3 4c0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+      </svg>
+      <span class="font-semibold text-sm hidden sm:inline">(316) 858-2083</span>
+      <span class="font-semibold text-sm sm:hidden">Call Us</span>
+    </a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════
+     HERO
+═══════════════════════════════════════════════ -->
+<section class="relative min-h-screen flex items-center pt-16" style="min-height:100svh;">
+  <!-- Video BG -->
+  <div class="video-wrapper">
+    <iframe
+      src="https://www.youtube.com/embed/3hKnNqYb1yU?autoplay=1&mute=1&loop=1&playlist=3hKnNqYb1yU&controls=0&showinfo=0&rel=0&playsinline=1"
+      allow="autoplay; fullscreen"
+      allowfullscreen
+      title="Reddi Winterization Background"
+    ></iframe>
+  </div>
+
+  <!-- Content -->
+  <div class="relative z-10 w-full max-w-7xl mx-auto px-5 py-16">
+    <div class="flex flex-col lg:flex-row items-center gap-12 hero-layout">
+
+      <!-- Left: Headline + trust -->
+      <div class="flex-1 flex flex-col gap-6 hero-content">
+        <!-- Badge -->
+        <div class="inline-flex items-center gap-2 self-start rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest"
+             style="background:rgba(232,25,44,0.18);border:1px solid rgba(232,25,44,0.35);color:#ff6b7a;">
+          ❄️ Winterization Season is Here
+        </div>
+
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-tight">
+          Protect Your<br/>
+          <span class="text-reddi">Sprinkler System</span><br/>
+          This Winter
+        </h1>
+
+        <p class="text-lg text-gray-300 max-w-lg leading-relaxed">
+          A professional blowout from Reddi costs $50–$100. Frozen pipe repairs? $500–$3,000. 
+          Don't gamble with your investment — book your winterization today.
+        </p>
+
+        <!-- Trust badges -->
+        <div class="flex flex-wrap gap-2 hero-badges">
+          <span class="trust-badge">✅ Trusted Since 1957</span>
+          <span class="trust-badge">⚡ Fast Scheduling</span>
+          <span class="trust-badge">🛡️ Licensed & Insured</span>
+          <span class="trust-badge">📞 Local Wichita Team</span>
+        </div>
+
+        <!-- Phone CTA -->
+        <a href="tel:3168582083" class="self-start flex items-center gap-3 text-white no-underline mt-2">
+          <div class="w-12 h-12 rounded-full flex items-center justify-center" style="background:#E8192C;">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C10.61 21 3 13.39 3 4c0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="text-xs text-gray-400">Or call us directly</div>
+            <div class="font-bold text-lg">(316) 858-2083</div>
+          </div>
+        </a>
+      </div>
+
+      <!-- Right: Booking card -->
+      <div class="booking-card-wrap w-full lg:w-[420px] flex-shrink-0">
+        <div class="glass-card p-7">
+          <!-- Card header -->
+          <div class="mb-5">
+            <h2 class="text-xl font-bold text-white">Book Your Winterization</h2>
+            <p class="text-sm text-gray-400 mt-1">Quick, easy, no hassle — just enter your phone number</p>
+          </div>
+
+          <!-- Step dots -->
+          <div class="flex gap-1.5 mb-6" id="step-dots">
+            <div class="step-dot active" id="dot-0"></div>
+            <div class="step-dot" id="dot-1"></div>
+            <div class="step-dot" id="dot-2"></div>
+            <div class="step-dot" id="dot-3"></div>
+            <div class="step-dot" id="dot-4"></div>
+          </div>
+
+          <!-- STEP 1: Phone -->
+          <div class="step active" id="step-phone">
+            <label class="block text-sm font-medium text-gray-300 mb-2">Your Phone Number</label>
+            <input
+              type="tel"
+              id="phone-input"
+              class="form-input"
+              placeholder="(316) 555-0000"
+              maxlength="14"
+            />
+            <div class="error-msg" id="phone-error">Please enter a valid phone number.</div>
+            <button class="btn-primary mt-4" id="lookup-btn" onclick="doLookup()">
+              <span id="lookup-btn-text">Find My Account</span>
+              <span id="lookup-spinner" class="spinner" style="display:none;"></span>
+            </button>
+            <p class="text-xs text-gray-500 text-center mt-3">We'll look up your service address on file</p>
+          </div>
+
+          <!-- STEP 2: Select address -->
+          <div class="step" id="step-address">
+            <p class="text-sm text-gray-300 mb-3">We found your account. Select the address to winterize:</p>
+            <div id="address-list" class="flex flex-col gap-2 max-h-56 overflow-y-auto"></div>
+            <div class="error-msg" id="address-error">Please select an address.</div>
+            <button class="btn-primary mt-4" onclick="goToPreference()">
+              Continue
+            </button>
+          </div>
+
+          <!-- STEP 3: AM/PM Preference -->
+          <div class="step" id="step-preference">
+            <p class="text-sm font-medium text-gray-300 mb-1">Time Preference</p>
+            <p class="text-xs text-gray-500 mb-4">We'll do our best to accommodate your choice. We'll call to confirm the exact time.</p>
+            <div class="grid grid-cols-3 gap-2">
+              <button class="pref-btn" id="pref-am" onclick="selectPref('AM')">
+                <span class="pref-icon">🌅</span>
+                <span class="pref-label">Morning</span>
+                <span class="pref-sub">8am – 12pm</span>
+              </button>
+              <button class="pref-btn" id="pref-pm" onclick="selectPref('PM')">
+                <span class="pref-icon">☀️</span>
+                <span class="pref-label">Afternoon</span>
+                <span class="pref-sub">12pm – 5pm</span>
+              </button>
+              <button class="pref-btn" id="pref-any" onclick="selectPref('any')">
+                <span class="pref-icon">🕐</span>
+                <span class="pref-label">No Preference</span>
+                <span class="pref-sub">Anytime</span>
+              </button>
+            </div>
+            <div class="error-msg" id="pref-error">Please select a time preference.</div>
+            <button class="btn-primary mt-4" onclick="goToDatePicker()">
+              <span>Continue</span>
+            </button>
+          </div>
+
+          <!-- STEP 4: Date Picker -->
+          <div class="step" id="step-date">
+            <p class="text-sm font-medium text-gray-300 mb-1">Choose a Date</p>
+            <p class="text-xs text-gray-500 mb-4">Select from available dates for your time preference.</p>
+            <div id="date-loading" class="text-center py-6 text-gray-500 text-sm" style="display:none;">
+              <span class="spinner" style="display:inline-block;"></span>
+            </div>
+            <div id="date-none" style="display:none;" class="text-center py-6">
+              <p class="text-sm text-gray-400">No dates available right now.</p>
+              <p class="text-sm text-gray-500 mt-1">Call us at <a href="tel:3168582083" class="text-reddi hover:underline">(316) 858-2083</a>.</p>
+            </div>
+            <div id="date-grid" class="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto" style="display:none;"></div>
+            <div class="error-msg" id="date-error">Please select a date.</div>
+            <button class="btn-primary mt-4" id="book-btn" onclick="doBook()" style="display:none;">
+              <span id="book-btn-text">Confirm Booking</span>
+              <span id="book-spinner" class="spinner" style="display:none;"></span>
+            </button>
+          </div>
+
+          <!-- STEP 5: Confirm -->
+          <div class="step" id="step-confirm">
+            <div class="text-center py-2">
+              <div class="checkmark-circle">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-9 w-9" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </div>
+              <h3 class="text-lg font-bold text-white">You're scheduled!</h3>
+              <p class="text-sm text-gray-400 mt-1 mb-3" id="confirm-msg">We'll call to confirm your arrival window.</p>
+              <div id="wo-badge" class="inline-block px-4 py-2 rounded-xl text-sm font-semibold" style="background:rgba(232,25,44,0.15);border:1px solid rgba(232,25,44,0.3);color:#ff8a94;display:none;">
+                Work Order #<span id="wo-number" class="font-bold text-white"></span>
+              </div>
+              <p class="text-xs text-gray-500 mt-4">Questions? Call <a href="tel:3168582083" class="text-reddi hover:underline">(316) 858-2083</a></p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scroll indicator -->
+  <div class="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1 animate-bounce opacity-50">
+    <span class="text-xs text-gray-400 uppercase tracking-widest">Scroll</span>
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+    </svg>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     WHY WINTERIZE
+═══════════════════════════════════════════════ -->
+<div class="section-divider"></div>
+<section class="max-w-7xl mx-auto px-5 py-24">
+  <div class="text-center mb-14">
+    <span class="text-xs font-bold uppercase tracking-widest text-reddi mb-3 block">The Numbers Don't Lie</span>
+    <h2 class="text-3xl sm:text-4xl font-black">Why Winterization Matters</h2>
+    <p class="text-gray-400 mt-3 max-w-xl mx-auto">Skipping a blowout is one of the most expensive mistakes a Wichita homeowner can make.</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+    <div class="stat-card">
+      <div class="text-4xl font-black text-reddi mb-2">$50–$100</div>
+      <div class="text-sm font-semibold text-white mb-1">Professional Blowout</div>
+      <div class="text-xs text-gray-400">One-time seasonal service that takes under an hour</div>
+    </div>
+    <div class="stat-card" style="background:linear-gradient(135deg,rgba(255,255,255,0.05) 0%,rgba(255,255,255,0.02) 100%);border-color:rgba(255,255,255,0.1);">
+      <div class="text-4xl font-black text-gray-300 mb-2">vs.</div>
+      <div class="text-sm font-semibold text-white mb-1">The Decision</div>
+      <div class="text-xs text-gray-400">Protect now or pay later — it's that simple</div>
+    </div>
+    <div class="stat-card" style="background:linear-gradient(135deg,rgba(239,68,68,0.12) 0%,rgba(239,68,68,0.04) 100%);border-color:rgba(239,68,68,0.25);">
+      <div class="text-4xl font-black text-red-400 mb-2">$500–$3K</div>
+      <div class="text-sm font-semibold text-white mb-1">Frozen Pipe Repairs</div>
+      <div class="text-xs text-gray-400">Burst lines, cracked heads, and damaged valves from a hard freeze</div>
+    </div>
+  </div>
+
+  <!-- Explainer video -->
+  <div class="max-w-3xl mx-auto">
+    <div class="rounded-2xl overflow-hidden" style="border:1px solid rgba(255,255,255,0.08);aspect-ratio:16/9;">
+      <iframe
+        class="w-full h-full"
+        src="https://www.youtube.com/embed/4cD7ZhbpJaI"
+        title="Sprinkler Winterization Explained"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen
+        style="border:none;"
+      ></iframe>
+    </div>
+    <p class="text-center text-sm text-gray-500 mt-3">Watch: How sprinkler winterization works</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     HOW IT WORKS
+═══════════════════════════════════════════════ -->
+<div class="section-divider"></div>
+<section style="background:rgba(255,255,255,0.02);">
+  <div class="max-w-7xl mx-auto px-5 py-24">
+    <div class="text-center mb-14">
+      <span class="text-xs font-bold uppercase tracking-widest text-reddi mb-3 block">Simple Process</span>
+      <h2 class="text-3xl sm:text-4xl font-black">How It Works</h2>
+      <p class="text-gray-400 mt-3">From sign-up to protected system in four easy steps.</p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+      <!-- Step 1 -->
+      <div class="hiw-step">
+        <div class="hiw-num">1</div>
+        <div class="text-2xl mb-2">📱</div>
+        <h3 class="text-lg font-bold mb-2">Sign Up</h3>
+        <p class="text-sm text-gray-400 text-center">Enter your phone number above. We'll find your account and get you on the schedule.</p>
+      </div>
+      <!-- Step 2 -->
+      <div class="hiw-step">
+        <div class="hiw-num">2</div>
+        <div class="text-2xl mb-2">📅</div>
+        <h3 class="text-lg font-bold mb-2">Pick a Date</h3>
+        <p class="text-sm text-gray-400 text-center">Choose your time preference and pick from available dates on our live calendar.</p>
+      </div>
+      <!-- Step 3 -->
+      <div class="hiw-step">
+        <div class="hiw-num">3</div>
+        <div class="text-2xl mb-2">🚚</div>
+        <h3 class="text-lg font-bold mb-2">Tech Arrives</h3>
+        <p class="text-sm text-gray-400 text-center">A licensed Reddi technician shows up with professional-grade compressed air equipment.</p>
+      </div>
+      <!-- Step 4 -->
+      <div class="hiw-step">
+        <div class="hiw-num">4</div>
+        <div class="text-2xl mb-2">✅</div>
+        <h3 class="text-lg font-bold mb-2">System Protected</h3>
+        <p class="text-sm text-gray-400 text-center">Every zone is blown out. Your system is ready for winter. Peace of mind guaranteed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     REDDI SERVICES
+═══════════════════════════════════════════════ -->
+<div class="section-divider"></div>
+<section class="max-w-7xl mx-auto px-5 py-24">
+  <div class="text-center mb-14">
+    <span class="text-xs font-bold uppercase tracking-widest text-reddi mb-3 block">Everything Under One Roof</span>
+    <h2 class="text-3xl sm:text-4xl font-black">All Reddi Services</h2>
+    <p class="text-gray-400 mt-3 max-w-xl mx-auto">Wichita's most trusted home services company since 1957. We do it all.</p>
+  </div>
+
+  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+    <a href="https://reddi.com/plumbing" target="_blank" class="service-card">
+      <div class="text-3xl mb-2">🔧</div>
+      <div class="font-semibold text-sm">Plumbing</div>
+    </a>
+    <a href="https://reddi.com/hvac/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2">❄️</div>
+      <div class="font-semibold text-sm">HVAC</div>
+    </a>
+    <a href="https://reddi.com/electrical/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2">⚡</div>
+      <div class="font-semibold text-sm">Electrical</div>
+    </a>
+    <a href="https://reddi.com/garage-doors/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2">🚪</div>
+      <div class="font-semibold text-sm">Garage Doors</div>
+    </a>
+    <a href="https://reddi.com/fencing/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2">🏡</div>
+      <div class="font-semibold text-sm">Fencing</div>
+    </a>
+    <a href="https://reddi.com/sprinklers/" target="_blank" class="service-card" style="background:rgba(232,25,44,0.1);border-color:rgba(232,25,44,0.3);">
+      <div class="text-3xl mb-2">💧</div>
+      <div class="font-semibold text-sm">Sprinklers</div>
+    </a>
+    <a href="https://reddi.com/lawn-care/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2">🌿</div>
+      <div class="font-semibold text-sm">Lawn Care</div>
+    </a>
+    <a href="https://reddi.com/appliance-repair/" target="_blank" class="service-card">
+      <div class="text-3xl mb-2">🧺</div>
+      <div class="font-semibold text-sm">Appliance Repair</div>
+    </a>
+    <a href="https://reddi.com/excavation-utility" target="_blank" class="service-card">
+      <div class="text-3xl mb-2">⛏️</div>
+      <div class="font-semibold text-sm">Excavation</div>
+    </a>
+    <a href="https://reddi.com/exteriors-baths" target="_blank" class="service-card">
+      <div class="text-3xl mb-2">🏠</div>
+      <div class="font-semibold text-sm">Roofing &amp; Exteriors</div>
+    </a>
+    <a href="https://reddi.com/environmental" target="_blank" class="service-card">
+      <div class="text-3xl mb-2">♻️</div>
+      <div class="font-semibold text-sm">Environmental</div>
+    </a>
+    <a href="https://reddi.com/flooring" target="_blank" class="service-card">
+      <div class="text-3xl mb-2">🪵</div>
+      <div class="font-semibold text-sm">Flooring</div>
+    </a>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     FINAL CTA
+═══════════════════════════════════════════════ -->
+<div class="section-divider"></div>
+<section style="background:linear-gradient(135deg, #E8192C 0%, #8b0f1a 100%);">
+  <div class="max-w-4xl mx-auto px-5 py-20 text-center">
+    <div class="text-5xl mb-4">❄️</div>
+    <h2 class="text-3xl sm:text-4xl font-black text-white mb-4">Don't Wait Until It Freezes</h2>
+    <p class="text-red-100 text-lg mb-8 max-w-xl mx-auto">
+      Wichita winters hit fast. Once temps drop below freezing, it's too late.
+      Book your blowout now and protect your investment.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+      <button
+        onclick="document.getElementById('phone-input').scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(()=>document.getElementById('phone-input').focus(),600);"
+        class="btn-primary"
+        style="width:auto;padding:1rem 2.5rem;font-size:1rem;"
+      >
+        📅 Book Online Now
+      </button>
+      <a
+        href="tel:3168582083"
+        class="flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-white no-underline transition-all hover:bg-white/10"
+        style="border:2px solid rgba(255,255,255,0.5);"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C10.61 21 3 13.39 3 4c0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+        </svg>
+        (316) 858-2083
+      </a>
+    </div>
+    <p class="text-red-200 text-sm mt-6 opacity-75">Licensed • Insured • Wichita's Trusted Choice Since 1957</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════ -->
+<footer style="background:#000;border-top:1px solid rgba(255,255,255,0.07);">
+  <div class="max-w-7xl mx-auto px-5 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <a href="https://reddi.com" class="flex items-center gap-2 text-white no-underline">
+      <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="#E8192C"/>
+        <path d="M19 6L10 17h7l-4 9 13-14h-8l2-6z" fill="white"/>
+      </svg>
+      <span class="text-lg font-black tracking-widest" style="letter-spacing:0.22em;">REDDI</span>
+    </a>
+    <p class="text-sm text-gray-500">© 2024 Reddi Industries. All rights reserved.</p>
+    <a href="tel:3168582083" class="text-sm text-gray-400 hover:text-white no-underline transition-colors">(316) 858-2083</a>
+  </div>
+</footer>
+
+<!-- ═══════════════════════════════════════════════
+     SCROLL TO TOP BUTTON
+═══════════════════════════════════════════════ -->
+<button
+  id="scroll-top-btn"
+  onclick="window.scrollTo({top:0,behavior:'smooth'})"
+  class="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 opacity-0 pointer-events-none"
+  style="background:#E8192C;"
+  aria-label="Scroll to top"
+>
+  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"/>
+  </svg>
+</button>
+
+<!-- ═══════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════ -->
+<script>
+  const API = 'https://rd.ngrok.app/api/winterization/public';
+
+  // ── State ──
+  let currentStep = 0;
+  let selectedSM = null;
+  let selectedPref = null;
+  let selectedDate = null;   // YYYY-MM-DD
+  let availableDates = [];   // AvailableDate[]
+  let lookupResults = [];
+  let phoneRaw = '';
+
+  // ── Phone formatting ──
+  const phoneInput = document.getElementById('phone-input');
+  phoneInput.addEventListener('input', function(e) {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 10);
+    if (v.length > 6) v = `(${v.slice(0,3)}) ${v.slice(3,6)}-${v.slice(6)}`;
+    else if (v.length > 3) v = `(${v.slice(0,3)}) ${v.slice(3)}`;
+    else if (v.length) v = `(${v}`;
+    e.target.value = v;
+  });
+  phoneInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doLookup();
+  });
+
+  // ── Step management ──
+  // Steps: 0=phone, 1=address, 2=preference, 3=date, 4=confirm
+  function showStep(n) {
+    document.querySelectorAll('.step').forEach((el, i) => {
+      el.classList.toggle('active', i === n);
+    });
+    document.querySelectorAll('.step-dot').forEach((el, i) => {
+      el.classList.toggle('active', i === n);
+    });
+    currentStep = n;
+  }
+
+  // ── Lookup ──
+  async function doLookup() {
+    const raw = phoneInput.value.replace(/\D/g, '');
+    const err = document.getElementById('phone-error');
+    err.classList.remove('visible');
+
+    if (raw.length !== 10) {
+      err.textContent = 'Please enter a valid 10-digit phone number.';
+      err.classList.add('visible');
+      return;
+    }
+
+    phoneRaw = raw;
+
+    const btn = document.getElementById('lookup-btn');
+    const btnText = document.getElementById('lookup-btn-text');
+    const spinner = document.getElementById('lookup-spinner');
+    btn.disabled = true;
+    btnText.style.display = 'none';
+    spinner.style.display = 'inline-block';
+
+    try {
+      const res = await fetch(`${API}/lookup?phone=${raw}`);
+      const data = await res.json();
+
+      if (!res.ok || !data || (Array.isArray(data) && data.length === 0)) {
+        err.textContent = data?.message || 'No account found for that number. Please call (316) 858-2083.';
+        err.classList.add('visible');
+        return;
+      }
+
+      lookupResults = Array.isArray(data) ? data : [data];
+
+      if (lookupResults.length === 1) {
+        selectedSM = lookupResults[0];
+        showStep(2); // skip address selection, go to preference
+        renderPreference();
+      } else {
+        renderAddresses(lookupResults);
+        showStep(1);
+      }
+    } catch (ex) {
+      err.textContent = 'Connection error. Please try again or call (316) 858-2083.';
+      err.classList.add('visible');
+    } finally {
+      btn.disabled = false;
+      btnText.style.display = '';
+      spinner.style.display = 'none';
+    }
+  }
+
+  // ── Render address list ──
+  function renderAddresses(sms) {
+    const list = document.getElementById('address-list');
+    list.innerHTML = '';
+    sms.forEach(sm => {
+      const btn = document.createElement('button');
+      btn.className = 'address-option';
+      const addr = sm.address || sm.serviceAddress || sm.location || JSON.stringify(sm);
+      btn.textContent = addr;
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.address-option').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedSM = sm;
+      });
+      list.appendChild(btn);
+    });
+  }
+
+  function goToPreference() {
+    const err = document.getElementById('address-error');
+    if (!selectedSM) {
+      err.classList.add('visible');
+      return;
+    }
+    err.classList.remove('visible');
+    showStep(2);
+    renderPreference();
+  }
+
+  // ── Date Picker ──
+  async function goToDatePicker() {
+    const err = document.getElementById('pref-error');
+    if (!selectedPref) {
+      err.textContent = 'Please select a time preference.';
+      err.classList.add('visible');
+      return;
+    }
+    err.classList.remove('visible');
+    showStep(3);
+    await loadAvailableDates();
+  }
+
+  async function loadAvailableDates() {
+    const loading = document.getElementById('date-loading');
+    const none = document.getElementById('date-none');
+    const grid = document.getElementById('date-grid');
+    const bookBtn = document.getElementById('book-btn');
+
+    loading.style.display = 'block';
+    none.style.display = 'none';
+    grid.style.display = 'none';
+    bookBtn.style.display = 'none';
+
+    try {
+      const pref = selectedPref === 'any' ? 'any' : selectedPref;
+      const res = await fetch(`${API}/available-dates?preference=${pref}`);
+      const data = await res.json();
+      availableDates = data?.dates ?? [];
+
+      if (availableDates.length === 0) {
+        none.style.display = 'block';
+      } else {
+        renderDateGrid(availableDates);
+        grid.style.display = 'grid';
+      }
+    } catch (ex) {
+      none.style.display = 'block';
+    } finally {
+      loading.style.display = 'none';
+    }
+  }
+
+  function renderDateGrid(dates) {
+    const grid = document.getElementById('date-grid');
+    grid.innerHTML = '';
+    selectedDate = null;
+    document.getElementById('book-btn').style.display = 'none';
+
+    dates.forEach(d => {
+      const dateObj = new Date(d.date + 'T12:00:00');
+      const label = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const btn = document.createElement('button');
+      btn.style.cssText = `
+        padding: 0.6rem 0.25rem;
+        border-radius: 0.75rem;
+        border: 1.5px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.04);
+        color: #fff;
+        font-family: inherit;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+        text-align: center;
+      `;
+
+      // Show slot availability
+      let sub = '';
+      if (d.amAvailable && d.pmAvailable) sub = 'AM · PM';
+      else if (d.amAvailable) sub = 'AM only';
+      else sub = 'PM only';
+
+      btn.innerHTML = `<div>${label}</div><div style="font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:2px;">${sub}</div>`;
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('#date-grid button').forEach(b => {
+          b.style.background = 'rgba(255,255,255,0.04)';
+          b.style.borderColor = 'rgba(255,255,255,0.1)';
+        });
+        btn.style.background = 'rgba(232,25,44,0.2)';
+        btn.style.borderColor = '#E8192C';
+        selectedDate = d.date;
+        document.getElementById('book-btn').style.display = 'flex';
+        document.getElementById('date-error').classList.remove('visible');
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  // ── Preference ──
+  function renderPreference() {
+    selectedPref = null;
+    ['am','pm','any'].forEach(p => {
+      document.getElementById(`pref-${p}`).classList.remove('selected');
+    });
+  }
+
+  function selectPref(val) {
+    selectedPref = val;
+    document.getElementById('pref-am').classList.toggle('selected', val === 'AM');
+    document.getElementById('pref-pm').classList.toggle('selected', val === 'PM');
+    document.getElementById('pref-any').classList.toggle('selected', val === 'any');
+    document.getElementById('pref-error').classList.remove('visible');
+  }
+
+  // ── Book ──
+  async function doBook() {
+    const err = document.getElementById('date-error');
+
+    if (!selectedDate) {
+      err.textContent = 'Please select a date.';
+      err.classList.add('visible');
+      return;
+    }
+
+    const btn = document.getElementById('book-btn');
+    const btnText = document.getElementById('book-btn-text');
+    const spinner = document.getElementById('book-spinner');
+    btn.disabled = true;
+    btnText.style.display = 'none';
+    spinner.style.display = 'inline-block';
+
+    try {
+      const payload = {
+        phone: phoneRaw,
+        serviceMasterId: selectedSM.id || selectedSM.serviceMasterId || selectedSM._id,
+        amPm: selectedPref,
+        date: selectedDate
+      };
+
+      const res = await fetch(`${API}/book`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        err.textContent = data?.error || data?.message || 'Booking failed. Please call (316) 858-2083.';
+        err.classList.add('visible');
+        btn.disabled = false;
+        btnText.style.display = '';
+        spinner.style.display = 'none';
+        return;
+      }
+
+      // Build confirmation message
+      const dateObj = new Date(selectedDate + 'T12:00:00');
+      const dateLabel = dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+      const slotLabel = selectedPref === 'AM' ? 'Morning' : selectedPref === 'PM' ? 'Afternoon' : 'your preferred time';
+      document.getElementById('confirm-msg').textContent =
+        `You're scheduled for ${dateLabel} in the ${slotLabel}. We'll call to confirm your arrival window.`;
+
+      // Show work order
+      const wo = data?.jobNumber || data?.workOrderNumber || data?.woNumber || null;
+      if (wo) {
+        document.getElementById('wo-number').textContent = wo;
+        document.getElementById('wo-badge').style.display = 'inline-block';
+      }
+
+      showStep(4);
+    } catch (ex) {
+      err.textContent = 'Connection error. Please try again or call (316) 858-2083.';
+      err.classList.add('visible');
+    } finally {
+      btn.disabled = false;
+      btnText.style.display = '';
+      spinner.style.display = 'none';
+    }
+  }
+
+  // ── Scroll to top button ──
+  const scrollTopBtn = document.getElementById('scroll-top-btn');
+  window.addEventListener('scroll', function() {
+    if (window.scrollY > 400) {
+      scrollTopBtn.style.opacity = '1';
+      scrollTopBtn.style.pointerEvents = 'auto';
+    } else {
+      scrollTopBtn.style.opacity = '0';
+      scrollTopBtn.style.pointerEvents = 'none';
+    }
+  });
+</script>
+
+</body>
+</html>

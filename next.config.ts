@@ -1,6 +1,11 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    return [
+      { source: '/winterizations', destination: '/winterizations.html' },
+    ]
+  },
   serverExternalPackages: ['@react-pdf/renderer'],
 
   images: {
