@@ -399,9 +399,17 @@
 
           <!-- STEP 2: Select address -->
           <div class="step" id="step-address">
-            <p class="text-sm text-gray-300 mb-3">We found your account. Select the address to winterize:</p>
-            <div id="address-list" class="flex flex-col gap-2 max-h-56 overflow-y-auto"></div>
-            <div class="error-msg" id="address-error">Please select an address.</div>
+            <p class="text-sm text-gray-300 mb-3" id="address-header">Please confirm your service address:</p>
+            <div id="address-list" class="flex flex-col gap-2 max-h-48 overflow-y-auto"></div>
+            <!-- Manual entry when no account found -->
+            <div id="manual-address-entry" style="display:none;">
+              <input type="text" id="manual-address" class="form-input mb-2" placeholder="Street address (e.g. 123 Main St)" />
+              <div style="display:grid;grid-template-columns:1fr 80px;gap:8px;">
+                <input type="text" id="manual-city" class="form-input" placeholder="City" />
+                <input type="text" id="manual-zip" class="form-input" placeholder="ZIP" />
+              </div>
+            </div>
+            <div class="error-msg" id="address-error">Please select or enter your address.</div>
             <button class="btn-primary mt-4" onclick="goToWaterSource()">
               Continue
             </button>
@@ -843,21 +851,16 @@
       const res = await fetch(`${API}/lookup?phone=${raw}`);
       const data = await res.json();
 
-      if (!res.ok || !data || (Array.isArray(data) && data.length === 0)) {
-        err.textContent = data?.message || 'No account found for that number. Please call (316) 858-2083.';
-        err.classList.add('visible');
-        return;
-      }
+      lookupResults = (!res.ok || !data) ? [] : (Array.isArray(data) ? data : [data]);
 
-      lookupResults = Array.isArray(data) ? data : [data];
+      // Always go to address step — even if 0 results
+      renderAddresses(lookupResults);
+      showStep(1);
 
+      // Pre-select if exactly one result
       if (lookupResults.length === 1) {
         selectedSM = lookupResults[0];
-        showStep(2); // skip address selection, go to preference
-        renderPreference();
-      } else {
-        renderAddresses(lookupResults);
-        showStep(1);
+        document.querySelectorAll('.address-option').forEach(b => b.classList.add('selected'));
       }
     } catch (ex) {
       err.textContent = 'Connection error. Please try again or call (316) 858-2083.';
@@ -872,12 +875,28 @@
   //  Render address list 
   function renderAddresses(sms) {
     const list = document.getElementById('address-list');
+    const addrHeader = document.getElementById('address-header');
+    const manualEntry = document.getElementById('manual-address-entry');
     list.innerHTML = '';
+
+    if (sms.length === 0) {
+      // No account found — show manual address entry
+      addrHeader.textContent = "We couldn't find an account with that number. Please enter your service address:";
+      manualEntry.style.display = 'block';
+      selectedSM = null;
+      return;
+    }
+
+    manualEntry.style.display = 'none';
+    addrHeader.textContent = sms.length === 1
+      ? 'Please confirm your service address:'
+      : 'We found multiple addresses on your account. Select the one to winterize:';
+
     sms.forEach(sm => {
       const btn = document.createElement('button');
       btn.className = 'address-option';
-      const addr = sm.address || sm.serviceAddress || sm.location || JSON.stringify(sm);
-      btn.textContent = addr;
+      const addr = [sm.address, sm.city, sm.state, sm.zip].filter(Boolean).join(', ');
+      btn.innerHTML = `<div style="font-weight:600;">${addr}</div>${sm.name ? `<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:2px;">${sm.name}</div>` : ''}`;
       btn.addEventListener('click', function() {
         document.querySelectorAll('.address-option').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
@@ -890,7 +909,19 @@
   //  Water Source 
   function goToWaterSource() {
     const err = document.getElementById('address-error');
-    if (!selectedSM) { err.classList.add('visible'); return; }
+    const manualEntry = document.getElementById('manual-address-entry');
+
+    if (!selectedSM && manualEntry.style.display !== 'none') {
+      // Manual entry path — build a fake SM object from typed address
+      const addr = document.getElementById('manual-address').value.trim();
+      const city = document.getElementById('manual-city').value.trim();
+      const zip = document.getElementById('manual-zip').value.trim();
+      if (!addr) { err.textContent = 'Please enter your street address.'; err.classList.add('visible'); return; }
+      // Create a manual SM placeholder (no id — API will handle new address)
+      selectedSM = { id: null, address: addr, city: city || 'Wichita', state: 'KS', zip: zip || '', name: '', isManual: true };
+    }
+
+    if (!selectedSM) { err.textContent = 'Please select your address.'; err.classList.add('visible'); return; }
     err.classList.remove('visible');
     showStep(2);
   }
@@ -924,7 +955,7 @@
     const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${addr}&zoom=19&size=600x300&maptype=satellite&key=${GMAPS_KEY}`;
 
     // Show satellite image
-    mapDiv.innerHTML = `<img id="shutoff-img" src="${mapUrl}" style="width:100%;height:100%;object-fit:cover;display:block;" crossorigin="anonymous" />`;
+    mapDiv.innerHTML = `<img id="shutoff-img" src="${mapUrl}" style="width:100%;height:240px;object-fit:cover;display:block;border-radius:8px;" />`;
 
     // Set up canvas for click-to-pin
     const rect = mapDiv.getBoundingClientRect();
@@ -942,8 +973,15 @@
       pin.style.left = x + 'px';
       pin.style.top = y + 'px';
 
-      // Capture canvas screenshot with pin drawn
-      captureShutoffImage(x, y);
+      // Describe position in compass terms
+      const hPct = shutoffPin.x;
+      const vPct = shutoffPin.y;
+      const h = hPct < 0.33 ? 'west' : hPct < 0.66 ? 'center' : 'east';
+      const v = vPct < 0.33 ? 'north' : vPct < 0.66 ? 'middle' : 'south';
+      const existing = document.getElementById('shutoff-notes').value;
+      if (!existing) {
+        document.getElementById('shutoff-notes').value = `Marked on aerial map — ${v}-${h} area of property`;
+      }
     });
   }
 
@@ -1126,9 +1164,10 @@
     spinner.style.display = 'inline-block';
 
     try {
+      const smId = selectedSM.id || selectedSM.serviceMasterId || selectedSM._id || null;
       const payload = {
         phone: phoneRaw,
-        serviceMasterId: selectedSM.id || selectedSM.serviceMasterId || selectedSM._id,
+        ...(smId ? { serviceMasterId: smId } : { manualAddress: `${selectedSM.address}, ${selectedSM.city}, ${selectedSM.state} ${selectedSM.zip}` }),
         amPm: selectedPref,
         date: selectedDate,
         waterSource: selectedWater !== 'idk' ? selectedWater : undefined,
