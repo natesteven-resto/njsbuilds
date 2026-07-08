@@ -277,6 +277,8 @@
       .booking-card-wrap { width: 100%; max-width: 480px; margin: 0 auto; }
     }
   </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body class="bg-bg text-white">
 
@@ -461,13 +463,9 @@
           <div class="step" id="step-shutoff">
             <p class="text-sm font-medium text-gray-300 mb-1">Where is your shutoff valve located?</p>
             <p class="text-xs text-gray-500 mb-3">Tap on the map to mark the location, or describe it below.</p>
-            <!-- Satellite map -->
-            <div style="position:relative;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);margin-bottom:12px;">
-              <div id="shutoff-map" style="width:100%;height:240px;background:#1a1a1a;display:flex;align-items:center;justify-content:center;">
-                <span style="color:rgba(255,255,255,0.3);font-size:13px;">Loading map…</span>
-              </div>
-              <canvas id="shutoff-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;cursor:crosshair;"></canvas>
-              <div id="shutoff-pin" style="display:none;position:absolute;transform:translate(-50%,-100%);font-size:28px;pointer-events:none;"></div>
+            <!-- Satellite map (Leaflet + Esri World Imagery) -->
+            <div style="border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);margin-bottom:12px;">
+              <div id="shutoff-map" style="width:100%;height:240px;background:#1a1a1a;"></div>
             </div>
             <p class="text-xs text-gray-500 mb-2">Or describe the location:</p>
             <textarea
@@ -797,9 +795,7 @@
   // New fields
   let selectedWater = null;   // 'city' | 'well' | 'idk'
   let selectedControl = null; // 'inside' | 'outside' | 'idk'
-  let shutoffPin = null;      // { x: pct, y: pct } relative position on map image
-  let shutoffImageBase64 = null; // captured canvas screenshot
-  const GMAPS_KEY = 'AIzaSyAJevy694OrjsZ67Bm_iuwRJFgxR3ju6lk';
+
 
   //  Phone formatting 
   const phoneInput = document.getElementById('phone-input');
@@ -944,91 +940,70 @@
   }
 
   //  Shutoff Valve Map 
-  function initShutoffMap() {
+  let leafletMap = null;
+  let leafletMarker = null;
+  let shutoffLatLng = null; // { lat, lng }
+
+  async function initShutoffMap() {
     if (!selectedSM) return;
     const mapDiv = document.getElementById('shutoff-map');
-    const canvas = document.getElementById('shutoff-canvas');
-    const pin = document.getElementById('shutoff-pin');
 
-    // Build address string for geocoding
-    const addr = encodeURIComponent(`${selectedSM.address}, ${selectedSM.city}, ${selectedSM.state} ${selectedSM.zip}`);
-    const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${addr}&zoom=19&size=600x300&maptype=satellite&key=${GMAPS_KEY}`;
+    // Reset any prior map instance
+    if (leafletMap) { leafletMap.remove(); leafletMap = null; leafletMarker = null; }
+    shutoffLatLng = null;
 
-    // Show satellite image
-    mapDiv.innerHTML = `<img id="shutoff-img" src="${mapUrl}" style="width:100%;height:240px;object-fit:cover;display:block;border-radius:8px;" />`;
+    // Geocode the address via our API (Google geocoding is enabled)
+    let center = [37.6872, -97.3301]; // Wichita fallback
+    try {
+      const q = selectedSM.id
+        ? `smId=${encodeURIComponent(selectedSM.id)}`
+        : `address=${encodeURIComponent(`${selectedSM.address}, ${selectedSM.city}, ${selectedSM.state} ${selectedSM.zip}`)}`;
+      const res = await fetch(`${API}/geocode?${q}`);
+      if (res.ok) {
+        const d = await res.json();
+        if (d.lat && d.lng) center = [d.lat, d.lng];
+      }
+    } catch (e) { /* use fallback */ }
 
-    // Set up canvas for click-to-pin
-    const rect = mapDiv.getBoundingClientRect();
-    canvas.width = mapDiv.offsetWidth;
-    canvas.height = mapDiv.offsetHeight;
+    // Build Leaflet map with Esri World Imagery satellite tiles (keyless)
+    leafletMap = L.map('shutoff-map', { zoomControl: true, attributionControl: false }).setView(center, 19);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 21,
+    }).addTo(leafletMap);
 
-    canvas.addEventListener('click', function(e) {
-      const r = canvas.getBoundingClientRect();
-      const x = e.clientX - r.left;
-      const y = e.clientY - r.top;
-      shutoffPin = { x: x / r.width, y: y / r.height };
+    // Fix tile rendering inside a step that was hidden
+    setTimeout(() => leafletMap.invalidateSize(), 200);
 
-      // Move pin emoji
-      pin.style.display = 'block';
-      pin.style.left = x + 'px';
-      pin.style.top = y + 'px';
-
-      // Describe position in compass terms
-      const hPct = shutoffPin.x;
-      const vPct = shutoffPin.y;
-      const h = hPct < 0.33 ? 'west' : hPct < 0.66 ? 'center' : 'east';
-      const v = vPct < 0.33 ? 'north' : vPct < 0.66 ? 'middle' : 'south';
+    // Click to drop / move pin
+    leafletMap.on('click', function(e) {
+      shutoffLatLng = { lat: e.latlng.lat, lng: e.latlng.lng };
+      if (leafletMarker) {
+        leafletMarker.setLatLng(e.latlng);
+      } else {
+        leafletMarker = L.marker(e.latlng, { draggable: true }).addTo(leafletMap);
+        leafletMarker.on('dragend', function() {
+          const p = leafletMarker.getLatLng();
+          shutoffLatLng = { lat: p.lat, lng: p.lng };
+        });
+      }
       const existing = document.getElementById('shutoff-notes').value;
       if (!existing) {
-        document.getElementById('shutoff-notes').value = `Marked on aerial map — ${v}-${h} area of property`;
+        document.getElementById('shutoff-notes').value = 'Marked on aerial map (see attached image)';
       }
     });
   }
 
-  function captureShutoffImage(pinX, pinY) {
-    const img = document.getElementById('shutoff-img');
-    if (!img) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth || img.offsetWidth;
-    canvas.height = img.naturalHeight || img.offsetHeight;
-    const ctx = canvas.getContext('2d');
-    try {
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      // Draw red circle at pin location
-      const px = (pinX / img.offsetWidth) * canvas.width;
-      const py = (pinY / img.offsetHeight) * canvas.height;
-      ctx.beginPath();
-      ctx.arc(px, py, 14, 0, 2 * Math.PI);
-      ctx.fillStyle = 'rgba(232,25,44,0.7)';
-      ctx.fill();
-      ctx.strokeStyle = 'white';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      shutoffImageBase64 = canvas.toDataURL('image/png');
-    } catch(e) {
-      // CORS issue — skip image capture, notes still saved
-      shutoffImageBase64 = null;
-    }
-  }
-
   function goFromShutoff() {
-    // Grab notes text
     const notes = document.getElementById('shutoff-notes').value.trim();
-    if (shutoffPin) {
-      const pctX = Math.round(shutoffPin.x * 100);
-      const pctY = Math.round(shutoffPin.y * 100);
-      window._shutoffNotesText = notes || `Marked on map (${pctX}% from left, ${pctY}% from top)`;
-    } else {
-      window._shutoffNotesText = notes || null;
-    }
+    window._shutoffNotesText = notes || (shutoffLatLng ? 'Marked on aerial map (see attached image)' : null);
     showStep(5);
     renderPreference();
   }
 
   function skipShutoff() {
     window._shutoffNotesText = null;
-    shutoffImageBase64 = null;
-    shutoffPin = null;
+    shutoffLatLng = null;
+    if (leafletMarker) { leafletMap.removeLayer(leafletMarker); leafletMarker = null; }
     showStep(5);
     renderPreference();
   }
@@ -1173,7 +1148,8 @@
         waterSource: selectedWater !== 'idk' ? selectedWater : undefined,
         controlBox: selectedControl !== 'idk' ? selectedControl : undefined,
         shutoffNotes: window._shutoffNotesText || undefined,
-        shutoffImageBase64: shutoffImageBase64 || undefined,
+        shutoffLat: shutoffLatLng ? shutoffLatLng.lat : undefined,
+        shutoffLng: shutoffLatLng ? shutoffLatLng.lng : undefined,
       };
 
       const res = await fetch(`${API}/book`, {
