@@ -33,31 +33,31 @@
     html { scroll-behavior: smooth; }
     body { background-color: #050505; color: #fff; font-family: 'Inter', system-ui, sans-serif; margin: 0; }
 
-    /* ── Video background ── */
-    .video-wrapper {
+    /* ── Photo background with Ken Burns ── */
+    .photo-bg {
       position: absolute;
       inset: 0;
       overflow: hidden;
       z-index: 0;
     }
-    .video-wrapper::after {
+    .photo-bg::after {
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(135deg, rgba(5,5,5,0.85) 0%, rgba(5,5,5,0.55) 50%, rgba(5,5,5,0.75) 100%);
+      background: linear-gradient(135deg, rgba(5,5,5,0.88) 0%, rgba(5,5,5,0.55) 50%, rgba(5,5,5,0.80) 100%);
       z-index: 1;
     }
-    .video-wrapper iframe {
+    .photo-img {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 177.78vh; /* 16/9 aspect */
-      height: 100vh;
-      min-width: 100%;
-      min-height: 56.25vw; /* 9/16 aspect */
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-      border: none;
+      inset: -8%;
+      background-image: url('https://images.unsplash.com/photo-1605117882932-f9e32b03fea9?w=1920&q=85');
+      background-size: cover;
+      background-position: center 30%;
+      animation: kenBurns 22s ease-in-out infinite alternate;
+    }
+    @keyframes kenBurns {
+      0%   { transform: scale(1.00) translate(0%,   0%); }
+      100% { transform: scale(1.10) translate(-2%, -1%); }
     }
 
     /* ── Glass card ── */
@@ -327,14 +327,9 @@
      HERO
 ═══════════════════════════════════════════════ -->
 <section class="relative min-h-screen flex items-center pt-16" style="min-height:100svh;">
-  <!-- Video BG -->
-  <div class="video-wrapper">
-    <iframe
-      src="https://www.youtube.com/embed/3hKnNqYb1yU?autoplay=1&mute=1&loop=1&playlist=3hKnNqYb1yU&controls=0&showinfo=0&rel=0&playsinline=1"
-      allow="autoplay; fullscreen"
-      allowfullscreen
-      title="Reddi Winterization Background"
-    ></iframe>
+  <!-- Photo BG + Ken Burns -->
+  <div class="photo-bg">
+    <div class="photo-img"></div>
   </div>
 
   <!-- Content -->
@@ -346,7 +341,7 @@
         <!-- Badge -->
         <div class="inline-flex items-center gap-2 self-start rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest"
              style="background:rgba(232,25,44,0.18);border:1px solid rgba(232,25,44,0.35);color:#ff6b7a;">
-          ❄️ Winterization Season is Here
+          Winterization Season is Coming Fast
         </div>
 
         <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-tight">
@@ -362,9 +357,9 @@
 
         <!-- Trust badges -->
         <div class="flex flex-wrap gap-2 hero-badges">
-          <span class="trust-badge">✅ Trusted Since 1957</span>
-          <span class="trust-badge">⚡ Fast Scheduling</span>
-          <span class="trust-badge">🛡️ Licensed & Insured</span>
+          <span class="trust-badge"> Trusted Since 1957</span>
+          <span class="trust-badge"> Fast Scheduling</span>
+          <span class="trust-badge"> Licensed &amp; Insured</span>
           <span class="trust-badge"> Local Wichita Team</span>
         </div>
 
@@ -457,15 +452,15 @@
             <p class="text-xs text-gray-500 mb-4">This helps our tech prepare the right equipment.</p>
             <div class="flex flex-col gap-3">
               <button class="pref-btn" id="water-city" onclick="selectWater('city')">
-                <span class="pref-icon">🏙️</span>
+                <span class="pref-icon"></span>
                 <span class="pref-label">City Water</span>
               </button>
               <button class="pref-btn" id="water-well" onclick="selectWater('well')">
-                <span class="pref-icon">💧</span>
+                <span class="pref-icon"></span>
                 <span class="pref-label">Well Water</span>
               </button>
               <button class="pref-btn" id="water-idk" onclick="selectWater('idk')">
-                <span class="pref-icon">🤷</span>
+                <span class="pref-icon"></span>
                 <span class="pref-label">I'm Not Sure</span>
               </button>
             </div>
@@ -477,17 +472,17 @@
             <p class="text-xs text-gray-500 mb-4">This helps our tech locate the system quickly.</p>
             <div class="flex flex-col gap-3">
               <button class="pref-btn" id="ctrl-inside" onclick="selectControl('inside')">
-                <span class="pref-icon">🏠</span>
+                <span class="pref-icon"></span>
                 <span class="pref-label">Inside</span>
                 <span class="pref-sub">Garage, basement, or utility room</span>
               </button>
               <button class="pref-btn" id="ctrl-outside" onclick="selectControl('outside')">
-                <span class="pref-icon">🌿</span>
+                <span class="pref-icon"></span>
                 <span class="pref-label">Outside</span>
                 <span class="pref-sub">Exterior wall or yard</span>
               </button>
               <button class="pref-btn" id="ctrl-idk" onclick="selectControl('idk')">
-                <span class="pref-icon">🤷</span>
+                <span class="pref-icon"></span>
                 <span class="pref-label">I'm Not Sure</span>
               </button>
             </div>
@@ -521,17 +516,17 @@
             <p class="text-xs text-gray-500 mb-4">We'll do our best to accommodate your choice. We'll call to confirm the exact time.</p>
             <div class="grid grid-cols-3 gap-2">
               <button class="pref-btn" id="pref-am" onclick="selectPref('AM')">
-                <span class="pref-icon">🌅</span>
+                <span class="pref-icon"></span>
                 <span class="pref-label">Morning</span>
                 <span class="pref-sub">8am – 12pm</span>
               </button>
               <button class="pref-btn" id="pref-pm" onclick="selectPref('PM')">
-                <span class="pref-icon">☀️</span>
+                <span class="pref-icon"></span>
                 <span class="pref-label">Afternoon</span>
                 <span class="pref-sub">12pm – 5pm</span>
               </button>
               <button class="pref-btn" id="pref-any" onclick="selectPref('any')">
-                <span class="pref-icon">🕐</span>
+                <span class="pref-icon"></span>
                 <span class="pref-label">No Preference</span>
                 <span class="pref-sub">Anytime</span>
               </button>
