@@ -33,34 +33,34 @@
     html { scroll-behavior: smooth; }
     body { background-color: #050505; color: #fff; font-family: 'Inter', system-ui, sans-serif; margin: 0; }
 
-    /*  Photo background with Ken Burns  */
-    .photo-bg {
+    /* ── Video background ── */
+    .video-wrapper {
       position: absolute;
       inset: 0;
       overflow: hidden;
       z-index: 0;
     }
-    .photo-bg::after {
+    .video-wrapper::after {
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(135deg, rgba(5,5,5,0.88) 0%, rgba(5,5,5,0.55) 50%, rgba(5,5,5,0.80) 100%);
+      background: linear-gradient(135deg, rgba(5,5,5,0.85) 0%, rgba(5,5,5,0.55) 50%, rgba(5,5,5,0.75) 100%);
       z-index: 1;
     }
-    .photo-img {
+    .video-wrapper iframe {
       position: absolute;
-      inset: -8%;
-      background-image: url('https://images.unsplash.com/photo-1605117882932-f9e32b03fea9?w=1920&q=85');
-      background-size: cover;
-      background-position: center 30%;
-      animation: kenBurns 22s ease-in-out infinite alternate;
-    }
-    @keyframes kenBurns {
-      0%   { transform: scale(1.00) translate(0%,   0%); }
-      100% { transform: scale(1.10) translate(-2%, -1%); }
+      top: 50%;
+      left: 50%;
+      width: 177.78vh; /* 16/9 aspect */
+      height: 100vh;
+      min-width: 100%;
+      min-height: 56.25vw; /* 9/16 aspect */
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      border: none;
     }
 
-    /*  Glass card  */
+    /* ── Glass card ── */
     .glass-card {
       background: rgba(255,255,255,0.06);
       backdrop-filter: blur(20px) saturate(1.4);
@@ -69,11 +69,11 @@
       border-radius: 1.25rem;
     }
 
-    /*  Booking steps  */
+    /* ── Booking steps ── */
     .step { display: none; }
     .step.active { display: block; }
 
-    /*  Trust badges  */
+    /* ── Trust badges ── */
     .trust-badge {
       display: inline-flex;
       align-items: center;
@@ -88,7 +88,7 @@
       white-space: nowrap;
     }
 
-    /*  Service card hover  */
+    /* ── Service card hover ── */
     .service-card {
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.08);
@@ -107,7 +107,7 @@
       box-shadow: 0 12px 40px rgba(232,25,44,0.18);
     }
 
-    /*  Step indicator  */
+    /* ── Step indicator ── */
     .step-dot {
       width: 8px; height: 8px; border-radius: 50%;
       background: rgba(255,255,255,0.25);
@@ -115,7 +115,7 @@
     }
     .step-dot.active { background: #E8192C; }
 
-    /*  Address option  */
+    /* ── Address option ── */
     .address-option {
       background: rgba(255,255,255,0.05);
       border: 1px solid rgba(255,255,255,0.1);
@@ -132,7 +132,7 @@
       border-color: rgba(232,25,44,0.5);
     }
 
-    /*  Time pref buttons  */
+    /* ── Time pref buttons ── */
     .pref-btn {
       display: flex;
       flex-direction: column;
@@ -156,7 +156,7 @@
     .pref-btn .pref-label { font-size: 0.8rem; font-weight: 600; }
     .pref-btn .pref-sub { font-size: 0.7rem; color: rgba(255,255,255,0.55); }
 
-    /*  Inputs  */
+    /* ── Inputs ── */
     .form-input {
       width: 100%;
       padding: 0.75rem 1rem;
@@ -172,7 +172,7 @@
     .form-input:focus { border-color: #E8192C; }
     .form-input::placeholder { color: rgba(255,255,255,0.35); }
 
-    /*  Primary button  */
+    /* ── Primary button ── */
     .btn-primary {
       display: flex;
       align-items: center;
@@ -195,7 +195,24 @@
     .btn-primary:active { transform: translateY(0); }
     .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
-    /*  Stat card  */
+    .btn-secondary {
+      display: block;
+      width: 100%;
+      padding: 0.7rem 1rem;
+      border-radius: 0.65rem;
+      background: rgba(255,255,255,0.06);
+      color: #fff !important;
+      font-weight: 600;
+      font-size: 0.9rem;
+      border: 1px solid rgba(255,255,255,0.15);
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      font-family: inherit;
+      text-align: left;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.3); }
+
+    /* ── Stat card ── */
     .stat-card {
       background: linear-gradient(135deg, rgba(232,25,44,0.12) 0%, rgba(232,25,44,0.04) 100%);
       border: 1px solid rgba(232,25,44,0.25);
@@ -204,7 +221,7 @@
       text-align: center;
     }
 
-    /*  How-it-works step  */
+    /* ── How-it-works step ── */
     .hiw-step {
       position: relative;
       display: flex;
@@ -222,7 +239,7 @@
       position: relative; z-index: 1;
     }
 
-    /*  Nav  */
+    /* ── Nav ── */
     nav {
       position: fixed; top: 0; left: 0; right: 0; z-index: 100;
       background: rgba(5,5,5,0.85);
@@ -231,7 +248,7 @@
       border-bottom: 1px solid rgba(255,255,255,0.07);
     }
 
-    /*  Spinner  */
+    /* ── Spinner ── */
     .spinner {
       width: 20px; height: 20px;
       border: 2.5px solid rgba(255,255,255,0.25);
@@ -242,7 +259,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /*  Error message  */
+    /* ── Error message ── */
     .error-msg {
       color: #ff6b7a;
       font-size: 0.8rem;
@@ -251,7 +268,7 @@
     }
     .error-msg.visible { display: block; }
 
-    /*  Success checkmark  */
+    /* ── Success checkmark ── */
     .checkmark-circle {
       width: 72px; height: 72px;
       border-radius: 50%;
@@ -262,7 +279,7 @@
     }
     .checkmark-circle svg { color: #22c55e; }
 
-    /*  Section divider  */
+    /* ── Section divider ── */
     .section-divider {
       height: 1px;
       background: linear-gradient(90deg, transparent, rgba(232,25,44,0.3), transparent);
@@ -282,9 +299,9 @@
 </head>
 <body class="bg-bg text-white">
 
-<!-- 
+<!-- ═══════════════════════════════════════════════
      NAV
- -->
+═══════════════════════════════════════════════ -->
 <nav>
   <div class="max-w-7xl mx-auto px-5 py-3 flex items-center justify-between">
     <!-- Logo -->
@@ -306,13 +323,18 @@
   </div>
 </nav>
 
-<!-- 
+<!-- ═══════════════════════════════════════════════
      HERO
- -->
+═══════════════════════════════════════════════ -->
 <section class="relative min-h-screen flex items-center pt-16" style="min-height:100svh;">
-  <!-- Photo BG + Ken Burns -->
-  <div class="photo-bg">
-    <div class="photo-img"></div>
+  <!-- Video BG -->
+  <div class="video-wrapper">
+    <iframe
+      src="https://www.youtube.com/embed/3hKnNqYb1yU?autoplay=1&mute=1&loop=1&playlist=3hKnNqYb1yU&controls=0&showinfo=0&rel=0&playsinline=1"
+      allow="autoplay; fullscreen"
+      allowfullscreen
+      title="Reddi Winterization Background"
+    ></iframe>
   </div>
 
   <!-- Content -->
@@ -324,7 +346,7 @@
         <!-- Badge -->
         <div class="inline-flex items-center gap-2 self-start rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest"
              style="background:rgba(232,25,44,0.18);border:1px solid rgba(232,25,44,0.35);color:#ff6b7a;">
-           Winterization Season is Coming Fast
+          ❄️ Winterization Season is Here
         </div>
 
         <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-tight">
@@ -334,16 +356,16 @@
         </h1>
 
         <p class="text-lg text-gray-300 max-w-lg leading-relaxed">
-          A professional blowout from Reddi costs one low price. Frozen pipe repairs? $500–$3,000. 
+          A professional blowout from Reddi costs $50–$100. Frozen pipe repairs? $500–$3,000. 
           Don't gamble with your investment — book your winterization today.
         </p>
 
         <!-- Trust badges -->
         <div class="flex flex-wrap gap-2 hero-badges">
-          <span class="trust-badge"> Trusted Since 1957</span>
-          <span class="trust-badge"> Fast Scheduling</span>
-          <span class="trust-badge"> Licensed & Insured</span>
-          <span class="trust-badge"> Local Wichita Team</span>
+          <span class="trust-badge">✅ Trusted Since 1957</span>
+          <span class="trust-badge">⚡ Fast Scheduling</span>
+          <span class="trust-badge">🛡️ Licensed & Insured</span>
+          <span class="trust-badge">📞 Local Wichita Team</span>
         </div>
 
         <!-- Phone CTA -->
@@ -403,8 +425,20 @@
           <div class="step" id="step-address">
             <p class="text-sm text-gray-300 mb-3" id="address-header">Please confirm your service address:</p>
             <div id="address-list" class="flex flex-col gap-2 max-h-48 overflow-y-auto"></div>
-            <!-- Manual entry when no account found -->
+
+            <!-- "Don't see your address?" escape hatches (shown when we returned a list) -->
+            <div id="address-escape" style="display:none;" class="mt-3 pt-3" >
+              <p class="text-xs text-gray-500 mb-2">Don't see your address?</p>
+              <button type="button" class="btn-secondary mb-2" onclick="tryAnotherNumber()">Try Another Number</button>
+              <button type="button" class="btn-secondary" onclick="switchToManual()">Not in System</button>
+            </div>
+
+            <!-- Manual entry when no account found / "Not in System" -->
             <div id="manual-address-entry" style="display:none;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" class="mb-2">
+                <input type="text" id="manual-first" class="form-input" placeholder="First name" />
+                <input type="text" id="manual-last" class="form-input" placeholder="Last name" />
+              </div>
               <input type="text" id="manual-address" class="form-input mb-2" placeholder="Street address (e.g. 123 Main St)" />
               <div style="display:grid;grid-template-columns:1fr 80px;gap:8px;">
                 <input type="text" id="manual-city" class="form-input" placeholder="City" />
@@ -423,15 +457,15 @@
             <p class="text-xs text-gray-500 mb-4">This helps our tech prepare the right equipment.</p>
             <div class="flex flex-col gap-3">
               <button class="pref-btn" id="water-city" onclick="selectWater('city')">
-                <span class="pref-icon"></span>
+                <span class="pref-icon">🏙️</span>
                 <span class="pref-label">City Water</span>
               </button>
               <button class="pref-btn" id="water-well" onclick="selectWater('well')">
-                <span class="pref-icon"></span>
+                <span class="pref-icon">💧</span>
                 <span class="pref-label">Well Water</span>
               </button>
               <button class="pref-btn" id="water-idk" onclick="selectWater('idk')">
-                <span class="pref-icon"></span>
+                <span class="pref-icon">🤷</span>
                 <span class="pref-label">I'm Not Sure</span>
               </button>
             </div>
@@ -443,17 +477,17 @@
             <p class="text-xs text-gray-500 mb-4">This helps our tech locate the system quickly.</p>
             <div class="flex flex-col gap-3">
               <button class="pref-btn" id="ctrl-inside" onclick="selectControl('inside')">
-                <span class="pref-icon"></span>
+                <span class="pref-icon">🏠</span>
                 <span class="pref-label">Inside</span>
                 <span class="pref-sub">Garage, basement, or utility room</span>
               </button>
               <button class="pref-btn" id="ctrl-outside" onclick="selectControl('outside')">
-                <span class="pref-icon"></span>
+                <span class="pref-icon">🌿</span>
                 <span class="pref-label">Outside</span>
                 <span class="pref-sub">Exterior wall or yard</span>
               </button>
               <button class="pref-btn" id="ctrl-idk" onclick="selectControl('idk')">
-                <span class="pref-icon"></span>
+                <span class="pref-icon">🤷</span>
                 <span class="pref-label">I'm Not Sure</span>
               </button>
             </div>
@@ -487,17 +521,17 @@
             <p class="text-xs text-gray-500 mb-4">We'll do our best to accommodate your choice. We'll call to confirm the exact time.</p>
             <div class="grid grid-cols-3 gap-2">
               <button class="pref-btn" id="pref-am" onclick="selectPref('AM')">
-                <span class="pref-icon"></span>
+                <span class="pref-icon">🌅</span>
                 <span class="pref-label">Morning</span>
                 <span class="pref-sub">8am – 12pm</span>
               </button>
               <button class="pref-btn" id="pref-pm" onclick="selectPref('PM')">
-                <span class="pref-icon"></span>
+                <span class="pref-icon">☀️</span>
                 <span class="pref-label">Afternoon</span>
                 <span class="pref-sub">12pm – 5pm</span>
               </button>
               <button class="pref-btn" id="pref-any" onclick="selectPref('any')">
-                <span class="pref-icon"></span>
+                <span class="pref-icon">🕐</span>
                 <span class="pref-label">No Preference</span>
                 <span class="pref-sub">Anytime</span>
               </button>
@@ -558,9 +592,9 @@
   </div>
 </section>
 
-<!-- 
+<!-- ═══════════════════════════════════════════════
      WHY WINTERIZE
- -->
+═══════════════════════════════════════════════ -->
 <div class="section-divider"></div>
 <section class="max-w-7xl mx-auto px-5 py-24">
   <div class="text-center mb-14">
@@ -571,7 +605,7 @@
 
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
     <div class="stat-card">
-      <div class="text-4xl font-black text-reddi mb-2">one low price</div>
+      <div class="text-4xl font-black text-reddi mb-2">$50–$100</div>
       <div class="text-sm font-semibold text-white mb-1">Professional Blowout</div>
       <div class="text-xs text-gray-400">One-time seasonal service that takes under an hour</div>
     </div>
@@ -603,9 +637,9 @@
   </div>
 </section>
 
-<!-- 
+<!-- ═══════════════════════════════════════════════
      HOW IT WORKS
- -->
+═══════════════════════════════════════════════ -->
 <div class="section-divider"></div>
 <section style="background:rgba(255,255,255,0.02);">
   <div class="max-w-7xl mx-auto px-5 py-24">
@@ -619,28 +653,28 @@
       <!-- Step 1 -->
       <div class="hiw-step">
         <div class="hiw-num">1</div>
-        <div class="text-2xl mb-2"></div>
+        <div class="text-2xl mb-2">📱</div>
         <h3 class="text-lg font-bold mb-2">Sign Up</h3>
         <p class="text-sm text-gray-400 text-center">Enter your phone number above. We'll find your account and get you on the schedule.</p>
       </div>
       <!-- Step 2 -->
       <div class="hiw-step">
         <div class="hiw-num">2</div>
-        <div class="text-2xl mb-2"></div>
+        <div class="text-2xl mb-2">📅</div>
         <h3 class="text-lg font-bold mb-2">Pick a Date</h3>
         <p class="text-sm text-gray-400 text-center">Choose your time preference and pick from available dates on our live calendar.</p>
       </div>
       <!-- Step 3 -->
       <div class="hiw-step">
         <div class="hiw-num">3</div>
-        <div class="text-2xl mb-2"></div>
+        <div class="text-2xl mb-2">🚚</div>
         <h3 class="text-lg font-bold mb-2">Tech Arrives</h3>
         <p class="text-sm text-gray-400 text-center">A licensed Reddi technician shows up with professional-grade compressed air equipment.</p>
       </div>
       <!-- Step 4 -->
       <div class="hiw-step">
         <div class="hiw-num">4</div>
-        <div class="text-2xl mb-2"></div>
+        <div class="text-2xl mb-2">✅</div>
         <h3 class="text-lg font-bold mb-2">System Protected</h3>
         <p class="text-sm text-gray-400 text-center">Every zone is blown out. Your system is ready for winter. Peace of mind guaranteed.</p>
       </div>
@@ -648,9 +682,9 @@
   </div>
 </section>
 
-<!-- 
+<!-- ═══════════════════════════════════════════════
      REDDI SERVICES
- -->
+═══════════════════════════════════════════════ -->
 <div class="section-divider"></div>
 <section class="max-w-7xl mx-auto px-5 py-24">
   <div class="text-center mb-14">
@@ -661,63 +695,63 @@
 
   <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
     <a href="https://reddi.com/plumbing" target="_blank" class="service-card">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">🔧</div>
       <div class="font-semibold text-sm">Plumbing</div>
     </a>
     <a href="https://reddi.com/hvac/" target="_blank" class="service-card">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">❄️</div>
       <div class="font-semibold text-sm">HVAC</div>
     </a>
     <a href="https://reddi.com/electrical/" target="_blank" class="service-card">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">⚡</div>
       <div class="font-semibold text-sm">Electrical</div>
     </a>
     <a href="https://reddi.com/garage-doors/" target="_blank" class="service-card">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">🚪</div>
       <div class="font-semibold text-sm">Garage Doors</div>
     </a>
     <a href="https://reddi.com/fencing/" target="_blank" class="service-card">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">🏡</div>
       <div class="font-semibold text-sm">Fencing</div>
     </a>
     <a href="https://reddi.com/sprinklers/" target="_blank" class="service-card" style="background:rgba(232,25,44,0.1);border-color:rgba(232,25,44,0.3);">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">💧</div>
       <div class="font-semibold text-sm">Sprinklers</div>
     </a>
     <a href="https://reddi.com/lawn-care/" target="_blank" class="service-card">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">🌿</div>
       <div class="font-semibold text-sm">Lawn Care</div>
     </a>
     <a href="https://reddi.com/appliance-repair/" target="_blank" class="service-card">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">🧺</div>
       <div class="font-semibold text-sm">Appliance Repair</div>
     </a>
     <a href="https://reddi.com/excavation-utility" target="_blank" class="service-card">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">⛏️</div>
       <div class="font-semibold text-sm">Excavation</div>
     </a>
     <a href="https://reddi.com/exteriors-baths" target="_blank" class="service-card">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">🏠</div>
       <div class="font-semibold text-sm">Roofing &amp; Exteriors</div>
     </a>
     <a href="https://reddi.com/environmental" target="_blank" class="service-card">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">♻️</div>
       <div class="font-semibold text-sm">Environmental</div>
     </a>
     <a href="https://reddi.com/flooring" target="_blank" class="service-card">
-      <div class="text-3xl mb-2"></div>
+      <div class="text-3xl mb-2">🪵</div>
       <div class="font-semibold text-sm">Flooring</div>
     </a>
   </div>
 </section>
 
-<!-- 
+<!-- ═══════════════════════════════════════════════
      FINAL CTA
- -->
+═══════════════════════════════════════════════ -->
 <div class="section-divider"></div>
 <section style="background:linear-gradient(135deg, #E8192C 0%, #8b0f1a 100%);">
   <div class="max-w-4xl mx-auto px-5 py-20 text-center">
-    <div class="text-5xl mb-4"></div>
+    <div class="text-5xl mb-4">❄️</div>
     <h2 class="text-3xl sm:text-4xl font-black text-white mb-4">Don't Wait Until It Freezes</h2>
     <p class="text-red-100 text-lg mb-8 max-w-xl mx-auto">
       Wichita winters hit fast. Once temps drop below freezing, it's too late.
@@ -729,7 +763,7 @@
         class="btn-primary"
         style="width:auto;padding:1rem 2.5rem;font-size:1rem;"
       >
-         Book Online Now
+        📅 Book Online Now
       </button>
       <a
         href="tel:3168582083"
@@ -746,9 +780,9 @@
   </div>
 </section>
 
-<!-- 
+<!-- ═══════════════════════════════════════════════
      FOOTER
- -->
+═══════════════════════════════════════════════ -->
 <footer style="background:#000;border-top:1px solid rgba(255,255,255,0.07);">
   <div class="max-w-7xl mx-auto px-5 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
     <a href="https://reddi.com" class="flex items-center gap-2 text-white no-underline">
@@ -763,9 +797,9 @@
   </div>
 </footer>
 
-<!-- 
+<!-- ═══════════════════════════════════════════════
      SCROLL TO TOP BUTTON
- -->
+═══════════════════════════════════════════════ -->
 <button
   id="scroll-top-btn"
   onclick="window.scrollTo({top:0,behavior:'smooth'})"
@@ -778,13 +812,13 @@
   </svg>
 </button>
 
-<!-- 
+<!-- ═══════════════════════════════════════════════
      JAVASCRIPT
- -->
+═══════════════════════════════════════════════ -->
 <script>
   const API = 'https://rd.ngrok.app/api/winterization/public';
 
-  //  State 
+  // ── State ──
   let currentStep = 0;
   let selectedSM = null;
   let selectedPref = null;
@@ -797,7 +831,7 @@
   let selectedControl = null; // 'inside' | 'outside' | 'idk'
 
 
-  //  Phone formatting 
+  // ── Phone formatting ──
   const phoneInput = document.getElementById('phone-input');
   phoneInput.addEventListener('input', function(e) {
     let v = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -810,7 +844,7 @@
     if (e.key === 'Enter') doLookup();
   });
 
-  //  Step management 
+  // ── Step management ──
   // Steps: 0=phone, 1=address, 2=water, 3=controlbox, 4=shutoff, 5=preference, 6=date, 7=confirm
   function showStep(n) {
     document.querySelectorAll('.step').forEach((el, i) => {
@@ -822,7 +856,7 @@
     currentStep = n;
   }
 
-  //  Lookup 
+  // ── Lookup ──
   async function doLookup() {
     const raw = phoneInput.value.replace(/\D/g, '');
     const err = document.getElementById('phone-error');
@@ -868,22 +902,24 @@
     }
   }
 
-  //  Render address list 
+  // ── Render address list ──
   function renderAddresses(sms) {
     const list = document.getElementById('address-list');
     const addrHeader = document.getElementById('address-header');
     const manualEntry = document.getElementById('manual-address-entry');
+    const escapeBox = document.getElementById('address-escape');
     list.innerHTML = '';
 
     if (sms.length === 0) {
-      // No account found — show manual address entry
-      addrHeader.textContent = "We couldn't find an account with that number. Please enter your service address:";
-      manualEntry.style.display = 'block';
-      selectedSM = null;
+      // No account found — go straight to manual entry (name + address)
+      showManualEntry("We couldn't find an account with that number. Please enter your name and service address:");
       return;
     }
 
+    // We have results — show the list + the two escape hatches, hide manual entry
     manualEntry.style.display = 'none';
+    escapeBox.style.display = 'block';
+    list.style.display = 'flex';
     addrHeader.textContent = sms.length === 1
       ? 'Please confirm your service address:'
       : 'We found multiple addresses on your account. Select the one to winterize:';
@@ -902,19 +938,55 @@
     });
   }
 
-  //  Water Source 
+  // ── Show manual ("Not in System") entry: name + address ──
+  function showManualEntry(headerText) {
+    const list = document.getElementById('address-list');
+    const addrHeader = document.getElementById('address-header');
+    const manualEntry = document.getElementById('manual-address-entry');
+    const escapeBox = document.getElementById('address-escape');
+    addrHeader.textContent = headerText || 'Please enter your name and service address:';
+    list.innerHTML = '';
+    list.style.display = 'none';
+    escapeBox.style.display = 'none';
+    manualEntry.style.display = 'block';
+    selectedSM = null;
+  }
+
+  // ── Escape hatch: try a different phone number ──
+  function tryAnotherNumber() {
+    selectedSM = null;
+    lookupResults = [];
+    document.getElementById('manual-address-entry').style.display = 'none';
+    document.getElementById('address-escape').style.display = 'none';
+    document.getElementById('address-error').classList.remove('visible');
+    phoneInput.value = '';
+    phoneRaw = '';
+    showStep(0);
+    phoneInput.focus();
+  }
+
+  // ── Escape hatch: "Not in System" → manual name + address ──
+  function switchToManual() {
+    document.getElementById('address-error').classList.remove('visible');
+    showManualEntry('Please enter your name and service address:');
+  }
+
+  // ── Water Source ──
   function goToWaterSource() {
     const err = document.getElementById('address-error');
     const manualEntry = document.getElementById('manual-address-entry');
 
     if (!selectedSM && manualEntry.style.display !== 'none') {
-      // Manual entry path — build a fake SM object from typed address
+      // Manual entry path — build a fake SM object from typed name + address
+      const first = document.getElementById('manual-first').value.trim();
+      const last = document.getElementById('manual-last').value.trim();
       const addr = document.getElementById('manual-address').value.trim();
       const city = document.getElementById('manual-city').value.trim();
       const zip = document.getElementById('manual-zip').value.trim();
+      if (!first || !last) { err.textContent = 'Please enter your first and last name.'; err.classList.add('visible'); return; }
       if (!addr) { err.textContent = 'Please enter your street address.'; err.classList.add('visible'); return; }
-      // Create a manual SM placeholder (no id — API will handle new address)
-      selectedSM = { id: null, address: addr, city: city || 'Wichita', state: 'KS', zip: zip || '', name: '', isManual: true };
+      // Create a manual SM placeholder (no id — API will flag it Needs Attention)
+      selectedSM = { id: null, firstName: first, lastName: last, address: addr, city: city || 'Wichita', state: 'KS', zip: zip || '', name: `${first} ${last}`.trim(), isManual: true };
     }
 
     if (!selectedSM) { err.textContent = 'Please select your address.'; err.classList.add('visible'); return; }
@@ -930,7 +1002,7 @@
     setTimeout(() => showStep(3), 300);
   }
 
-  //  Control Box 
+  // ── Control Box ──
   function selectControl(val) {
     selectedControl = val;
     ['inside','outside','idk'].forEach(v => {
@@ -939,7 +1011,7 @@
     setTimeout(() => { showStep(4); initShutoffMap(); }, 300);
   }
 
-  //  Shutoff Valve Map 
+  // ── Shutoff Valve Map ──
   let leafletMap = null;
   let leafletMarker = null;
   let shutoffLatLng = null; // { lat, lng }
@@ -1016,7 +1088,7 @@
     renderPreference();
   }
 
-  //  Date Picker 
+  // ── Date Picker ──
   async function goToDatePicker() {
     const err = document.getElementById('pref-error');
     if (!selectedPref) {
@@ -1105,7 +1177,7 @@
     });
   }
 
-  //  Preference 
+  // ── Preference ──
   function renderPreference() {
     selectedPref = null;
     ['am','pm','any'].forEach(p => {
@@ -1121,7 +1193,7 @@
     document.getElementById('pref-error').classList.remove('visible');
   }
 
-  //  Book 
+  // ── Book ──
   async function doBook() {
     const err = document.getElementById('date-error');
 
@@ -1142,7 +1214,13 @@
       const smId = selectedSM.id || selectedSM.serviceMasterId || selectedSM._id || null;
       const payload = {
         phone: phoneRaw,
-        ...(smId ? { serviceMasterId: smId } : { manualAddress: `${selectedSM.address}, ${selectedSM.city}, ${selectedSM.state} ${selectedSM.zip}` }),
+        ...(smId
+          ? { serviceMasterId: smId }
+          : {
+              manualAddress: `${selectedSM.address}, ${selectedSM.city}, ${selectedSM.state} ${selectedSM.zip}`.trim(),
+              manualFirstName: selectedSM.firstName || undefined,
+              manualLastName: selectedSM.lastName || undefined,
+            }),
         amPm: selectedPref,
         date: selectedDate,
         waterSource: selectedWater !== 'idk' ? selectedWater : undefined,
@@ -1193,7 +1271,7 @@
     }
   }
 
-  //  Scroll to top button 
+  // ── Scroll to top button ──
   const scrollTopBtn = document.getElementById('scroll-top-btn');
   window.addEventListener('scroll', function() {
     if (window.scrollY > 400) {
