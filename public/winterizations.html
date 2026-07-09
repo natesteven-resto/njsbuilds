@@ -550,8 +550,13 @@
               <span class="spinner" style="display:inline-block;"></span>
             </div>
             <div id="date-none" style="display:none;" class="text-center py-6">
-              <p class="text-sm text-gray-400">No dates available right now.</p>
-              <p class="text-sm text-gray-500 mt-1">Call us at <a href="tel:3168582083" class="text-reddi hover:underline">(316) 858-2083</a>.</p>
+              <p class="text-sm text-white font-semibold">No open dates for your area yet.</p>
+              <p class="text-sm text-gray-400 mt-1">Leave it with us — we'll call you right back to get you scheduled.</p>
+              <button class="btn-primary mt-4" id="callback-btn" onclick="requestCallback()">
+                <span id="callback-btn-text">Request a Call Back</span>
+                <span id="callback-spinner" class="spinner" style="display:none;"></span>
+              </button>
+              <div class="error-msg mt-2" id="callback-error">Something went wrong.</div>
             </div>
             <div id="date-grid" class="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto" style="display:none;"></div>
             <div class="error-msg" id="date-error">Please select a date.</div>
@@ -1114,7 +1119,8 @@
 
     try {
       const pref = selectedPref === 'any' ? 'any' : selectedPref;
-      const res = await fetch(`${API}/available-dates?preference=${pref}`);
+      const zip = (selectedSM && selectedSM.zip ? String(selectedSM.zip) : '').match(/\d{5}/)?.[0] || '';
+      const res = await fetch(`${API}/available-dates?preference=${pref}&zip=${encodeURIComponent(zip)}`);
       const data = await res.json();
       availableDates = data?.dates ?? [];
 
@@ -1191,6 +1197,47 @@
     document.getElementById('pref-pm').classList.toggle('selected', val === 'PM');
     document.getElementById('pref-any').classList.toggle('selected', val === 'any');
     document.getElementById('pref-error').classList.remove('visible');
+  }
+
+  // ── Request a call back (no zone/date available) ──
+  // Books the job with NO date so it lands in Kelci's queue/Needs Attention and
+  // she calls the customer back to schedule.
+  async function requestCallback() {
+    const err = document.getElementById('callback-error');
+    err.classList.remove('visible');
+    const btn = document.getElementById('callback-btn');
+    const btnText = document.getElementById('callback-btn-text');
+    const spinner = document.getElementById('callback-spinner');
+    btn.disabled = true; btnText.style.display = 'none'; spinner.style.display = 'inline-block';
+    try {
+      const smId = selectedSM && (selectedSM.id || selectedSM.serviceMasterId || selectedSM._id) || null;
+      const payload = {
+        phone: phoneRaw,
+        amPm: selectedPref || 'any',
+        callbackRequested: true,
+        ...(smId ? { serviceMasterId: smId } : {
+          manualAddress: `${selectedSM.address}, ${selectedSM.city}, ${selectedSM.state} ${selectedSM.zip}`.trim(),
+          manualFirstName: selectedSM.firstName || undefined,
+          manualLastName: selectedSM.lastName || undefined,
+        }),
+        waterSource: selectedWater && selectedWater !== 'idk' ? selectedWater : undefined,
+        controlBox: selectedControl && selectedControl !== 'idk' ? selectedControl : undefined,
+        shutoffNotes: window._shutoffNotesText || undefined,
+        shutoffLat: shutoffLatLng ? shutoffLatLng.lat : undefined,
+        shutoffLng: shutoffLatLng ? shutoffLatLng.lng : undefined,
+      };
+      const res = await fetch(`${API}/book`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) { err.textContent = data?.error || 'Something went wrong. Please call (316) 858-2083.'; err.classList.add('visible'); return; }
+      document.getElementById('confirm-msg').textContent = "Got it! We'll call you right back to get your winterization scheduled.";
+      const wo = data?.jobNumber || null;
+      if (wo) { document.getElementById('wo-number').textContent = wo; document.getElementById('wo-badge').style.display = 'inline-block'; }
+      showStep(7);
+    } catch (ex) {
+      err.textContent = 'Connection error. Please call (316) 858-2083.'; err.classList.add('visible');
+    } finally {
+      btn.disabled = false; btnText.style.display = ''; spinner.style.display = 'none';
+    }
   }
 
   // ── Book ──
