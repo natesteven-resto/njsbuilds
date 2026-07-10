@@ -1444,6 +1444,8 @@
     try {
       const { error } = await _stripe.confirmPayment({
         elements: _elements,
+        // return_url is required by Stripe.js even with redirect:'if_required'.
+        confirmParams: { return_url: window.location.href },
         redirect: 'if_required'
       });
       if (error) {
@@ -1456,7 +1458,7 @@
       document.getElementById('paynow-form').style.display = 'none';
       document.getElementById('paynow-success').style.display = 'block';
     } catch (ex) {
-      err.textContent = 'Something went wrong. Please try again or pay at service.';
+      err.textContent = (ex && ex.message) ? ('Payment error: ' + ex.message) : 'Something went wrong. Please try again or pay at service.';
       err.classList.add('visible');
       payBtn.disabled = false; payText.style.display = ''; spinner.style.display = 'none';
     }
