@@ -1421,8 +1421,7 @@
       const paymentElement = _elements.create('payment', {
         layout: 'tabs',
         // No saved-info / Link — one-time winterization payment, keep it simple.
-        wallets: { applePay: 'auto', googlePay: 'auto', link: 'never' },
-        fields: { billingDetails: { email: 'never' } }
+        wallets: { applePay: 'auto', googlePay: 'auto', link: 'never' }
       });
       paymentElement.mount('#payment-element');
 
