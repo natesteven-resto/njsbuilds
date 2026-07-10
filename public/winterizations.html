@@ -410,6 +410,21 @@
               maxlength="14"
             />
             <div class="error-msg" id="phone-error">Please enter a valid phone number.</div>
+
+            <!-- SMS consent (A2P 10DLC compliant opt-in) -->
+            <label style="display:flex;align-items:flex-start;gap:10px;margin-top:14px;cursor:pointer;">
+              <input type="checkbox" id="sms-consent" style="margin-top:3px;width:18px;height:18px;flex-shrink:0;accent-color:#E8192C;" />
+              <span style="font-size:11.5px;line-height:1.5;color:#9ca3af;">
+                I agree to receive service-related text messages from Reddi Industries at the number provided
+                (technician arrival time and job status updates). Message frequency varies. Message &amp; data
+                rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of purchase.
+                See our <a href="https://www.njsbuilds.com/privacy" target="_blank" style="color:#E8192C;text-decoration:underline;">Privacy Policy</a>
+                and <a href="https://www.njsbuilds.com/terms" target="_blank" style="color:#E8192C;text-decoration:underline;">Terms &amp; Conditions</a>.
+                We do not sell or share your number with third parties for marketing.
+              </span>
+            </label>
+            <div class="error-msg" id="consent-error">Please agree to receive text messages to continue, or call us at (316) 858-2083.</div>
+
             <button class="btn-primary mt-4" id="lookup-btn" onclick="doLookup()">
               <span id="lookup-btn-text">Find My Account</span>
               <span id="lookup-spinner" class="spinner" style="display:none;"></span>
@@ -894,7 +909,9 @@
   async function doLookup() {
     const raw = phoneInput.value.replace(/\D/g, '');
     const err = document.getElementById('phone-error');
+    const consentErr = document.getElementById('consent-error');
     err.classList.remove('visible');
+    consentErr.classList.remove('visible');
 
     if (raw.length !== 10) {
       err.textContent = 'Please enter a valid 10-digit phone number.';
@@ -902,7 +919,14 @@
       return;
     }
 
+    // A2P 10DLC: require explicit SMS opt-in before proceeding.
+    if (!document.getElementById('sms-consent').checked) {
+      consentErr.classList.add('visible');
+      return;
+    }
+
     phoneRaw = raw;
+    window._smsConsent = true;
 
     const btn = document.getElementById('lookup-btn');
     const btnText = document.getElementById('lookup-btn-text');
@@ -1244,6 +1268,7 @@
         phone: phoneRaw,
         amPm: selectedPref || 'any',
         callbackRequested: true,
+        smsConsent: window._smsConsent === true,
         ...(smId ? { serviceMasterId: smId } : {
           manualAddress: `${selectedSM.address}, ${selectedSM.city}, ${selectedSM.state} ${selectedSM.zip}`.trim(),
           manualFirstName: selectedSM.firstName || undefined,
@@ -1299,6 +1324,7 @@
             }),
         amPm: selectedPref,
         date: selectedDate,
+        smsConsent: window._smsConsent === true,
         waterSource: selectedWater !== 'idk' ? selectedWater : undefined,
         controlBox: selectedControl !== 'idk' ? selectedControl : undefined,
         shutoffNotes: window._shutoffNotesText || undefined,
@@ -1385,12 +1411,19 @@
       _stripe = Stripe(data.publishableKey);
       _elements = _stripe.elements({
         clientSecret: _clientSecret,
+        // Turn off Stripe Link entirely (no "Save my information for faster checkout").
+        loader: 'always',
         appearance: {
           theme: 'night',
           variables: { colorPrimary: '#E8192C', colorBackground: '#141414', borderRadius: '10px', fontFamily: 'inherit' }
         }
       });
-      const paymentElement = _elements.create('payment', { layout: 'tabs' });
+      const paymentElement = _elements.create('payment', {
+        layout: 'tabs',
+        // No saved-info / Link — one-time winterization payment, keep it simple.
+        wallets: { applePay: 'auto', googlePay: 'auto', link: 'never' },
+        fields: { billingDetails: { email: 'never' } }
+      });
       paymentElement.mount('#payment-element');
 
       document.getElementById('paynow-offer').style.display = 'none';
