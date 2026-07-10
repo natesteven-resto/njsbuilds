@@ -296,6 +296,7 @@
   </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body class="bg-bg text-white">
 
@@ -574,6 +575,39 @@
               <div id="wo-badge" class="inline-block px-4 py-2 rounded-xl text-sm font-semibold" style="background:rgba(232,25,44,0.15);border:1px solid rgba(232,25,44,0.3);color:#ff8a94;display:none;">
                 Work Order #<span id="wo-number" class="font-bold text-white"></span>
               </div>
+
+              <!-- ── Pay Now (optional, appears right after booking) ── -->
+              <div id="paynow-wrap" style="display:none;" class="mt-5 pt-5 text-left">
+                <div style="border-top:1px solid rgba(255,255,255,0.1);" class="pt-5"></div>
+                <div id="paynow-offer">
+                  <p class="text-sm font-semibold text-white text-center">Want to pay now and be all set?</p>
+                  <p class="text-xs text-gray-400 text-center mt-1 mb-3">Prepay your winterization — <span id="paynow-price" class="font-bold text-white">$125</span>. Totally optional; the tech can also collect at service.</p>
+                  <button type="button" class="btn-primary" id="paynow-start-btn" onclick="startPayNow()">Pay Now</button>
+                </div>
+
+                <!-- Card form (revealed on Pay Now) -->
+                <div id="paynow-form" style="display:none;">
+                  <p class="text-sm font-semibold text-white text-center mb-1">Pay <span id="paynow-amount" class="font-bold">$125</span></p>
+                  <p class="text-xs text-gray-500 text-center mb-3">Secure payment powered by Stripe</p>
+                  <div id="payment-element" class="mb-3"></div>
+                  <button type="button" class="btn-primary" id="paynow-pay-btn" onclick="submitPayNow()">
+                    <span id="paynow-pay-text">Pay Now</span>
+                    <span id="paynow-pay-spinner" class="spinner" style="display:none;"></span>
+                  </button>
+                  <button type="button" onclick="cancelPayNow()" style="width:100%;margin-top:8px;padding:0.6rem;border-radius:0.65rem;border:1px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.55);font-family:inherit;cursor:pointer;font-size:13px;">Maybe later</button>
+                  <div class="error-msg mt-2" id="paynow-error">Payment failed.</div>
+                </div>
+
+                <!-- Success -->
+                <div id="paynow-success" style="display:none;" class="text-center">
+                  <div class="checkmark-circle" style="width:44px;height:44px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </div>
+                  <p class="text-sm font-semibold text-green-400 mt-2">Payment received — thank you!</p>
+                  <p class="text-xs text-gray-400 mt-1">You're all paid up. Nothing to pay at service.</p>
+                </div>
+              </div>
+
               <p class="text-xs text-gray-500 mt-4">Questions? Call <a href="tel:3168582083" class="text-reddi hover:underline">(316) 858-2083</a></p>
             </div>
           </div>
@@ -1302,6 +1336,21 @@
         document.getElementById('wo-badge').style.display = 'inline-block';
       }
 
+      // Offer Pay Now for real bookings (not callback / not-in-system placeholders)
+      window._bookedJobId = data?.jobId || null;
+      window._bookedPrice = data?.price || 125;
+      if (data?.canPayNow && window._bookedJobId) {
+        const p = '$' + Number(window._bookedPrice).toFixed(0);
+        document.getElementById('paynow-price').textContent = p;
+        document.getElementById('paynow-amount').textContent = p;
+        document.getElementById('paynow-wrap').style.display = 'block';
+        document.getElementById('paynow-offer').style.display = 'block';
+        document.getElementById('paynow-form').style.display = 'none';
+        document.getElementById('paynow-success').style.display = 'none';
+      } else {
+        document.getElementById('paynow-wrap').style.display = 'none';
+      }
+
       showStep(7);
     } catch (ex) {
       err.textContent = 'Connection error. Please try again or call (316) 858-2083.';
@@ -1311,6 +1360,78 @@
       btnText.style.display = '';
       spinner.style.display = 'none';
     }
+  }
+
+  // ── Pay Now (Stripe inline Payment Element) ──
+  let _stripe = null, _elements = null, _clientSecret = null;
+
+  async function startPayNow() {
+    const startBtn = document.getElementById('paynow-start-btn');
+    startBtn.disabled = true;
+    startBtn.textContent = 'Loading…';
+    try {
+      const res = await fetch(`${API}/payment-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: window._bookedJobId })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.clientSecret || !data.publishableKey) {
+        alert(data?.error || 'Unable to start payment. The tech can collect at service.');
+        startBtn.disabled = false; startBtn.textContent = 'Pay Now';
+        return;
+      }
+      _clientSecret = data.clientSecret;
+      _stripe = Stripe(data.publishableKey);
+      _elements = _stripe.elements({
+        clientSecret: _clientSecret,
+        appearance: {
+          theme: 'night',
+          variables: { colorPrimary: '#E8192C', colorBackground: '#141414', borderRadius: '10px', fontFamily: 'inherit' }
+        }
+      });
+      const paymentElement = _elements.create('payment', { layout: 'tabs' });
+      paymentElement.mount('#payment-element');
+
+      document.getElementById('paynow-offer').style.display = 'none';
+      document.getElementById('paynow-form').style.display = 'block';
+    } catch (ex) {
+      alert('Connection error. The tech can collect payment at service.');
+      startBtn.disabled = false; startBtn.textContent = 'Pay Now';
+    }
+  }
+
+  async function submitPayNow() {
+    const err = document.getElementById('paynow-error');
+    const payBtn = document.getElementById('paynow-pay-btn');
+    const payText = document.getElementById('paynow-pay-text');
+    const spinner = document.getElementById('paynow-pay-spinner');
+    err.classList.remove('visible');
+    payBtn.disabled = true; payText.style.display = 'none'; spinner.style.display = 'inline-block';
+    try {
+      const { error } = await _stripe.confirmPayment({
+        elements: _elements,
+        redirect: 'if_required'
+      });
+      if (error) {
+        err.textContent = error.message || 'Payment failed. Please try again.';
+        err.classList.add('visible');
+        payBtn.disabled = false; payText.style.display = ''; spinner.style.display = 'none';
+        return;
+      }
+      // Success — the webhook posts to GL + marks the WO paid on the backend.
+      document.getElementById('paynow-form').style.display = 'none';
+      document.getElementById('paynow-success').style.display = 'block';
+    } catch (ex) {
+      err.textContent = 'Something went wrong. Please try again or pay at service.';
+      err.classList.add('visible');
+      payBtn.disabled = false; payText.style.display = ''; spinner.style.display = 'none';
+    }
+  }
+
+  function cancelPayNow() {
+    // They chose not to pay now — booking still stands.
+    document.getElementById('paynow-wrap').style.display = 'none';
   }
 
   // ── Scroll to top button ──
