@@ -17,11 +17,14 @@ function todayKey() {
 // GET — poll: is today unlocked?
 export async function GET() {
   try {
-    const val = await kv.get<string>(todayKey())
+    const key = todayKey()
+    const val = await kv.get<string>(key)
+    console.log('GET unlock check:', key, '=> val:', val, 'KV_URL:', process.env.KV_URL?.slice(0, 20))
     const unlocked = val === 'true'
-    return NextResponse.json({ unlocked, date: todayKey() })
+    return NextResponse.json({ unlocked, date: key, raw: val })
   } catch (e) {
-    return NextResponse.json({ unlocked: false, error: 'KV error' }, { status: 500 })
+    console.error('GET KV error:', e)
+    return NextResponse.json({ unlocked: false, error: String(e) }, { status: 500 })
   }
 }
 
@@ -32,7 +35,10 @@ export async function POST(req: NextRequest) {
     const { pin, action } = body as { pin?: string; action?: string }
 
     if (action === 'lock') {
-      await kv.set(todayKey(), 'false', { ex: 60 * 60 * 25 }) // 25h TTL
+      const key = todayKey()
+      await kv.set(key, 'false', { ex: 60 * 60 * 25 })
+      const verify = await kv.get<string>(key)
+      console.log('LOCK set, verify read back:', verify)
       return NextResponse.json({ success: true, unlocked: false })
     }
 
@@ -40,10 +46,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Wrong PIN' }, { status: 401 })
     }
 
-    // Set unlock — expires in 25 hours (covers until next midnight + buffer)
-    await kv.set(todayKey(), 'true', { ex: 60 * 60 * 25 })
-    return NextResponse.json({ success: true, unlocked: true })
+    const key = todayKey()
+    await kv.set(key, 'true', { ex: 60 * 60 * 25 })
+    const verify = await kv.get<string>(key)
+    console.log('UNLOCK set key:', key, '=> verify read back:', verify)
+    return NextResponse.json({ success: true, unlocked: true, verify })
   } catch (e) {
-    return NextResponse.json({ success: false, error: 'KV error' }, { status: 500 })
+    console.error('POST KV error:', e)
+    return NextResponse.json({ success: false, error: String(e) }, { status: 500 })
   }
 }
