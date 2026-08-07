@@ -1,198 +1,525 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
-const players = [
+// ─── COURT DIAGRAM COMPONENT ───────────────────────────────────────────────
+
+type PlayerDot = {
+  id: string
+  label: string
+  x: number // 0-100 percent of court width
+  y: number // 0-100 percent of court height
+  color: string
+  isHighlight?: boolean
+}
+
+type Arrow = {
+  fromX: number
+  fromY: number
+  toX: number
+  toY: number
+  color: string
+  dashed?: boolean
+  label?: string
+}
+
+type CourtStep = {
+  title: string
+  description: string
+  players: PlayerDot[]
+  arrows: Arrow[]
+  callout?: string
+}
+
+const COURT_W = 500
+const COURT_H = 470
+
+function pct(val: number, total: number) { return (val / 100) * total }
+
+function CourtDiagram({ steps }: { steps: CourtStep[] }) {
+  const [step, setStep] = useState(0)
+  const current = steps[step]
+
+  useEffect(() => { setStep(0) }, [steps])
+
+  function arrowPath(a: Arrow) {
+    const x1 = pct(a.fromX, COURT_W)
+    const y1 = pct(a.fromY, COURT_H)
+    const x2 = pct(a.toX, COURT_W)
+    const y2 = pct(a.toY, COURT_H)
+    const mx = (x1 + x2) / 2
+    const my = (y1 + y2) / 2 - 30
+    return `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`
+  }
+
+  return (
+    <div>
+      {/* Step indicators */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {steps.map((s, i) => (
+          <button
+            key={i}
+            onClick={() => setStep(i)}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+            style={{
+              background: step === i ? '#FF5F04' : 'rgba(255,255,255,0.05)',
+              color: step === i ? '#fff' : '#6B7280',
+              border: step === i ? '1px solid #FF5F04' : '1px solid rgba(255,255,255,0.08)',
+            }}
+          >
+            {i + 1}. {s.title}
+          </button>
+        ))}
+      </div>
+
+      {/* Court SVG */}
+      <div className="rounded-2xl overflow-hidden mb-4" style={{ background: '#1a3a1a', border: '2px solid rgba(255,255,255,0.1)' }}>
+        <svg viewBox={`0 0 ${COURT_W} ${COURT_H}`} width="100%" style={{ display: 'block' }}>
+          {/* Court background */}
+          <rect width={COURT_W} height={COURT_H} fill="#2d5a2d" />
+
+          {/* Court outline */}
+          <rect x="20" y="20" width={COURT_W - 40} height={COURT_H - 40} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" />
+
+          {/* Half court line */}
+          {/* (not shown — we show only half court) */}
+
+          {/* Paint / key */}
+          <rect x="175" y="20" width="150" height="160" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" />
+
+          {/* Free throw circle */}
+          <circle cx="250" cy="180" r="60" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
+
+          {/* Basket */}
+          <circle cx="250" cy="50" r="10" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2" />
+          <line x1="220" y1="20" x2="280" y2="20" stroke="rgba(255,255,255,0.6)" strokeWidth="2" />
+          <line x1="250" y1="20" x2="250" y2="50" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" />
+
+          {/* 3-point arc */}
+          <path
+            d="M 40 20 L 40 195 A 215 215 0 0 0 460 195 L 460 20"
+            fill="none"
+            stroke="rgba(255,255,255,0.45)"
+            strokeWidth="1.5"
+          />
+
+          {/* Lane lines */}
+          <line x1="175" y1="20" x2="175" y2="180" stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
+          <line x1="325" y1="20" x2="325" y2="180" stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
+
+          {/* Restricted area arc */}
+          <path d="M 220 20 A 30 30 0 0 1 280 20" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+
+          {/* Short corner markers */}
+          <line x1="20" y1="175" x2="60" y2="175" stroke="rgba(255,255,255,0.25)" strokeWidth="1" strokeDasharray="4,4" />
+          <line x1="440" y1="175" x2="480" y2="175" stroke="rgba(255,255,255,0.25)" strokeWidth="1" strokeDasharray="4,4" />
+
+          {/* Arrows */}
+          {current.arrows.map((a, i) => {
+            const path = arrowPath(a)
+            const x2 = pct(a.toX, COURT_W)
+            const y2 = pct(a.toY, COURT_H)
+            const id = `arrow-${i}`
+            return (
+              <g key={i}>
+                <defs>
+                  <marker id={id} markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L8,3 z" fill={a.color} />
+                  </marker>
+                </defs>
+                <path
+                  d={path}
+                  fill="none"
+                  stroke={a.color}
+                  strokeWidth="2.5"
+                  strokeDasharray={a.dashed ? '6,4' : undefined}
+                  markerEnd={`url(#${id})`}
+                  opacity="0.9"
+                />
+                {a.label && (
+                  <text
+                    x={(pct(a.fromX, COURT_W) + pct(a.toX, COURT_W)) / 2}
+                    y={(pct(a.fromY, COURT_H) + pct(a.toY, COURT_H)) / 2 - 28}
+                    textAnchor="middle"
+                    fill={a.color}
+                    fontSize="11"
+                    fontWeight="bold"
+                  >
+                    {a.label}
+                  </text>
+                )}
+              </g>
+            )
+          })}
+
+          {/* Players */}
+          {current.players.map((p) => {
+            const cx = pct(p.x, COURT_W)
+            const cy = pct(p.y, COURT_H)
+            return (
+              <g key={p.id}>
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={p.isHighlight ? 22 : 19}
+                  fill={p.color}
+                  stroke={p.isHighlight ? '#FFD700' : 'rgba(255,255,255,0.3)'}
+                  strokeWidth={p.isHighlight ? 3 : 1.5}
+                />
+                <text
+                  x={cx}
+                  y={cy - 1}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill="#fff"
+                  fontSize={p.isHighlight ? "11" : "10"}
+                  fontWeight="bold"
+                >
+                  {p.label}
+                </text>
+              </g>
+            )
+          })}
+
+          {/* Legend */}
+          <g transform="translate(25, 390)">
+            <rect x="0" y="0" width="200" height="68" rx="6" fill="rgba(0,0,0,0.5)" />
+            <circle cx="16" cy="14" r="10" fill="#FF5F04" stroke="#FFD700" strokeWidth="2" />
+            <text x="32" y="18" fill="white" fontSize="10">Star player</text>
+            <circle cx="16" cy="34" r="10" fill="#3B82F6" />
+            <text x="32" y="38" fill="white" fontSize="10">Starter</text>
+            <line x1="6" y1="54" x2="30" y2="54" stroke="#FFD700" strokeWidth="2.5" markerEnd="url(#arrow-legend)" />
+            <text x="36" y="58" fill="#FFD700" fontSize="10">Drive / cut</text>
+            <line x1="100" y1="54" x2="124" y2="54" stroke="#aaa" strokeWidth="2" strokeDasharray="4,3" />
+            <text x="130" y="58" fill="#aaa" fontSize="10">Pass</text>
+          </g>
+        </svg>
+      </div>
+
+      {/* Step description */}
+      <div
+        className="rounded-xl p-4 mb-3"
+        style={{ background: '#141920', border: '1px solid rgba(255,255,255,0.08)' }}
+      >
+        <p className="font-bold text-white mb-1">{current.title}</p>
+        <p className="text-sm leading-relaxed" style={{ color: '#9CA3AF' }}>{current.description}</p>
+        {current.callout && (
+          <div
+            className="mt-3 px-3 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: 'rgba(255,95,4,0.15)', color: '#FF5F04', border: '1px solid rgba(255,95,4,0.3)' }}
+          >
+            {current.callout}
+          </div>
+        )}
+      </div>
+
+      {/* Prev / Next */}
+      <div className="flex gap-3">
+        <button
+          onClick={() => setStep(s => Math.max(0, s - 1))}
+          disabled={step === 0}
+          className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
+          style={{
+            background: step === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.07)',
+            color: step === 0 ? '#374151' : '#D1D5DB',
+            border: '1px solid rgba(255,255,255,0.07)',
+          }}
+        >
+          ← Prev
+        </button>
+        <button
+          onClick={() => setStep(s => Math.min(steps.length - 1, s + 1))}
+          disabled={step === steps.length - 1}
+          className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
+          style={{
+            background: step === steps.length - 1 ? 'rgba(255,255,255,0.03)' : '#FF5F04',
+            color: step === steps.length - 1 ? '#374151' : '#fff',
+          }}
+        >
+          Next →
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── CHIN SERIES STEPS ─────────────────────────────────────────────────────
+// Court is 500w x 470h. Basket at top center (250, 50).
+// y increases downward. Players start near half court (y ~85-95%).
+//
+// Positions (% of court):
+//   Laken (PG)  — top of key, brings ball up:        x:50, y:72
+//   Nathan (SG) — right wing, 3pt line:              x:78, y:48
+//   Dayton (SF) — left corner, 3pt:                  x:12, y:35
+//   Kade (C)    — elbow / high post:                 x:50, y:42
+//   Rex/4 (PF)  — right corner, 3pt:                 x:88, y:35
+
+const LAKEN_COLOR = '#3B82F6'
+const NATHAN_COLOR = '#FF5F04'
+const DAYTON_COLOR = '#8B5CF6'
+const KADE_COLOR = '#6B7280'
+const REX_COLOR = '#10B981'
+
+const chinSteps: CourtStep[] = [
   {
-    name: 'Nathan',
-    number: '—',
-    position: 'SG / Co-PG',
-    role: 'Primary Scorer',
-    emoji: '🎯',
-    highlight: true,
-    strengths: ['3-point shooter', 'Shoots off anything (screens, DHO, catch-and-shoot)', 'Smart — reads defense', 'Layups'],
-    notes: 'The engine. Every action either gets him an open 3 or opens someone else up because of the attention he commands.',
-    tag: 'Star',
-    tagColor: '#FF5F04',
+    title: 'Initial Setup',
+    description: 'Laken brings the ball up to the top of the key. Nathan is on the right wing near the 3-point line. Dayton is in the left corner (weak side). Rex is in the right corner (strong side). Kade is at the high post / elbow — he\'s about to set the ball screen on Laken.',
+    players: [
+      { id: 'L', label: 'Laken', x: 50, y: 72, color: LAKEN_COLOR },
+      { id: 'N', label: 'Nathan', x: 78, y: 50, color: NATHAN_COLOR, isHighlight: true },
+      { id: 'D', label: 'Dayton', x: 12, y: 38, color: DAYTON_COLOR },
+      { id: 'K', label: 'Kade', x: 50, y: 44, color: KADE_COLOR },
+      { id: 'R', label: 'Rex', x: 88, y: 38, color: REX_COLOR },
+    ],
+    arrows: [],
+    callout: '📍 Nathan starts wide on the right wing — away from the ball screen side. This matters.',
   },
   {
-    name: 'Laken',
-    number: '—',
-    position: 'PG',
-    role: 'Floor General',
-    emoji: '⚡',
-    highlight: false,
-    strengths: ['Downhill driver', 'Gets to the rim', '1-on-1 isolation (own set play)', 'Pushes pace'],
-    notes: 'DDM lives and dies with him. When he attacks, the defense collapses — that\'s when Nathan and Dayton get open kicks.',
-    tag: 'Starter',
-    tagColor: '#3B82F6',
+    title: 'Kade Sets Ball Screen',
+    description: 'Kade steps out and sets a ball screen on Laken\'s defender at the top of the key. Laken uses it. The defense now has THREE options — go under, go over, or switch. All three are bad for them. Nathan stays wide on the wing, Dayton holds the left corner.',
+    players: [
+      { id: 'L', label: 'Laken', x: 50, y: 72, color: LAKEN_COLOR },
+      { id: 'N', label: 'Nathan', x: 78, y: 50, color: NATHAN_COLOR, isHighlight: true },
+      { id: 'D', label: 'Dayton', x: 12, y: 38, color: DAYTON_COLOR },
+      { id: 'K', label: 'Kade', x: 50, y: 58, color: KADE_COLOR },
+      { id: 'R', label: 'Rex', x: 88, y: 38, color: REX_COLOR },
+    ],
+    arrows: [
+      { fromX: 50, fromY: 44, toX: 50, toY: 58, color: '#6B7280', label: 'Screen' },
+    ],
+    callout: '🔑 Triple Gap: Laken can go LEFT of screen, RIGHT of screen, or Kade can roll to rim.',
   },
   {
-    name: 'Dayton',
-    number: '—',
-    position: 'SF',
-    role: 'Weak-Side Shooter',
-    emoji: '🏹',
-    highlight: false,
-    strengths: ['Lefty 3-point shooter', 'Spaces weak-side corner', 'High effort — takes shots', 'Will hit some'],
-    notes: 'Corner anchor on the weak side. Teams won\'t chase a lefty hard — he\'ll be open more than they expect. Skip pass from Nathan\'s side gets him rhythm looks.',
-    tag: 'Starter',
-    tagColor: '#3B82F6',
+    title: 'Read 1 — Laken Turns Corner (Drive)',
+    description: 'Defense goes under the screen or hedges late. Laken turns the corner and attacks the lane hard. The defense collapses. Now it\'s a kick-out decision: Nathan on the right wing is wide open for the 3. Dayton in the left corner is open if the help rotates to Nathan.',
+    players: [
+      { id: 'L', label: 'Laken', x: 35, y: 52, color: LAKEN_COLOR },
+      { id: 'N', label: 'Nathan', x: 78, y: 50, color: NATHAN_COLOR, isHighlight: true },
+      { id: 'D', label: 'Dayton', x: 12, y: 38, color: DAYTON_COLOR },
+      { id: 'K', label: 'Kade', x: 55, y: 45, color: KADE_COLOR },
+      { id: 'R', label: 'Rex', x: 88, y: 38, color: REX_COLOR },
+    ],
+    arrows: [
+      { fromX: 50, fromY: 72, toX: 35, toY: 52, color: LAKEN_COLOR, label: 'Drive' },
+      { fromX: 35, fromY: 52, toX: 78, toY: 50, color: '#aaaaaa', dashed: true, label: 'Kick-out' },
+      { fromX: 55, fromY: 45, toX: 48, toY: 22, color: KADE_COLOR, dashed: true, label: 'Roll' },
+    ],
+    callout: '🎯 Nathan catches on the wing — catch and shoot. If his man helps, skip to Dayton corner.',
   },
   {
-    name: 'Kade',
-    number: '—',
-    position: 'C / PF',
-    role: 'Short-Corner Spacer',
-    emoji: '🧱',
-    highlight: false,
-    strengths: ['Finishes layups', 'Some shooting range', 'Available backside when lane opens', 'Sets screens'],
-    notes: 'Not asked to do a lot — that\'s the beauty of DDM. Parks in short corner, spaces the lane for Laken\'s drives, and is open when defense forgets about him.',
-    tag: 'Starter',
-    tagColor: '#3B82F6',
+    title: 'Read 2 — Laken Rejects, Hits Nathan at Elbow',
+    description: 'Defense cheats hard over the screen anticipating the drive. Laken rejects (goes away from screen), dribbles to the right, and hits Nathan cutting to the elbow. Now Nathan\'s reads begin — this is the SPLIT ACTION.',
+    players: [
+      { id: 'L', label: 'Laken', x: 63, y: 65, color: LAKEN_COLOR },
+      { id: 'N', label: 'Nathan', x: 65, y: 44, color: NATHAN_COLOR, isHighlight: true },
+      { id: 'D', label: 'Dayton', x: 12, y: 38, color: DAYTON_COLOR },
+      { id: 'K', label: 'Kade', x: 50, y: 58, color: KADE_COLOR },
+      { id: 'R', label: 'Rex', x: 88, y: 38, color: REX_COLOR },
+    ],
+    arrows: [
+      { fromX: 50, fromY: 72, toX: 63, toY: 65, color: LAKEN_COLOR, label: 'Reject' },
+      { fromX: 63, fromY: 65, toX: 65, toY: 44, color: '#aaaaaa', dashed: true, label: 'Pass' },
+      { fromX: 78, fromY: 50, toX: 65, toY: 44, color: NATHAN_COLOR, label: 'Cuts to elbow' },
+    ],
+    callout: '🧠 Nathan is at the elbow. Defense has to decide RIGHT NOW. Nathan reads them.',
   },
   {
-    name: 'Rex',
-    number: '—',
-    position: 'SF / SG',
-    role: 'Energy / Cutter',
-    emoji: '🚀',
-    highlight: false,
-    strengths: ['Fast', 'Can shoot some', 'Cuts hard', 'Creates chaos'],
-    notes: 'Sub-package player. When Rex is in, run him on back-cuts — his speed is the weapon. DDM loves cutters when the drive collapses a defense.',
-    tag: 'Rotation',
-    tagColor: '#8B5CF6',
+    title: 'Split Read A — Nathan Shoots (Closeout Flat)',
+    description: 'Nathan\'s defender closeouts flat or late. Nathan pulls up from the elbow for the mid-range or steps into a 3 if he caught higher. This is the simplest read — defender gives you the shot, you take it.',
+    players: [
+      { id: 'L', label: 'Laken', x: 63, y: 65, color: LAKEN_COLOR },
+      { id: 'N', label: 'Nathan', x: 65, y: 44, color: NATHAN_COLOR, isHighlight: true },
+      { id: 'D', label: 'Dayton', x: 12, y: 38, color: DAYTON_COLOR },
+      { id: 'K', label: 'Kade', x: 50, y: 58, color: KADE_COLOR },
+      { id: 'R', label: 'Rex', x: 88, y: 38, color: REX_COLOR },
+    ],
+    arrows: [
+      { fromX: 65, fromY: 44, toX: 50, toY: 14, color: NATHAN_COLOR, label: 'Shot' },
+    ],
+    callout: '🎯 Read: Defender gives you space → Nathan shoots. Simplest. Fastest.',
   },
   {
-    name: 'Nick',
-    number: '—',
-    position: 'Flex',
-    role: '6th Man',
-    emoji: '🔋',
-    highlight: false,
-    strengths: ['Provides depth', 'Keeps starters fresh', 'Learns the system'],
-    notes: 'Comes off the bench, keeps fresh legs on the floor. Every team needs a reliable 6th man.',
-    tag: '6th Man',
-    tagColor: '#6B7280',
+    title: 'Split Read B — Nathan Drives Baseline',
+    description: 'Nathan\'s defender overplays the passing lane or leans toward the middle. Nathan drives baseline toward the right block. Kade has rolled to the short corner / weak side — if baseline help comes, Kade is right there for the dump-off or kick.',
+    players: [
+      { id: 'L', label: 'Laken', x: 63, y: 65, color: LAKEN_COLOR },
+      { id: 'N', label: 'Nathan', x: 65, y: 44, color: NATHAN_COLOR, isHighlight: true },
+      { id: 'D', label: 'Dayton', x: 12, y: 38, color: DAYTON_COLOR },
+      { id: 'K', label: 'Kade', x: 82, y: 35, color: KADE_COLOR },
+      { id: 'R', label: 'Rex', x: 88, y: 38, color: REX_COLOR },
+    ],
+    arrows: [
+      { fromX: 65, fromY: 44, toX: 80, toY: 28, color: NATHAN_COLOR, label: 'Baseline drive' },
+      { fromX: 80, fromY: 28, toX: 82, toY: 35, color: '#aaaaaa', dashed: true, label: 'Dump to Kade' },
+    ],
+    callout: '⚡ Read: Defender cheats high → Nathan goes baseline. Kade is the safety valve.',
+  },
+  {
+    title: 'Split Read C — Skip to Dayton Corner',
+    description: 'Both defenders collapse on Nathan at the elbow. Dayton has been standing in the left corner the whole play. The weak-side defense cheated in to help. Nathan swing-passes to Laken, Laken reverses to Dayton in the corner. Rhythm 3 for the lefty — nobody chased him.',
+    players: [
+      { id: 'L', label: 'Laken', x: 63, y: 65, color: LAKEN_COLOR },
+      { id: 'N', label: 'Nathan', x: 65, y: 44, color: NATHAN_COLOR, isHighlight: true },
+      { id: 'D', label: 'Dayton', x: 12, y: 38, color: DAYTON_COLOR },
+      { id: 'K', label: 'Kade', x: 50, y: 55, color: KADE_COLOR },
+      { id: 'R', label: 'Rex', x: 88, y: 38, color: REX_COLOR },
+    ],
+    arrows: [
+      { fromX: 65, fromY: 44, toX: 63, toY: 65, color: '#aaaaaa', dashed: true, label: 'Swing' },
+      { fromX: 63, fromY: 65, toX: 12, toY: 38, color: '#aaaaaa', dashed: true, label: 'Reverse' },
+      { fromX: 12, fromY: 38, toX: 12, toY: 14, color: DAYTON_COLOR, label: 'Shot' },
+    ],
+    callout: '🏹 Read: Defense collapses → Dayton corner 3. Nobody closes on a lefty in the corner.',
+  },
+  {
+    title: 'Kade Roll — The Bonus Read',
+    description: 'If the defense switches the ball screen AND both wings are covered, Kade\'s man just left him to take Laken. Kade rolls hard to the rim. Laken hits him in stride for a layup. This only needs to happen 2-3 times a game to keep the defense honest on every future screen.',
+    players: [
+      { id: 'L', label: 'Laken', x: 50, y: 72, color: LAKEN_COLOR },
+      { id: 'N', label: 'Nathan', x: 78, y: 50, color: NATHAN_COLOR, isHighlight: true },
+      { id: 'D', label: 'Dayton', x: 12, y: 38, color: DAYTON_COLOR },
+      { id: 'K', label: 'Kade', x: 50, y: 22, color: KADE_COLOR },
+      { id: 'R', label: 'Rex', x: 88, y: 38, color: REX_COLOR },
+    ],
+    arrows: [
+      { fromX: 50, fromY: 58, toX: 50, toY: 22, color: KADE_COLOR, label: 'Roll to rim' },
+      { fromX: 50, fromY: 72, toX: 50, toY: 22, color: '#aaaaaa', dashed: true, label: 'Lob/bounce' },
+    ],
+    callout: '🧱 Switch? Kade rolls free. Hit him for the layup. Defense can\'t switch this forever.',
   },
 ]
 
-const offenseActions = [
+// ─── PLAYERS / ROSTER ───────────────────────────────────────────────────────
+
+const players = [
   {
-    name: 'DDM Base — 4-Out 1-In',
-    icon: '🏀',
-    priority: 'Primary',
-    priorityColor: '#FF5F04',
-    description: 'Your foundation. Laken at the top, Nathan wing, Dayton weak corner, Rex/PF strong corner, Kade short corner. Laken attacks the gap. Defense collapses → kick to Nathan for 3, skip to Dayton in corner, or dump to Kade backside.',
-    positions: ['Laken — Top (ball)', 'Nathan — Strong Wing', 'Dayton — Weak Corner', 'Kade — Short Corner', 'Rex/4 — Strong Corner'],
-    cue: 'Drive. Kick. Shoot.',
+    name: 'Nathan', position: 'SG / Co-PG', role: 'Primary Scorer', emoji: '🎯', highlight: true,
+    strengths: ['3-point shooter', 'Shoots off anything', 'Smart — reads defense', 'Layups', 'Elbow split action'],
+    notes: 'The engine. Every Chin series action either gets him a look or opens someone else because of the attention he commands.',
+    tag: 'Star', tagColor: '#FF5F04',
   },
   {
-    name: 'DHO Split Action',
-    icon: '🔄',
-    priority: 'Primary',
-    priorityColor: '#FF5F04',
-    description: 'Laken dribble-hand-offs to Nathan at the elbow extended. Nathan gets THREE reads: 1) Pull up 3 off the DHO if closeout is flat, 2) Reject and drive baseline if defender goes under, 3) Re-pass to Laken cutting off Kade\'s screen for layup. Nathan reads the defense — this is where his IQ shines.',
-    positions: ['Nathan — Elbow Extended (receives DHO)', 'Laken — Drives off screen after DHO', 'Kade — Sets screen for Laken cut', 'Dayton — Weak corner (skip pass option)', 'Rex — Strong corner (spacing)'],
-    cue: 'Hand off. Read. React.',
+    name: 'Laken', position: 'PG', role: 'Floor General', emoji: '⚡', highlight: false,
+    strengths: ['Downhill driver', 'Gets to the rim', 'Uses ball screens', 'ISO set (called play)'],
+    notes: 'Initiates every Chin possession. Uses Kade\'s screen, reads the triple gap, decides: turn corner, reject, or wait for the switch. Defense has to pick their poison on him.',
+    tag: 'Starter', tagColor: '#3B82F6',
+  },
+  {
+    name: 'Dayton', position: 'SF', role: 'Weak-Side Corner', emoji: '🏹', highlight: false,
+    strengths: ['Lefty corner 3', 'Spaces weak side', 'High effort', 'Corner skip target'],
+    notes: 'Parks in the left corner every possession and stays there. He\'s the release valve when Nathan\'s elbow reads collapse. Nobody closes on a lefty 8th-grader in the corner.',
+    tag: 'Starter', tagColor: '#3B82F6',
+  },
+  {
+    name: 'Kade', position: 'C', role: 'Ball Screener / Roller', emoji: '🧱', highlight: false,
+    strengths: ['Sets ball screens', 'Rolls to rim', 'Short corner layups', 'Keeps lane clear'],
+    notes: 'More important than he looks. Sets the screen that starts every Chin possession. If defense switches → he rolls free. Doesn\'t need to be a star — just needs to screen hard and roll.',
+    tag: 'Starter', tagColor: '#3B82F6',
+  },
+  {
+    name: 'Rex', position: 'SF', role: 'Energy / Cutter', emoji: '🚀', highlight: false,
+    strengths: ['Fast', 'Back-cuts', 'Can shoot some', 'Spaces strong corner'],
+    notes: 'Holds the strong-side corner in base Chin. When he\'s in, run extra back-cut reads off drives — his speed makes him a weapon when the defense forgets him.',
+    tag: 'Rotation', tagColor: '#8B5CF6',
+  },
+  {
+    name: 'Nick', position: 'Flex', role: '6th Man', emoji: '🔋', highlight: false,
+    strengths: ['Depth', 'Keeps starters fresh', 'Learns the system'],
+    notes: 'Reliable 6th man. Every team needs one.',
+    tag: '6th Man', tagColor: '#6B7280',
+  },
+]
+
+// ─── OFFENSE SUMMARY ────────────────────────────────────────────────────────
+
+const offenseSummary = [
+  {
+    name: 'Chin Series (Base)',
+    icon: '🏀',
+    tag: 'Primary', tagColor: '#FF5F04',
+    desc: 'Every half-court possession starts here. Kade ball screen on Laken → triple gap read → drive or reject → Nathan split action at elbow → shoot, drive, or skip to Dayton.',
+  },
+  {
+    name: 'Triple Gap Reads',
+    icon: '3️⃣',
+    tag: 'Within Chin', tagColor: '#FF5F04',
+    desc: 'Left of screen (attack left lane), Right of screen (attack right lane), Roll (Kade to rim). Laken reads which gap is open before he gets to the screen.',
+  },
+  {
+    name: 'Nathan Split Action',
+    icon: '🎯',
+    tag: 'Within Chin', tagColor: '#FF5F04',
+    desc: 'After Laken rejects: Nathan cuts to elbow, receives pass. Three reads: pull-up/3 if open, baseline drive if overplayed, skip to Dayton corner if defense collapses.',
   },
   {
     name: 'Laken ISO Set',
     icon: '⚡',
-    priority: 'Called Play',
-    priorityColor: '#8B5CF6',
-    description: 'Your existing called play. Clear one side, get Laken isolation, let him go 1-on-1. Keep for 3-4 times a game — predictable if overused, deadly if deployed right.',
-    positions: ['Laken — Ball handler, isolation', 'Everyone else — Clear and space the floor'],
-    cue: 'Coach calls it. Laken goes.',
+    tag: 'Called Play', tagColor: '#8B5CF6',
+    desc: 'Separate called play. Clear the floor, Laken goes 1-on-1. Use 3-4 times per game — too predictable if overused, deadly when deployed right.',
   },
   {
-    name: 'Corner Skip — Dayton',
+    name: 'Dayton Corner Skip',
     icon: '🏹',
-    priority: 'Secondary',
-    priorityColor: '#10B981',
-    description: 'Nathan catches on the strong wing, pump fakes or shot-fakes to freeze the defense, then fires a skip pass to Dayton in the weak corner. Lefty rhythm 3 — teams won\'t closeout hard. Run this 4-5 times a game.',
-    positions: ['Nathan — Strong wing, skip passer', 'Dayton — Weak corner, catch and shoot', 'Laken — Ball reversal / reset', 'Kade — Short corner, keeps lane clear'],
-    cue: 'Nathan catches. Skip. Dayton shoots.',
+    tag: 'Secondary', tagColor: '#10B981',
+    desc: 'Nathan wing catches → pump fake → skip to Dayton in weak corner. Also the terminal read of Nathan\'s split action. Lefty rhythm 3 — nobody closes hard enough.',
   },
   {
-    name: 'Rex Sub-Package — Speed Cuts',
+    name: 'Rex Speed Package',
     icon: '🚀',
-    priority: 'Sub Package',
-    priorityColor: '#F59E0B',
-    description: 'When Rex checks in for Dayton, shift to cutting actions. Rex back-cuts off any defender who goes to sleep. Laken or Nathan drives, Rex reads the collapse and cuts to the basket. Fast kid + collapsing defense = easy layups.',
-    positions: ['Rex — Weak side, reads and cuts hard', 'Laken — Drive to force collapse', 'Nathan — Wing, catch-and-shoot or dump', 'Kade — Short corner, keeps spacing'],
-    cue: 'Rex cuts on every drive.',
+    tag: 'Sub Package', tagColor: '#F59E0B',
+    desc: 'Rex in for Dayton. Add back-cut reads on every drive. Fast kid + collapsing defense = easy layups. Small change, big impact.',
   },
   {
-    name: 'Zone Offense (Coming Later)',
+    name: 'Zone Offense',
     icon: '🛡️',
-    priority: 'Later',
-    priorityColor: '#6B7280',
-    description: 'Some teams will run zone. Basic zone attack: skip passes to find the gaps, Nathan at the high post elbow (zones hate that spot), Dayton in the corner. More detail added as season approaches.',
-    positions: ['Nathan — High post elbow (zone killer)', 'Dayton — Corner (skip target)', 'Laken — Ball movement / reversal'],
-    cue: 'Find the gaps. Skip fast.',
+    tag: 'Coming Later', tagColor: '#6B7280',
+    desc: 'Nathan at the high-post elbow (zone killer). Skip passes to find gaps. Dayton corner. More detail added closer to season.',
   },
 ]
+
+// ─── PRACTICE PLAN ──────────────────────────────────────────────────────────
 
 const practicePhases = [
   {
-    week: 'Week 1',
-    focus: 'Foundation',
-    color: '#3B82F6',
+    week: 'Week 1', focus: 'Foundation', color: '#3B82F6',
     days: [
-      { day: 'Day 1–2', title: 'DDM Principles', detail: 'Spacing rules: 4-out 1-in. Short corner for Kade. No one clogs the lane. Laken drives lanes. Kick-outs. No dribbling into help.' },
-      { day: 'Day 3–4', title: 'DHO Action', detail: 'Walk through DHO with Nathan. Slow — every read. Defender flat = shoot. Defender over = reject. Defender under = Laken cuts. Reps, reps, reps.' },
-      { day: 'Day 5–6', title: 'Corner Skip', detail: 'Nathan wing to Dayton corner. Pump fake, skip, rhythm shot. Dayton needs volume reps catching in rhythm. Nathan needs to feel the timing.' },
+      { day: 'Day 1–2', title: 'Spacing & DDM Principles', detail: '4-out 1-in spacing rules. Kade in short corner / high post. Nobody clogs the lane. Walk through where every player stands on every possession. Repetition over speed.' },
+      { day: 'Day 3–4', title: 'Ball Screen Entry + Triple Gap', detail: 'Kade sets the screen. Laken walks through all three gap reads slowly. Left gap, right gap, Kade rolls. No defense yet — just footwork and reads.' },
+      { day: 'Day 5–6', title: 'Nathan Split Action', detail: 'Laken rejects screen, hits Nathan at elbow. Nathan\'s three reads: shoot, drive baseline, or swing to Dayton corner. Reps at 50% speed. Nathan needs to feel the read, not memorize it.' },
     ]
   },
   {
-    week: 'Week 2',
-    focus: 'Reads & Execution',
-    color: '#FF5F04',
+    week: 'Week 2', focus: 'Reads & Live Reps', color: '#FF5F04',
     days: [
-      { day: 'Day 7–8', title: '3-on-3 DDM Reads', detail: 'Laken + Nathan + Kade vs 3 defenders. Force the kick-out read. Reward the right pass, punish the bad drive.' },
-      { day: 'Day 9–10', title: 'Laken ISO + Team Spacing', detail: 'Install the called ISO set. Everyone learns their spots when Laken clears. Add Rex sub-package cuts.' },
-      { day: 'Day 11–12', title: '5-on-5 Live', detail: 'Full court, full speed. Call plays from sideline. Nathan reads DHO live. Coach identifies breakdowns in spacing.' },
+      { day: 'Day 7–8', title: '3-on-3 Ball Screen Reads', detail: 'Laken + Nathan + Kade vs 3 defenders. Force the read live. Coach calls what the defense does — Laken reacts. Reward the right read, punish the drive into traffic.' },
+      { day: 'Day 9–10', title: 'Full Chin Series 5-on-5 Walkthrough', detail: 'All 5 players, full speed walk-through. Add Dayton corner skip. Add Kade roll. Identify who doesn\'t know their spot — fix it now.' },
+      { day: 'Day 11–12', title: 'Laken ISO + Rex Package', detail: 'Install the called Laken ISO set. Install the Rex sub-package (back-cut read). 5-on-5 live reps, coach calling plays from sideline.' },
     ]
   },
   {
-    week: 'Week 3',
-    focus: 'Polish & Competition',
-    color: '#10B981',
+    week: 'Week 3', focus: 'Polish & Competition', color: '#10B981',
     days: [
-      { day: 'Day 13–14', title: 'Situational Offense', detail: 'Late game sets. BLOB plays. Last shot of quarter. Laken ISO vs zone. Nathan 3 off timeout.' },
-      { day: 'Day 15–16', title: 'Scrimmage', detail: 'Full scrimmage, call the offense like a game. Identify which actions are hitting, which to trim.' },
-      { day: 'Day 17+', title: 'Game Prep', detail: 'Opponent scout (if available). Sharpen best 3 actions. Keep it simple — confidence beats complexity.' },
+      { day: 'Day 13–14', title: 'Situational Offense', detail: 'Last shot of quarter. BLOB plays. Down 2 with 30 seconds. Chin into Nathan 3. Laken ISO at crunch time. Make it feel real.' },
+      { day: 'Day 15–16', title: 'Full Scrimmage', detail: 'Game speed. Call the offense like a game. Identify the 2-3 Chin reads that are clicking and lean into them. Trim anything that\'s not working.' },
+      { day: 'Day 17+', title: 'Game Prep', detail: 'Sharpen what works. If time allows, basic zone intro (Nathan high post, skip passes, Dayton corner). Confidence beats complexity.' },
     ]
   },
 ]
 
-const PhilosophyCard = ({ icon, title, body }: { icon: string; title: string; body: string }) => (
-  <div
-    className="rounded-2xl p-5"
-    style={{ background: '#141920', border: '1px solid rgba(255,255,255,0.06)' }}
-  >
-    <div className="text-2xl mb-2">{icon}</div>
-    <h4 className="font-bold text-white mb-1 text-sm">{title}</h4>
-    <p className="text-xs leading-relaxed" style={{ color: '#9CA3AF' }}>{body}</p>
-  </div>
-)
+// ─── MAIN PAGE ──────────────────────────────────────────────────────────────
 
 export default function SMSCoachingPage() {
-  const [activeTab, setActiveTab] = useState<'roster' | 'offense' | 'practice' | 'philosophy'>('roster')
+  const [activeTab, setActiveTab] = useState<'diagram' | 'roster' | 'offense' | 'practice'>('diagram')
 
   const tabs = [
+    { id: 'diagram', label: '📐 Chin Series' },
     { id: 'roster', label: '👥 Roster' },
     { id: 'offense', label: '🏀 Offense' },
-    { id: 'practice', label: '📅 Practice Plan' },
-    { id: 'philosophy', label: '🧠 Philosophy' },
+    { id: 'practice', label: '📅 Practice' },
   ] as const
 
   return (
-    <div
-      className="min-h-screen text-[#F1F3F5]"
-      style={{ background: '#07090D', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
-    >
+    <div className="min-h-screen text-[#F1F3F5]" style={{ background: '#07090D', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
       {/* Nav */}
       <nav
         className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between"
@@ -207,30 +534,27 @@ export default function SMSCoachingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="pt-32 pb-10 px-6 text-center">
+      <section className="pt-32 pb-8 px-6 text-center">
         <div
           className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-6 uppercase tracking-widest"
           style={{ background: 'rgba(255,95,4,0.12)', color: '#FF5F04', border: '1px solid rgba(255,95,4,0.25)' }}
         >
           <span style={{ fontSize: '8px' }}>●</span> 2026–27 Season
         </div>
-        <h1
-          className="text-4xl md:text-5xl font-extrabold leading-tight mb-4"
-          style={{ letterSpacing: '-0.03em' }}
-        >
+        <h1 className="text-4xl md:text-5xl font-extrabold leading-tight mb-3" style={{ letterSpacing: '-0.03em' }}>
           SMS <span style={{ color: '#FF5F04' }}>Coaching Plan</span>
         </h1>
-        <p className="text-base max-w-lg mx-auto" style={{ color: '#6B7280' }}>
-          8th Grade Basketball · Dribble-Drive Offense · Three weeks to game one.
+        <p className="text-base max-w-lg mx-auto mb-1" style={{ color: '#6B7280' }}>
+          8th Grade Basketball · Chin Series Offense
+        </p>
+        <p className="text-sm max-w-md mx-auto" style={{ color: '#4B5563' }}>
+          Ball screen → triple gap → split action → Nathan 3
         </p>
       </section>
 
       {/* Tabs */}
-      <div className="px-6 mb-8">
-        <div
-          className="flex gap-2 max-w-2xl mx-auto p-1 rounded-xl overflow-x-auto"
-          style={{ background: '#141920', border: '1px solid rgba(255,255,255,0.06)' }}
-        >
+      <div className="px-6 mb-6">
+        <div className="flex gap-2 max-w-2xl mx-auto p-1 rounded-xl overflow-x-auto" style={{ background: '#141920', border: '1px solid rgba(255,255,255,0.06)' }}>
           {tabs.map(tab => (
             <button
               key={tab.id}
@@ -247,14 +571,25 @@ export default function SMSCoachingPage() {
         </div>
       </div>
 
-      <main className="px-6 pb-24 max-w-3xl mx-auto">
+      <main className="px-6 pb-24 max-w-2xl mx-auto">
+
+        {/* DIAGRAM TAB */}
+        {activeTab === 'diagram' && (
+          <div>
+            <div className="rounded-2xl p-4 mb-5" style={{ background: 'rgba(255,95,4,0.08)', border: '1px solid rgba(255,95,4,0.25)' }}>
+              <p className="font-bold text-white mb-1">The Chin Series</p>
+              <p className="text-sm leading-relaxed" style={{ color: '#D1D5DB' }}>
+                Every possession starts the same way: Kade sets a ball screen on Laken. Then the defense tells you what to do. Step through each read below — this is the whole offense in one series.
+              </p>
+            </div>
+            <CourtDiagram steps={chinSteps} />
+          </div>
+        )}
 
         {/* ROSTER TAB */}
         {activeTab === 'roster' && (
           <div className="space-y-4">
-            <p className="text-sm mb-6" style={{ color: '#6B7280' }}>
-              Six-man rotation. Three shooters, one driver, one cutter, one paint presence.
-            </p>
+            <p className="text-sm mb-4" style={{ color: '#6B7280' }}>Six-man rotation. Every player has a defined role in the Chin series.</p>
             {players.map((p) => (
               <div
                 key={p.name}
@@ -268,12 +603,9 @@ export default function SMSCoachingPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{p.emoji}</span>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-bold text-white text-lg">{p.name}</h3>
-                        <span
-                          className="text-xs font-bold px-2 py-0.5 rounded-full"
-                          style={{ background: `${p.tagColor}22`, color: p.tagColor, border: `1px solid ${p.tagColor}44` }}
-                        >
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: `${p.tagColor}22`, color: p.tagColor, border: `1px solid ${p.tagColor}44` }}>
                           {p.tag}
                         </span>
                       </div>
@@ -283,13 +615,7 @@ export default function SMSCoachingPage() {
                 </div>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {p.strengths.map(s => (
-                    <span
-                      key={s}
-                      className="text-xs px-2 py-1 rounded-lg"
-                      style={{ background: 'rgba(255,255,255,0.05)', color: '#D1D5DB' }}
-                    >
-                      {s}
-                    </span>
+                    <span key={s} className="text-xs px-2 py-1 rounded-lg" style={{ background: 'rgba(255,255,255,0.05)', color: '#D1D5DB' }}>{s}</span>
                   ))}
                 </div>
                 <p className="text-sm leading-relaxed" style={{ color: '#9CA3AF' }}>{p.notes}</p>
@@ -300,54 +626,25 @@ export default function SMSCoachingPage() {
 
         {/* OFFENSE TAB */}
         {activeTab === 'offense' && (
-          <div className="space-y-5">
-            <div
-              className="rounded-2xl p-5 mb-2"
-              style={{ background: 'rgba(255,95,4,0.08)', border: '1px solid rgba(255,95,4,0.25)' }}
-            >
-              <h3 className="font-bold text-white mb-1">System: Dribble-Drive Motion (DDM)</h3>
+          <div className="space-y-4">
+            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,95,4,0.08)', border: '1px solid rgba(255,95,4,0.25)' }}>
+              <h3 className="font-bold text-white mb-2">System: Chin Series Motion</h3>
               <p className="text-sm leading-relaxed" style={{ color: '#9CA3AF' }}>
-                Base is 4-out 1-in. Laken attacks. Nathan and Dayton space the corners and wings. Kade anchors the short corner.
-                The offense answers two questions every possession: <strong style={{ color: '#F1F3F5' }}>Can Laken get to the rim?</strong> and <strong style={{ color: '#F1F3F5' }}>Is Nathan open for three?</strong> Everything else flows from that.
+                Not Princeton. Not pure DDM. It&apos;s the Chin Series — Princeton principles (read-and-react, split action, IQ-based) executed through DDM spacing (4-out 1-in, triple gap, short corner). One system that holds everything you want.
               </p>
             </div>
-            {offenseActions.map((a) => (
-              <div
-                key={a.name}
-                className="rounded-2xl p-5"
-                style={{ background: '#141920', border: '1px solid rgba(255,255,255,0.06)' }}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
+            {offenseSummary.map((a) => (
+              <div key={a.name} className="rounded-2xl p-5" style={{ background: '#141920', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
                     <span className="text-xl">{a.icon}</span>
                     <h3 className="font-bold text-white">{a.name}</h3>
                   </div>
-                  <span
-                    className="text-xs font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: `${a.priorityColor}22`, color: a.priorityColor, border: `1px solid ${a.priorityColor}44` }}
-                  >
-                    {a.priority}
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: `${a.tagColor}22`, color: a.tagColor, border: `1px solid ${a.tagColor}44` }}>
+                    {a.tag}
                   </span>
                 </div>
-                <p className="text-sm leading-relaxed mb-4" style={{ color: '#9CA3AF' }}>{a.description}</p>
-                <div className="mb-3">
-                  <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: '#6B7280' }}>Positions</p>
-                  <div className="space-y-1">
-                    {a.positions.map(pos => (
-                      <div key={pos} className="flex items-center gap-2">
-                        <span style={{ color: '#FF5F04', fontSize: '8px' }}>●</span>
-                        <span className="text-sm" style={{ color: '#D1D5DB' }}>{pos}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div
-                  className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl"
-                  style={{ background: 'rgba(255,255,255,0.04)' }}
-                >
-                  <span className="text-xs font-semibold" style={{ color: '#6B7280' }}>CUE:</span>
-                  <span className="text-xs font-bold" style={{ color: '#F1F3F5' }}>{a.cue}</span>
-                </div>
+                <p className="text-sm leading-relaxed" style={{ color: '#9CA3AF' }}>{a.desc}</p>
               </div>
             ))}
           </div>
@@ -356,16 +653,11 @@ export default function SMSCoachingPage() {
         {/* PRACTICE TAB */}
         {activeTab === 'practice' && (
           <div className="space-y-6">
-            <p className="text-sm mb-2" style={{ color: '#6B7280' }}>
-              Three weeks · 2 hours/day · Every action installed before game one.
-            </p>
+            <p className="text-sm mb-2" style={{ color: '#6B7280' }}>Three weeks · 2 hours/day · Full Chin series installed before game one.</p>
             {practicePhases.map(phase => (
               <div key={phase.week}>
                 <div className="flex items-center gap-3 mb-3">
-                  <div
-                    className="w-1 h-8 rounded-full"
-                    style={{ background: phase.color }}
-                  />
+                  <div className="w-1 h-8 rounded-full" style={{ background: phase.color }} />
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: phase.color }}>{phase.week}</p>
                     <p className="font-bold text-white">{phase.focus}</p>
@@ -373,18 +665,9 @@ export default function SMSCoachingPage() {
                 </div>
                 <div className="space-y-3 ml-4 pl-4" style={{ borderLeft: `1px solid ${phase.color}33` }}>
                   {phase.days.map(d => (
-                    <div
-                      key={d.day}
-                      className="rounded-xl p-4"
-                      style={{ background: '#141920', border: '1px solid rgba(255,255,255,0.06)' }}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span
-                          className="text-xs font-bold px-2 py-0.5 rounded-lg"
-                          style={{ background: `${phase.color}22`, color: phase.color }}
-                        >
-                          {d.day}
-                        </span>
+                    <div key={d.day} className="rounded-xl p-4" style={{ background: '#141920', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-lg" style={{ background: `${phase.color}22`, color: phase.color }}>{d.day}</span>
                         <p className="font-semibold text-white text-sm">{d.title}</p>
                       </div>
                       <p className="text-sm leading-relaxed" style={{ color: '#9CA3AF' }}>{d.detail}</p>
@@ -396,75 +679,9 @@ export default function SMSCoachingPage() {
           </div>
         )}
 
-        {/* PHILOSOPHY TAB */}
-        {activeTab === 'philosophy' && (
-          <div>
-            <div
-              className="rounded-2xl p-6 mb-6"
-              style={{ background: 'rgba(255,95,4,0.08)', border: '1px solid rgba(255,95,4,0.25)' }}
-            >
-              <h3 className="font-bold text-white text-lg mb-2">The Core Principle</h3>
-              <p className="text-sm leading-relaxed" style={{ color: '#D1D5DB' }}>
-                Get Nathan open threes. Everything else is in service of that. The offense isn&apos;t complicated — it&apos;s disciplined.
-                Laken attacks, the defense has to pick its poison: stop the drive or stop Nathan. They can&apos;t do both.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-              <PhilosophyCard
-                icon="🎯"
-                title="Star Development First"
-                body="Nathan is the priority. The offense is built so that every possession either creates a Nathan 3 or opens someone else because of Nathan's gravity. Don't fight the roster — amplify it."
-              />
-              <PhilosophyCard
-                icon="📐"
-                title="Spacing Is Non-Negotiable"
-                body="The biggest DDM killer is bad spacing. If Kade clogs the lane, Laken has nowhere to go. Kade's job is to stay in the short corner and be a release valve — not get fancy."
-              />
-              <PhilosophyCard
-                icon="🧠"
-                title="Nathan Reads the Defense"
-                body="The DHO split action is yours because Nathan is smart. Don't simplify it for other players — let Nathan's IQ be the weapon. That's what separates good coaches from great ones."
-              />
-              <PhilosophyCard
-                icon="⚡"
-                title="Laken Is a Weapon, Not a Role"
-                body="Use the ISO set surgically. 3-4 times a game max. The threat of it opens up the base DDM — teams will cheat to stop him, which means the kick-outs are there."
-              />
-              <PhilosophyCard
-                icon="🏹"
-                title="Dayton Is Free Real Estate"
-                body="Nobody closes out hard on a lefty 8th grade corner shooter. That's your edge — skip him the ball 4-5 times a game in rhythm. He'll make enough to keep them honest."
-              />
-              <PhilosophyCard
-                icon="🚀"
-                title="Rex Changes the Game"
-                body="When Rex comes in, the offense changes character. Fast cutter + drive collapse = backdoor layups. Keep a small sub-package just for when he's on the floor."
-              />
-            </div>
-            <div
-              className="rounded-2xl p-5"
-              style={{ background: '#141920', border: '1px solid rgba(255,255,255,0.06)' }}
-            >
-              <h4 className="font-bold text-white mb-3">Against Zone</h4>
-              <p className="text-sm leading-relaxed mb-3" style={{ color: '#9CA3AF' }}>
-                Some teams will run zone. The DDM principles still apply — you just attack gaps instead of defenders.
-                Nathan at the high-post elbow is a zone killer (it&apos;s the hardest spot for a 2-3 zone to cover).
-                Skip passes, quick ball movement, and don&apos;t overdribble.
-              </p>
-              <p className="text-xs font-semibold" style={{ color: '#6B7280' }}>
-                Full zone breakdown added when you&apos;re ready. Focus on man first.
-              </p>
-            </div>
-          </div>
-        )}
-
       </main>
 
-      {/* Footer */}
-      <footer
-        className="px-6 py-8 text-center text-sm"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.05)', color: '#6B7280' }}
-      >
+      <footer className="px-6 py-8 text-center text-sm" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', color: '#6B7280' }}>
         SMS Basketball · 2026–27 · Built by NJSBuilds
       </footer>
     </div>
