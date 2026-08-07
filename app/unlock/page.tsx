@@ -167,6 +167,17 @@ export default function UnlockPage() {
         <p className="text-center text-gray-600 text-xs mt-10">
           Resets automatically at midnight
         </p>
+
+        <div className="mt-8 pt-8 border-t border-gray-800 w-full text-center">
+          <a
+            href="/ChoreLock-portable.zip"
+            download
+            className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            <span>⬇️</span>
+            <span>Download ChoreLock (Windows)</span>
+          </a>
+        </div>
       </div>
     </div>
   )
