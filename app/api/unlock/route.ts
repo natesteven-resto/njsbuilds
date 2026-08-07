@@ -3,6 +3,11 @@ import { kv } from '@vercel/kv'
 
 const UNLOCK_PIN = '4100'
 
+// KV stores/returns booleans — check both string and boolean forms
+function isTrue(val: unknown): boolean {
+  return val === true || val === 'true' || val === 1
+}
+
 // KV key for today's unlock status — resets naturally since key includes the date
 function todayKey() {
   const now = new Date()
@@ -20,7 +25,7 @@ export async function GET() {
     const key = todayKey()
     const val = await kv.get<string>(key)
     console.log('GET unlock check:', key, '=> val:', val, 'KV_URL:', process.env.KV_URL?.slice(0, 20))
-    const unlocked = val === 'true'
+    const unlocked = isTrue(val)
     return NextResponse.json({ unlocked, date: key, raw: val })
   } catch (e) {
     console.error('GET KV error:', e)
@@ -36,8 +41,8 @@ export async function POST(req: NextRequest) {
 
     if (action === 'lock') {
       const key = todayKey()
-      await kv.set(key, 'false', { ex: 60 * 60 * 25 })
-      const verify = await kv.get<string>(key)
+      await kv.set(key, false, { ex: 60 * 60 * 25 })
+      const verify = await kv.get(key)
       console.log('LOCK set, verify read back:', verify)
       return NextResponse.json({ success: true, unlocked: false })
     }
@@ -47,8 +52,8 @@ export async function POST(req: NextRequest) {
     }
 
     const key = todayKey()
-    await kv.set(key, 'true', { ex: 60 * 60 * 25 })
-    const verify = await kv.get<string>(key)
+    await kv.set(key, true, { ex: 60 * 60 * 25 })
+    const verify = await kv.get(key)
     console.log('UNLOCK set key:', key, '=> verify read back:', verify)
     return NextResponse.json({ success: true, unlocked: true, verify })
   } catch (e) {
