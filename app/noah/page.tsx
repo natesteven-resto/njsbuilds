@@ -367,8 +367,7 @@ export default function NoahDraftPage() {
           message: userMsg,
           draftedPlayers: myDraftedPlayers.map(p => `${p.name} (${p.position})`),
           availablePlayers: available.slice(0, 30).map(p => `${p.name} (${p.position}, rank ${p.adp})`),
-          round,
-          draftPosition,
+          round: myDraftedPlayers.length,
           needs: getPositionNeeds(roster),
         })
       })
@@ -488,15 +487,15 @@ export default function NoahDraftPage() {
             <span className="text-2xl">🏈</span>
             <div>
               <div className="font-black text-sm text-white leading-none">NOAH&apos;S WAR ROOM</div>
-              <div className="text-xs text-slate-500">Pick #{draftPosition} · {totalTeams} teams · PPR {dataSource === 'live' ? '· 🟢 Live' : '· ⚠️ Offline'}</div>
+              <div className="text-xs text-slate-500">PPR Snake Draft {dataSource === 'live' ? '· 🟢 Live' : '· ⚠️ Offline'}</div>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <div className={`text-xs font-bold uppercase tracking-wider ${isNoahsTurn?'text-green-400 animate-pulse':'text-slate-500'}`}>
-                {isNoahsTurn ? '⚡ YOUR PICK' : `Pick ${currentPick}`}
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Pick {currentPick}
               </div>
-              <div className="text-xs text-slate-600">Round {round}</div>
+              <div className="text-xs text-slate-600">{myDraftedPlayers.length} drafted</div>
             </div>
             <button
               onClick={() => {
@@ -521,12 +520,7 @@ export default function NoahDraftPage() {
         {/* BOARD TAB */}
         {activeTab === 'board' && (
           <div className="space-y-4 pt-4">
-            {isNoahsTurn && (
-              <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/10 border border-green-500/40 rounded-xl p-4 text-center">
-                <div className="text-green-400 font-black text-lg">⚡ IT&apos;S YOUR PICK!</div>
-                <div className="text-slate-400 text-xs mt-1">Round {round} · Grab one of your top picks below</div>
-              </div>
-            )}
+
 
             {/* Top Picks */}
             {topPicks.length > 0 && (
