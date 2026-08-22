@@ -395,7 +395,7 @@ export default function NoahDraftPage() {
             <div>
               <label className="block text-xs font-bold text-green-400 uppercase tracking-widest mb-2">Number of Teams</label>
               <div className="flex gap-2">
-                {[8,10,12,14].map(n=>(
+                {[6,8,9,10,11,12,14,16].map(n=>(
                   <button key={n} onClick={()=>setTotalTeams(n)}
                     className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${totalTeams===n?'bg-green-500 text-black shadow-lg shadow-green-500/30':'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
                   >{n}</button>
