@@ -220,23 +220,24 @@ export default function NoahDraftPage() {
   const isNoahsTurn = pickInRound === noahPickInRound
 
   // Top picks recommendation
-  function getTopPicks(): Player[] {
+  function getTopPicks(posFilter = 'ALL'): Player[] {
     const drafted = myDraftedPlayers
     const hasCounts: Record<string, number> = {}
     drafted.forEach(p => { hasCounts[p.position] = (hasCounts[p.position]||0)+1 })
     const needs: Record<string, number> = { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 }
     const missing = NEED_ORDER.filter(p => (hasCounts[p]||0) < (needs[p]||0))
-    const notMissing = NEED_ORDER.filter(p => !missing.includes(p))
 
     return available
-      .filter(p => !p.taken)
+      .filter(p => !p.taken && (posFilter === 'ALL' || p.position === posFilter))
       .sort((a, b) => {
-        const aMissing = missing.includes(a.position) ? 0 : 1
-        const bMissing = missing.includes(b.position) ? 0 : 1
-        if (aMissing !== bMissing) return aMissing - bMissing
+        if (posFilter === 'ALL') {
+          const aMissing = missing.includes(a.position) ? 0 : 1
+          const bMissing = missing.includes(b.position) ? 0 : 1
+          if (aMissing !== bMissing) return aMissing - bMissing
+        }
         return a.adp - b.adp
       })
-      .slice(0, 5)
+      .slice(0, posFilter === 'ALL' ? 5 : 8)
   }
 
   function markTaken(playerId: number) {
@@ -409,7 +410,7 @@ export default function NoahDraftPage() {
     )
   }
 
-  const topPicks = getTopPicks()
+  const topPicks = getTopPicks(filterPos)
 
   return (
     <div className="min-h-screen bg-[#020817] text-white">
@@ -467,7 +468,9 @@ export default function NoahDraftPage() {
             {topPicks.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="text-xs font-bold text-green-400 uppercase tracking-widest">🎯 Top Picks For You</div>
+                  <div className="text-xs font-bold text-green-400 uppercase tracking-widest">
+                    🎯 {filterPos === 'ALL' ? 'Top Picks For You' : `Top ${filterPos}s Available`}
+                  </div>
                   <div className="flex-1 h-px bg-slate-800"></div>
                 </div>
                 <div className="space-y-2">
