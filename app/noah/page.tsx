@@ -59,6 +59,47 @@ const POS_COLORS: Record<string, string> = {
 
 const NEED_ORDER: Position[] = ['QB','RB','WR','TE','K','DST']
 
+// Playoff schedule difficulty: weeks 15-17 opponents per team
+// Score: 1-10 where 10 = easiest playoff schedule, 1 = hardest
+// Based on 2026 opponents: elite defenses (KC, SF, BAL, BUF, PHI) = hard
+// Soft defenses (CAR, NYG, LV, TEN, JAC, DEN) = easy
+const PLAYOFF_SCHEDULE: Record<string, number> = {
+  // Easy playoff schedules (8-10) — face weak defenses weeks 15-17
+  'DAL': 10,  // vs JAC, vs NYG, @ WAS — all weak
+  'DET': 9,   // vs MIN, vs NYG, @ CHI — manageable
+  'ATL': 8,   // @ CLE, @ WAS, vs TB — all beatable
+  'GB':  8,   // @ CHI, vs HOU, vs DET — soft
+  'MIN': 8,   // @ DET, vs WAS, vs CHI — soft
+  'TEN': 9,   // vs IND, vs PIT, @ HOU — very soft
+  'IND': 8,   // vs PHI, @ TEN, vs CIN — mixed but manageable
+  'NO':  8,   // @ ARI, @ ATL, vs TB — all beatable
+  'CAR': 7,   // vs SEA, vs CIN, vs ATL — home games help
+  'LV':  8,   // vs DEN, @ KC, vs KC — winnable
+  'NE':  7,   // @ NYJ, vs DEN, vs MIA — below avg opponents
+  'NYJ': 7,   // vs NE, @ NE, vs MIN — meh
+  'WAS': 7,   // @ MIN, vs ATL, @ JAC — mixed
+  'DEN': 7,   // @ LV, vs BUF, @ NE — mixed
+  'ARI': 7,   // vs WAS, vs PHI, vs SF — tough home schedule
+  'TB':  7,   // @ LAR, @ ATL, vs NO — manageable
+  'JAC': 7,   // @ HOU, @ DAL, vs WAS — soft opponents
+  'CLE': 6,   // @ BAL, vs IND, @ CIN — division gauntlet
+  'HOU': 6,   // @ PHI, @ GB, vs TEN — mixed
+  'CHI': 6,   // @ BUF, vs GB, vs DET — mixed
+  // Hard playoff schedules (1-5) — face elite defenses weeks 15-17
+  'PHI': 5,   // vs HOU, @ IND, vs SF — SF in playoffs brutal
+  'MIA': 5,   // vs LAC, vs BUF, @ NE — BUF defense elite
+  'LAC': 5,   // @ MIA, vs KC, @ DEN — KC defense tough
+  'PIT': 5,   // vs BAL, @ CAR, @ TEN — BAL matchup brutal
+  'CIN': 4,   // @ CAR, @ IND, vs BAL — BAL matchup brutal
+  'LAR': 4,   // @ SF, vs DAL, @ SEA — SF defense elite
+  'SEA': 4,   // vs NYG, @ PHI, @ CAR — PHI defense strong
+  'BAL': 3,   // @ PIT, vs CLE, @ CIN — tough AFC North
+  'SF':  3,   // @ LAC, @ KC, @ PHI — brutal road schedule
+  'BUF': 3,   // @ DEN, @ MIA, vs NYJ — MIA in December tough
+  'KC':  3,   // @ LAC, vs LV, @ LV — LAC is tough
+  'NYG': 6,   // @ SEA, @ CLE, @ DET — all road but soft
+}
+
 function getPositionNeeds(roster: RosterSlot[]): string {
   const counts: Record<string, number> = {}
   const needs: Record<string, number> = { QB:1, RB:2, WR:2, TE:1, K:1, DST:1 }
@@ -251,6 +292,11 @@ export default function NoahDraftPage() {
         else if (k >= 1) s -= 400
       }
 
+      // Playoff schedule bonus — boost players on teams with soft weeks 15-17
+      const playoffScore = PLAYOFF_SCHEDULE[p.team] || 5
+      const playoffBonus = (playoffScore - 5) * 8 // range: -32 to +40
+      s += playoffBonus
+
       return s
     }
 
@@ -277,6 +323,7 @@ export default function NoahDraftPage() {
     if (rb >= 2 && wr >= 2 && qb >= 1 && te === 0) return 'Core is solid — target TE or best player available.'
     if (rb >= 2 && wr >= 2 && qb >= 1 && te >= 1) return 'Stack bench with upside — handcuffs and sleepers now.'
     if (total >= 13) return 'Stream DST and grab your K — almost done!'
+    if (total >= 6 && total <= 10) return 'Playoff schedule factored in — we favor players with soft weeks 15-17.'
     return 'Build around your stars — grab best value available.'
   }
 
@@ -549,7 +596,14 @@ export default function NoahDraftPage() {
                           <span className="text-xs text-slate-500">{p.team}{p.bye?` · Bye ${p.bye}`:''}</span>
                           <span className="text-xs text-slate-600">Rank #{p.adp}</span>
                         </div>
-                        <div className="text-xs text-slate-400 mt-1 line-clamp-1">{p.notes}</div>
+                        <div className="text-xs text-slate-400 mt-1 line-clamp-1">{p.notes}
+                          {PLAYOFF_SCHEDULE[p.team] >= 8 && (
+                            <span className="ml-1 text-xs text-emerald-400 font-bold">📅 Easy playoffs</span>
+                          )}
+                          {PLAYOFF_SCHEDULE[p.team] !== undefined && PLAYOFF_SCHEDULE[p.team] <= 4 && (
+                            <span className="ml-1 text-xs text-red-400/70 font-bold">📅 Tough playoffs</span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <button onClick={()=>draftPlayer(p.id)} className="px-3 py-1.5 bg-green-500 text-black text-xs font-black rounded-lg hover:bg-green-400 active:scale-95 transition-all">DRAFT</button>
@@ -628,6 +682,14 @@ export default function NoahDraftPage() {
                       <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${POS_COLORS[p.position]}`}>{p.position}</span>
                       <span className="text-xs text-slate-500">{p.team}{p.bye?` · Bye ${p.bye}`:''}</span>
                       <span className="text-xs text-slate-600">#{p.adp}</span>
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      {PLAYOFF_SCHEDULE[p.team] >= 8 && (
+                        <span className="text-emerald-400 font-bold">📅 Easy playoffs</span>
+                      )}
+                      {PLAYOFF_SCHEDULE[p.team] !== undefined && PLAYOFF_SCHEDULE[p.team] <= 4 && (
+                        <span className="text-red-400/70 font-bold">📅 Tough playoffs</span>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-1.5">
