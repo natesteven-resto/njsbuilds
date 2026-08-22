@@ -110,6 +110,34 @@ const INITIAL_PLAYERS: Omit<Player, 'taken' | 'drafted'>[] = [
   { id: 66, name: 'Brandon Aubrey', team: 'DAL', position: 'K', bye: 7,  tier: 1, adp: 138, notes: 'Record-setting accuracy.' },
   { id: 67, name: 'Tyler Bass',     team: 'BUF', position: 'K', bye: 12, tier: 2, adp: 142, notes: 'Reliable volume kicker.' },
   { id: 68, name: 'Jake Elliott',   team: 'PHI', position: 'K', bye: 5,  tier: 2, adp: 145, notes: 'PHI offense = lots of FG attempts.' },
+
+  // More WRs
+  { id: 69, name: 'Tee Higgins',      team: 'CIN', position: 'WR', bye: 7,  tier: 2, adp: 44,  notes: 'Elite talent alongside Chase. Top WR2.' },
+  { id: 70, name: 'Rashee Rice',      team: 'KC',  position: 'WR', bye: 10, tier: 2, adp: 72,  notes: 'Mahomes\' new #1 — massive upside.', sleeper: true },
+  { id: 71, name: 'DJ Moore',         team: 'CHI', position: 'WR', bye: 7,  tier: 2, adp: 76,  notes: 'Caleb Williams\' favorite target.' },
+  { id: 72, name: 'Rome Odunze',      team: 'CHI', position: 'WR', bye: 7,  tier: 2, adp: 80,  notes: 'Rookie stud, huge upside with Caleb.', sleeper: true },
+  { id: 73, name: 'Diontae Johnson',  team: 'HOU', position: 'WR', bye: 14, tier: 3, adp: 88,  notes: 'New team, fighting for targets in HOU.' },
+  { id: 74, name: 'Keenan Allen',     team: 'CHI', position: 'WR', bye: 7,  tier: 3, adp: 94,  notes: 'Vet slot receiver, reliable hands.' },
+  { id: 75, name: 'Calvin Ridley',    team: 'TEN', position: 'WR', bye: 6,  tier: 3, adp: 96,  notes: 'Vet receiver, fading but depth value.' },
+
+  // More RBs
+  { id: 76, name: 'David Montgomery', team: 'DET', position: 'RB', bye: 5,  tier: 3, adp: 100, notes: 'Gibbs\' handcuff, goal-line role.' },
+  { id: 77, name: 'Rachaad White',    team: 'TB',  position: 'RB', bye: 11, tier: 3, adp: 102, notes: 'Pass-catching back, solid PPR floor.' },
+  { id: 78, name: 'Javonte Williams', team: 'DEN', position: 'RB', bye: 9,  tier: 3, adp: 122, notes: 'Recovering well, could emerge late.' },
+
+  // More TEs
+  { id: 79, name: 'Mark Andrews',     team: 'BAL', position: 'TE', bye: 14, tier: 2, adp: 48,  notes: 'When healthy, elite TE1. Lamar loves him.' },
+  { id: 80, name: 'Kyle Pitts',       team: 'ATL', position: 'TE', bye: 12, tier: 2, adp: 65,  notes: 'Elite athlete, huge ceiling in ATL.' },
+  { id: 81, name: 'David Njoku',      team: 'CLE', position: 'TE', bye: 10, tier: 2, adp: 78,  notes: 'Cleveland\'s primary TE target.' },
+  { id: 82, name: 'Travis Kelce',     team: 'KC',  position: 'TE', bye: 10, tier: 0, adp: 999, notes: '⚠️ RETIRED after 2024 — do not draft.' },
+
+  // More QBs
+  { id: 83, name: 'Caleb Williams',   team: 'CHI', position: 'QB', bye: 7,  tier: 2, adp: 72,  notes: '#1 pick, big year 2 leap expected.', sleeper: true },
+  { id: 84, name: 'Dak Prescott',     team: 'DAL', position: 'QB', bye: 7,  tier: 2, adp: 78,  notes: 'Elite offense, always puts up points.' },
+  { id: 85, name: 'Tua Tagovailoa',   team: 'MIA', position: 'QB', bye: 10, tier: 2, adp: 82,  notes: 'Tyreek + Waddle = fantasy gold when healthy.' },
+  { id: 86, name: 'Jordan Love',      team: 'GB',  position: 'QB', bye: 6,  tier: 2, adp: 88,  notes: 'Year 3 leap, surrounded by weapons.' },
+  { id: 87, name: 'Kirk Cousins',     team: 'ATL', position: 'QB', bye: 12, tier: 3, adp: 118, notes: 'Bijan + London makes him viable.' },
+  { id: 88, name: 'Russell Wilson',   team: 'PIT', position: 'QB', bye: 9,  tier: 3, adp: 125, notes: 'Veteran bounce-back attempt in PIT.' },
 ]
 
 const ROSTER_TEMPLATE: RosterSlot[] = [
@@ -543,6 +571,13 @@ export default function NoahDraftPage() {
 
             {/* Player list */}
             <div className="space-y-1.5">
+              {filtered.length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-3xl mb-2">🤷</div>
+                  <div className="text-slate-400 text-sm font-bold">Player not found</div>
+                  <div className="text-slate-600 text-xs mt-2 leading-relaxed">They might be retired, injured, or not in the database.<br/>Just mark them Taken in the AI Chat tab.</div>
+                </div>
+              )}
               {filtered.slice(0, 40).map(p => (
                 <div key={p.id} className="bg-slate-900/40 border border-slate-800 rounded-xl p-3 flex items-center gap-3 hover:border-slate-700 transition-all">
                   <div className="flex-1 min-w-0">
