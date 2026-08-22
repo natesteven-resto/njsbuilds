@@ -152,15 +152,43 @@ function getPositionNeeds(roster: RosterSlot[]): string {
 }
 
 export default function NoahDraftPage() {
-  const [players, setPlayers] = useState<Player[]>(
-    INITIAL_PLAYERS.map(p => ({ ...p, taken: false, drafted: false }))
-  )
-  const [roster, setRoster] = useState<RosterSlot[]>(ROSTER_TEMPLATE.map(s => ({ ...s })))
-  const [draftPosition, setDraftPosition] = useState<number>(1)
-  const [totalTeams, setTotalTeams] = useState<number>(10)
-  const [currentPick, setCurrentPick] = useState<number>(1)
-  const [setupDone, setSetupDone] = useState(false)
-  const [chat, setChat] = useState<ChatMessage[]>([])
+  const [players, setPlayers] = useState<Player[]>(() => {
+    if (typeof window === 'undefined') return INITIAL_PLAYERS.map(p => ({ ...p, taken: false, drafted: false }))
+    try {
+      const saved = localStorage.getItem('noah-draft-players')
+      return saved ? JSON.parse(saved) : INITIAL_PLAYERS.map(p => ({ ...p, taken: false, drafted: false }))
+    } catch { return INITIAL_PLAYERS.map(p => ({ ...p, taken: false, drafted: false })) }
+  })
+  const [roster, setRoster] = useState<RosterSlot[]>(() => {
+    if (typeof window === 'undefined') return ROSTER_TEMPLATE.map(s => ({ ...s }))
+    try {
+      const saved = localStorage.getItem('noah-draft-roster')
+      return saved ? JSON.parse(saved) : ROSTER_TEMPLATE.map(s => ({ ...s }))
+    } catch { return ROSTER_TEMPLATE.map(s => ({ ...s })) }
+  })
+  const [draftPosition, setDraftPosition] = useState<number>(() => {
+    if (typeof window === 'undefined') return 1
+    return parseInt(localStorage.getItem('noah-draft-position') || '1')
+  })
+  const [totalTeams, setTotalTeams] = useState<number>(() => {
+    if (typeof window === 'undefined') return 10
+    return parseInt(localStorage.getItem('noah-draft-teams') || '10')
+  })
+  const [currentPick, setCurrentPick] = useState<number>(() => {
+    if (typeof window === 'undefined') return 1
+    return parseInt(localStorage.getItem('noah-draft-pick') || '1')
+  })
+  const [setupDone, setSetupDone] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('noah-draft-setup') === 'true'
+  })
+  const [chat, setChat] = useState<ChatMessage[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const saved = localStorage.getItem('noah-draft-chat')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'board' | 'roster' | 'chat'>('board')
@@ -171,6 +199,15 @@ export default function NoahDraftPage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chat])
+
+  // Persist everything to localStorage on change
+  useEffect(() => { localStorage.setItem('noah-draft-players', JSON.stringify(players)) }, [players])
+  useEffect(() => { localStorage.setItem('noah-draft-roster', JSON.stringify(roster)) }, [roster])
+  useEffect(() => { localStorage.setItem('noah-draft-pick', String(currentPick)) }, [currentPick])
+  useEffect(() => { localStorage.setItem('noah-draft-setup', String(setupDone)) }, [setupDone])
+  useEffect(() => { localStorage.setItem('noah-draft-chat', JSON.stringify(chat)) }, [chat])
+  useEffect(() => { localStorage.setItem('noah-draft-position', String(draftPosition)) }, [draftPosition])
+  useEffect(() => { localStorage.setItem('noah-draft-teams', String(totalTeams)) }, [totalTeams])
 
   const available = players.filter(p => !p.taken && !p.drafted)
   const myDraftedPlayers = players.filter(p => p.drafted)
@@ -349,6 +386,22 @@ export default function NoahDraftPage() {
               className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-400 text-black font-black text-lg rounded-xl hover:shadow-lg hover:shadow-green-500/30 transition-all active:scale-95"
             >
               ENTER THE WAR ROOM →
+            </button>
+
+            <button
+              onClick={() => {
+                localStorage.clear()
+                setPlayers(INITIAL_PLAYERS.map(p => ({ ...p, taken: false, drafted: false })))
+                setRoster(ROSTER_TEMPLATE.map(s => ({ ...s })))
+                setDraftPosition(1)
+                setTotalTeams(10)
+                setCurrentPick(1)
+                setSetupDone(false)
+                setChat([])
+              }}
+              className="w-full py-2 text-slate-600 text-xs hover:text-slate-400 transition-colors"
+            >
+              Reset / Start Over
             </button>
           </div>
         </div>
