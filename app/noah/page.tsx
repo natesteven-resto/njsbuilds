@@ -129,7 +129,7 @@ const INITIAL_PLAYERS: Omit<Player, 'taken' | 'drafted'>[] = [
   { id: 79, name: 'Mark Andrews',     team: 'BAL', position: 'TE', bye: 14, tier: 2, adp: 48,  notes: 'When healthy, elite TE1. Lamar loves him.' },
   { id: 80, name: 'Kyle Pitts',       team: 'ATL', position: 'TE', bye: 12, tier: 2, adp: 65,  notes: 'Elite athlete, huge ceiling in ATL.' },
   { id: 81, name: 'David Njoku',      team: 'CLE', position: 'TE', bye: 10, tier: 2, adp: 78,  notes: 'Cleveland\'s primary TE target.' },
-  { id: 82, name: 'Travis Kelce',     team: 'KC',  position: 'TE', bye: 10, tier: 0, adp: 999, notes: '⚠️ RETIRED after 2024 — do not draft.' },
+  { id: 82, name: 'Travis Kelce',     team: 'KC',  position: 'TE', bye: 10, tier: 2, adp: 58,  notes: 'Still a weapon. Mahomes always finds him in big moments.' },
 
   // More QBs
   { id: 83, name: 'Caleb Williams',   team: 'CHI', position: 'QB', bye: 7,  tier: 2, adp: 72,  notes: '#1 pick, big year 2 leap expected.', sleeper: true },
