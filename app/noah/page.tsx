@@ -409,8 +409,15 @@ export default function NoahDraftPage() {
               }}
               className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-400 text-black font-black text-lg rounded-xl hover:shadow-lg hover:shadow-green-500/30 transition-all active:scale-95"
             >ENTER THE WAR ROOM →</button>
-            <button onClick={doReset} className="w-full py-2 text-slate-600 text-xs hover:text-slate-400 transition-colors">
-              Reset / Reload Fresh Rankings
+            <button
+              onClick={() => {
+                if (window.confirm('⚠️ Are you sure? This will wipe your entire draft and reload fresh rankings. This cannot be undone.')) {
+                  doReset()
+                }
+              }}
+              className="w-full py-3 border border-red-500/30 text-red-400 text-sm font-bold rounded-xl hover:bg-red-500/10 transition-all active:scale-95"
+            >
+              🗑️ Reset & Reload Fresh Rankings
             </button>
           </div>
         </div>
@@ -622,7 +629,16 @@ export default function NoahDraftPage() {
                 </div>
               ))}
             </div>
-            <button onClick={doReset} className="w-full py-2 text-slate-700 text-xs hover:text-slate-500 transition-colors mt-4">Reset Draft</button>
+            <button
+              onClick={() => {
+                if (window.confirm('⚠️ Are you sure? This will wipe your entire draft and reload fresh rankings. This cannot be undone.')) {
+                  doReset()
+                }
+              }}
+              className="w-full py-3 border border-red-500/30 text-red-400 text-sm font-bold rounded-xl hover:bg-red-500/10 transition-all active:scale-95 mt-2"
+            >
+              🗑️ Reset Draft
+            </button>
           </div>
         )}
 
