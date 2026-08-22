@@ -437,11 +437,20 @@ export default function NoahDraftPage() {
               <div className="text-xs text-slate-500">Pick #{draftPosition} · {totalTeams} teams · PPR {dataSource === 'live' ? '· 🟢 Live' : '· ⚠️ Offline'}</div>
             </div>
           </div>
-          <div className="text-right">
-            <div className={`text-xs font-bold uppercase tracking-wider ${isNoahsTurn?'text-green-400 animate-pulse':'text-slate-500'}`}>
-              {isNoahsTurn ? '⚡ YOUR PICK' : `Pick ${currentPick}`}
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className={`text-xs font-bold uppercase tracking-wider ${isNoahsTurn?'text-green-400 animate-pulse':'text-slate-500'}`}>
+                {isNoahsTurn ? '⚡ YOUR PICK' : `Pick ${currentPick}`}
+              </div>
+              <div className="text-xs text-slate-600">Round {round}</div>
             </div>
-            <div className="text-xs text-slate-600">Round {round}</div>
+            <button
+              onClick={() => {
+                if (window.confirm('⚠️ Are you sure? This will wipe your entire draft and reload fresh rankings. This cannot be undone.'))
+                  doReset()
+              }}
+              className="text-xs text-red-400/70 border border-red-500/30 rounded-lg px-2 py-1 hover:bg-red-500/10 transition-all active:scale-95"
+            >🗑️ Reset</button>
           </div>
         </div>
         <div className="max-w-2xl mx-auto px-4 flex gap-1 pb-2">
