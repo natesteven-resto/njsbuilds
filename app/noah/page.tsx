@@ -190,29 +190,94 @@ export default function NoahDraftPage() {
   const available = players.filter(p => !p.taken && !p.drafted)
   const myDraftedPlayers = players.filter(p => p.drafted)
 
-  const round = Math.ceil(currentPick / totalTeams)
-  const pickInRound = ((currentPick - 1) % totalTeams) + 1
-  const isSnakeRound = round % 2 === 0
-  const noahPickInRound = isSnakeRound ? totalTeams - draftPosition + 1 : draftPosition
-  const isNoahsTurn = pickInRound === noahPickInRound
-
+  // Smart strategy engine
   function getTopPicks(posFilter = 'ALL'): Player[] {
-    const hasCounts: Record<string, number> = {}
-    myDraftedPlayers.forEach(p => { hasCounts[p.position] = (hasCounts[p.position]||0)+1 })
-    const needs: Record<string, number> = { QB:1, RB:2, WR:2, TE:1, K:1, DST:1 }
-    const missing = NEED_ORDER.filter(p => (hasCounts[p]||0) < (needs[p]||0))
+    const counts: Record<string, number> = {}
+    myDraftedPlayers.forEach(p => { counts[p.position] = (counts[p.position]||0)+1 })
+    const total = myDraftedPlayers.length // how many picks Noah has made
+
+    // Score each available player based on roster context
+    function score(p: Player): number {
+      let s = 1000 - p.adp // base: higher rank = higher score
+
+      if (posFilter !== 'ALL') return s // filtering by position — just use rank
+
+      const rb = counts['RB']||0
+      const wr = counts['WR']||0
+      const qb = counts['QB']||0
+      const te = counts['TE']||0
+      const dst = counts['DST']||0
+      const k = counts['K']||0
+
+      // Early rounds (picks 1-3): pure best player available
+      if (total < 3) return s
+
+      // QB: don't reach early, but don't wait past pick 6 if elite ones are gone
+      if (p.position === 'QB') {
+        if (qb >= 1) s -= 300       // already have one, deprioritize hard
+        else if (total < 5) s -= 150 // too early for QB unless elite (adp < 20)
+        else if (total >= 5 && p.adp < 50) s += 50 // good QB available mid-draft
+      }
+
+      // RB: premium position in PPR, stack early
+      if (p.position === 'RB') {
+        if (rb === 0 && total >= 2) s += 200  // panic: no RB after 2 picks
+        else if (rb === 1 && total < 6) s += 100 // get that second RB
+        else if (rb >= 3) s -= 150            // 3 RBs is enough starters
+        else if (rb >= 4) s -= 300            // way too many RBs
+      }
+
+      // WR: also premium, need 2 solid starters
+      if (p.position === 'WR') {
+        if (wr === 0 && total >= 3) s += 150  // need a WR
+        else if (wr === 1 && total < 7) s += 75
+        else if (wr >= 4) s -= 150
+      }
+
+      // TE: get one good one, don't double up early
+      if (p.position === 'TE') {
+        if (te === 0 && total >= 4 && p.adp < 60) s += 100  // elite TE available
+        else if (te === 0 && total >= 7) s += 50             // late grab is fine
+        else if (te >= 1) s -= 200                           // one is enough
+      }
+
+      // DST/K: stream late, never early
+      if (p.position === 'DST') {
+        if (total < 12) s -= 500  // never draft DST before round ~13
+        else if (dst >= 1) s -= 300
+      }
+      if (p.position === 'K') {
+        if (total < 13) s -= 600  // always last pick
+        else if (k >= 1) s -= 400
+      }
+
+      return s
+    }
 
     return available
       .filter(p => posFilter === 'ALL' || p.position === posFilter)
-      .sort((a, b) => {
-        if (posFilter === 'ALL') {
-          const aMissing = missing.includes(a.position) ? 0 : 1
-          const bMissing = missing.includes(b.position) ? 0 : 1
-          if (aMissing !== bMissing) return aMissing - bMissing
-        }
-        return a.adp - b.adp
-      })
+      .map(p => ({ player: p, score: score(p) }))
+      .sort((a, b) => b.score - a.score)
+      .map(x => x.player)
       .slice(0, posFilter === 'ALL' ? 5 : 8)
+  }
+
+  // Strategy label shown under top picks
+  function getStrategyNote(): string {
+    const counts: Record<string, number> = {}
+    myDraftedPlayers.forEach(p => { counts[p.position] = (counts[p.position]||0)+1 })
+    const total = myDraftedPlayers.length
+    const rb = counts['RB']||0, wr = counts['WR']||0, qb = counts['QB']||0, te = counts['TE']||0
+
+    if (total === 0) return 'Take the best player available — position doesn\'t matter yet.'
+    if (rb === 0 && total >= 2) return '⚠️ You need a RB — this is getting urgent.'
+    if (wr === 0 && total >= 3) return '⚠️ You need a WR — grab one now.'
+    if (qb === 0 && total >= 6) return 'Consider a QB soon — the good ones are going fast.'
+    if (te === 0 && total >= 6) return 'TE is a big position gap — grab a good one if available.'
+    if (rb >= 2 && wr >= 2 && qb >= 1 && te === 0) return 'Core is solid — target TE or best player available.'
+    if (rb >= 2 && wr >= 2 && qb >= 1 && te >= 1) return 'Stack bench with upside — handcuffs and sleepers now.'
+    if (total >= 13) return 'Stream DST and grab your K — almost done!'
+    return 'Build around your stars — grab best value available.'
   }
 
   function markTaken(playerId: number) {
@@ -365,7 +430,7 @@ export default function NoahDraftPage() {
     )
   }
 
-  // Setup screen
+  // Setup screen — just needs to know it's ready
   if (!setupDone) {
     return (
       <div className="min-h-screen bg-[#020817] flex items-center justify-center p-4">
@@ -377,60 +442,37 @@ export default function NoahDraftPage() {
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-300">WAR ROOM</span>
             </h1>
             <p className="text-slate-400 text-sm">AI draft commander. Let&apos;s build a championship team.</p>
-            {dataSource === 'live' && <div className="mt-2 text-xs text-green-400/60">✓ Live 2026 rankings loaded ({players.length} players)</div>}
+            {dataSource === 'live' && <div className="mt-2 text-xs text-green-400/60">✓ Live 2026 PPR rankings loaded ({players.length} players)</div>}
             {dataSource === 'fallback' && <div className="mt-2 text-xs text-yellow-400/60">⚠ Using backup rankings — check connection</div>}
           </div>
 
           <div className="bg-slate-900/80 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur">
-            <div>
-              <label className="block text-xs font-bold text-green-400 uppercase tracking-widest mb-2">Your Draft Position</label>
-              <div className="flex gap-2 flex-wrap">
-                {Array.from({length:12},(_,i)=>i+1).map(n=>(
-                  <button key={n} onClick={()=>setDraftPosition(n)}
-                    className={`w-10 h-10 rounded-lg font-bold text-sm transition-all ${draftPosition===n?'bg-green-500 text-black shadow-lg shadow-green-500/30':'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
-                  >{n}</button>
-                ))}
+            <div className="bg-slate-800/60 rounded-xl p-4 text-sm text-slate-300 leading-relaxed">
+              <div className="font-black text-white mb-2">How it works:</div>
+              <div className="space-y-1.5 text-slate-400 text-xs">
+                <div>📍 When someone picks a player — tap <span className="text-slate-200 font-bold">Taken</span></div>
+                <div>🎯 When it’s your turn — tap <span className="text-green-400 font-bold">DRAFT</span> on your best pick</div>
+                <div>🤖 Ask the AI anything in the Chat tab</div>
+                <div>🔍 Search any player by name</div>
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-green-400 uppercase tracking-widest mb-2">Number of Teams</label>
-              <div className="flex gap-2 flex-wrap">
-                {[8,10,12,14].map(n=>(
-                  <button key={n} onClick={()=>setTotalTeams(n)}
-                    className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${totalTeams===n?'bg-green-500 text-black shadow-lg shadow-green-500/30':'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
-                  >{n}</button>
-                ))}
-                <button
-                  onClick={()=>{
-                    const val = prompt('How many teams are in your league?')
-                    const n = parseInt(val||'')
-                    if (!isNaN(n) && n > 1) setTotalTeams(n)
-                  }}
-                  className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${
-                    ![8,10,12,14].includes(totalTeams)
-                      ? 'bg-green-500 text-black shadow-lg shadow-green-500/30'
-                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                  }`}
-                >{![8,10,12,14].includes(totalTeams) ? totalTeams : 'Other'}</button>
-              </div>
-            </div>
+
             <button
               onClick={()=>{
                 setSetupDone(true)
-                setChat([{role:'ai', text:`Let's get it, Noah. Pick #${draftPosition} of ${totalTeams} teams — snake draft, PPR scoring. Rankings are live from FantasyPros. When someone gets picked, tap Taken. When it's your turn, I'll have your top picks ready. Let's build a dynasty. 🏆`}])
+                setChat([{role:'ai', text:`Let's go, Noah. Snake draft, PPR scoring — live rankings loaded. When someone picks a player, tap Taken. I'll always show your best options based on what you've already drafted. Let's build a dynasty. 🏆`}])
               }}
               className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-400 text-black font-black text-lg rounded-xl hover:shadow-lg hover:shadow-green-500/30 transition-all active:scale-95"
             >ENTER THE WAR ROOM →</button>
+
             <button
               onClick={() => {
-                if (window.confirm('⚠️ Are you sure? This will wipe your entire draft and reload fresh rankings. This cannot be undone.')) {
+                if (window.confirm('⚠️ Are you sure? This will wipe any saved data and reload fresh rankings.')) {
                   doReset()
                 }
               }}
               className="w-full py-3 border border-red-500/30 text-red-400 text-sm font-bold rounded-xl hover:bg-red-500/10 transition-all active:scale-95"
-            >
-              🗑️ Reset & Reload Fresh Rankings
-            </button>
+            >🗑️ Reset & Reload Fresh Rankings</button>
           </div>
         </div>
       </div>
@@ -489,12 +531,15 @@ export default function NoahDraftPage() {
             {/* Top Picks */}
             {topPicks.length > 0 && (
               <div>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-1">
                   <div className="text-xs font-bold text-green-400 uppercase tracking-widest">
                     🎯 {filterPos==='ALL'?'Top Picks For You':`Top ${filterPos}s Available`}
                   </div>
                   <div className="flex-1 h-px bg-slate-800" />
                 </div>
+                {filterPos === 'ALL' && (
+                  <div className="text-xs text-slate-500 italic mb-3">{getStrategyNote()}</div>
+                )}
                 <div className="space-y-2">
                   {topPicks.map((p,i)=>(
                     <div key={p.id} className={`relative bg-slate-900/60 border rounded-xl p-3 flex items-center gap-3 ${i===0?'border-green-500/50 shadow-lg shadow-green-500/10':'border-slate-700/50'}`}>
