@@ -535,6 +535,7 @@ export default function NoahDraftPage() {
             <div>
               <div className="font-black text-sm text-white leading-none">NOAH&apos;S WAR ROOM</div>
               <div className="text-xs text-slate-500">PPR Snake Draft {dataSource === 'live' ? '· 🟢 Live' : '· ⚠️ Offline'}</div>
+              <a href="/noah/team" className="text-xs text-green-400 font-bold hover:text-green-300 transition-colors">🏆 Manage Team →</a>
             </div>
           </div>
           <div className="flex items-center gap-3">
