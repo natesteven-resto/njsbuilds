@@ -135,18 +135,14 @@ export default function ForcastPage() {
     [save]
   )
 
-  const months = useMemo(() => {
-    const m1 = { y: anchorY, m: anchorM }
-    const m2Date = new Date(anchorY, anchorM + 1, 1)
-    const m2 = { y: m2Date.getFullYear(), m: m2Date.getMonth() }
-    return [m1, m2]
-  }, [anchorY, anchorM])
+  // Single visible month.
+  const view = useMemo(() => ({ y: anchorY, m: anchorM }), [anchorY, anchorM])
 
   const computed = useMemo(() => {
     if (!doc) return null
     const startDate = parseYmd(doc.startingDate)
-    const firstVisible = new Date(months[0].y, months[0].m, 1)
-    const lastVisible = new Date(months[1].y, months[1].m, daysInMonth(months[1].y, months[1].m))
+    const firstVisible = new Date(view.y, view.m, 1)
+    const lastVisible = new Date(view.y, view.m, daysInMonth(view.y, view.m))
     const windowStart = startDate < firstVisible ? startDate : firstVisible
 
     const byDate: Record<string, DayItem[]> = {}
@@ -180,7 +176,7 @@ export default function ForcastPage() {
     }
 
     return { byDate, balByDate, startDate }
-  }, [doc, months])
+  }, [doc, view])
 
   if (!loaded || !doc || !computed) {
     return (
@@ -234,32 +230,30 @@ export default function ForcastPage() {
           <button style={S.navBtn} onClick={goNext}>›</button>
         </div>
 
-        {/* Two months */}
+        {/* Single month */}
         <div style={S.monthsRow}>
-          {months.map((mm) => (
-            <MonthCalendar
-              key={`${mm.y}-${mm.m}`}
-              year={mm.y}
-              month={mm.m}
-              byDate={computed.byDate}
-              balByDate={computed.balByDate}
-              todayKey={todayKey}
-              startKey={doc.startingDate}
-              onAddOneOff={addOneOffTo}
-              onRemoveOneOff={(id) => update((d) => ({ ...d, oneOffs: d.oneOffs.filter((o) => o.id !== id) }))}
-              onMoveOneOff={(id, newDate) =>
-                update((d) => ({ ...d, oneOffs: d.oneOffs.map((o) => (o.id === id ? { ...o, date: newDate } : o)) }))
-              }
-              onMoveRecurring={(recId, originalDate, newDate) =>
-                update((d) => {
-                  const others = (d.overrides || []).filter((ov) => !(ov.recId === recId && ov.originalDate === originalDate))
-                  if (newDate === originalDate) return { ...d, overrides: others }
-                  return { ...d, overrides: [...others, { recId, originalDate, newDate }] }
-                })
-              }
-              oneOffs={doc.oneOffs}
-            />
-          ))}
+          <MonthCalendar
+            key={`${view.y}-${view.m}`}
+            year={view.y}
+            month={view.m}
+            byDate={computed.byDate}
+            balByDate={computed.balByDate}
+            todayKey={todayKey}
+            startKey={doc.startingDate}
+            onAddOneOff={addOneOffTo}
+            onRemoveOneOff={(id) => update((d) => ({ ...d, oneOffs: d.oneOffs.filter((o) => o.id !== id) }))}
+            onMoveOneOff={(id, newDate) =>
+              update((d) => ({ ...d, oneOffs: d.oneOffs.map((o) => (o.id === id ? { ...o, date: newDate } : o)) }))
+            }
+            onMoveRecurring={(recId, originalDate, newDate) =>
+              update((d) => {
+                const others = (d.overrides || []).filter((ov) => !(ov.recId === recId && ov.originalDate === originalDate))
+                if (newDate === originalDate) return { ...d, overrides: others }
+                return { ...d, overrides: [...others, { recId, originalDate, newDate }] }
+              })
+            }
+            oneOffs={doc.oneOffs}
+          />
         </div>
 
         {/* Recurring manager */}
@@ -523,8 +517,8 @@ const S: Record<string, React.CSSProperties> = {
   navBtn: { ...glass, width: 44, height: 40, fontSize: 20, fontWeight: 700, borderRadius: 12, color: '#4f46e5', cursor: 'pointer' },
   navBtnGhost: { background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: '#fff', border: 'none', padding: '10px 22px', fontSize: 14, fontWeight: 700, borderRadius: 12, cursor: 'pointer', boxShadow: '0 4px 14px rgba(79,70,229,0.4)' },
 
-  monthsRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18 },
-  month: { ...glass, borderRadius: 24, overflow: 'hidden' },
+  monthsRow: { display: 'block' },
+  month: { ...glass, borderRadius: 24, overflow: 'hidden', maxWidth: 900, margin: '0 auto' },
   monthHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,0.5)' },
   monthTitle: { fontSize: 19, fontWeight: 800, color: '#1e293b' },
   monthYear: { fontWeight: 500, color: '#94a3b8' },
@@ -535,10 +529,10 @@ const S: Record<string, React.CSSProperties> = {
   dow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' },
   dowCell: { textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#94a3b8', padding: '8px 0', textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, padding: '4px 6px 8px' },
-  emptyCell: { minHeight: 96, borderRadius: 12, background: 'rgba(255,255,255,0.12)' },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, padding: '6px 8px 10px' },
+  emptyCell: { minHeight: 140, borderRadius: 14, background: 'rgba(255,255,255,0.12)' },
   day: {
-    minHeight: 96, borderRadius: 12, padding: '6px 6px 4px', cursor: 'pointer',
+    minHeight: 140, borderRadius: 14, padding: '8px 8px 6px', cursor: 'pointer',
     display: 'flex', flexDirection: 'column', position: 'relative',
     background: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.4)',
     transition: 'transform 0.1s',
@@ -546,19 +540,19 @@ const S: Record<string, React.CSSProperties> = {
   dayToday: { background: 'rgba(99,102,241,0.16)', border: '1px solid rgba(99,102,241,0.55)', boxShadow: '0 0 0 3px rgba(99,102,241,0.15), 0 4px 14px rgba(99,102,241,0.2)' },
   dayStart: { background: 'rgba(52,211,153,0.14)', border: '1px solid rgba(52,211,153,0.4)' },
   dayTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  dayNum: { fontSize: 12, fontWeight: 700, color: '#94a3b8', lineHeight: 1 },
+  dayNum: { fontSize: 14, fontWeight: 700, color: '#94a3b8', lineHeight: 1 },
   dayNumToday: { color: '#4f46e5' },
-  dayItems: { display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4, flex: 1 },
+  dayItems: { display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6, flex: 1 },
 
-  item: { fontSize: 10.5, fontWeight: 600, display: 'flex', justifyContent: 'space-between', gap: 3, lineHeight: 1.25, cursor: 'pointer', padding: '2px 5px', borderRadius: 6 },
+  item: { fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', gap: 4, lineHeight: 1.3, cursor: 'pointer', padding: '3px 7px', borderRadius: 7 },
   itemIncome: { color: '#047857', background: 'rgba(52,211,153,0.16)' },
   itemExpense: { color: '#b91c1c', background: 'rgba(248,113,113,0.14)' },
   itemLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '62%' },
   itemAmt: { fontWeight: 800, fontVariantNumeric: 'tabular-nums' },
 
   balChip: {
-    marginTop: 'auto', textAlign: 'center', fontSize: 11, fontWeight: 800,
-    padding: '3px 6px', borderRadius: 8, fontVariantNumeric: 'tabular-nums',
+    marginTop: 'auto', textAlign: 'center', fontSize: 13, fontWeight: 800,
+    padding: '5px 8px', borderRadius: 9, fontVariantNumeric: 'tabular-nums',
     backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
   },
   balChipPos: { color: '#0f766e', background: 'rgba(45,212,191,0.22)', boxShadow: 'inset 0 0 0 1px rgba(45,212,191,0.3)' },
