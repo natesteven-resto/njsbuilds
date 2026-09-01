@@ -501,7 +501,7 @@ const S: Record<string, React.CSSProperties> = {
   },
   bgGlow: { position: 'fixed', top: -120, left: -80, width: 380, height: 380, borderRadius: '50%', background: 'radial-gradient(circle, rgba(129,140,248,0.35), transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none', zIndex: 0 },
   bgGlow2: { position: 'fixed', bottom: -140, right: -100, width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(94,234,212,0.28), transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none', zIndex: 0 },
-  container: { maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 },
+  container: { maxWidth: 1500, margin: '0 auto', position: 'relative', zIndex: 1, width: '96vw' },
   loadingWrap: { minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 },
   loading: { color: '#64748b', fontSize: 16 },
 
@@ -518,7 +518,7 @@ const S: Record<string, React.CSSProperties> = {
   navBtnGhost: { background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: '#fff', border: 'none', padding: '10px 22px', fontSize: 14, fontWeight: 700, borderRadius: 12, cursor: 'pointer', boxShadow: '0 4px 14px rgba(79,70,229,0.4)' },
 
   monthsRow: { display: 'block' },
-  month: { ...glass, borderRadius: 24, overflow: 'hidden', maxWidth: 900, margin: '0 auto' },
+  month: { ...glass, borderRadius: 24, overflow: 'hidden', maxWidth: 1400, margin: '0 auto' },
   monthHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,0.5)' },
   monthTitle: { fontSize: 19, fontWeight: 800, color: '#1e293b' },
   monthYear: { fontWeight: 500, color: '#94a3b8' },
@@ -544,11 +544,11 @@ const S: Record<string, React.CSSProperties> = {
   dayNumToday: { color: '#4f46e5' },
   dayItems: { display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6, flex: 1 },
 
-  item: { fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', gap: 4, lineHeight: 1.3, cursor: 'pointer', padding: '3px 7px', borderRadius: 7 },
+  item: { fontSize: 10.5, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4, lineHeight: 1.3, cursor: 'pointer', padding: '2px 6px', borderRadius: 6 },
   itemIncome: { color: '#047857', background: 'rgba(52,211,153,0.16)' },
   itemExpense: { color: '#b91c1c', background: 'rgba(248,113,113,0.14)' },
-  itemLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '62%' },
-  itemAmt: { fontWeight: 800, fontVariantNumeric: 'tabular-nums' },
+  itemLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 },
+  itemAmt: { fontWeight: 800, fontVariantNumeric: 'tabular-nums', flexShrink: 0, whiteSpace: 'nowrap' },
 
   balChip: {
     marginTop: 'auto', textAlign: 'center', fontSize: 13, fontWeight: 800,
