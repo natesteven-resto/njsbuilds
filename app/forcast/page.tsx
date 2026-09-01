@@ -46,6 +46,12 @@ function daysInMonth(year: number, month: number): number {
 function money(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
+function moneyShort(n: number): string {
+  const abs = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
+  if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1)}k`
+  return `${sign}$${abs.toFixed(0)}`
+}
 function diffDays(a: Date, b: Date): number {
   const ms = parseYmd(ymd(a)).getTime() - parseYmd(ymd(b)).getTime()
   return Math.round(ms / 86400000)
@@ -65,16 +71,12 @@ function recurringHits(r: Recurring, start: Date, end: Date): string[] {
     }
   } else if (r.cadence === 'weekly' || r.cadence === 'biweekly') {
     const step = r.cadence === 'weekly' ? 7 : 14
-    // Anchor: startDate if given, else first matching weekday on/after start
     let anchor = r.startDate ? parseYmd(r.startDate) : new Date(start)
     if (!r.startDate && r.weekday != null) {
       while (anchor.getDay() !== r.weekday) anchor.setDate(anchor.getDate() + 1)
     }
-    // Walk backward/forward to align anchor into range
     let d = new Date(anchor)
-    // move forward to >= start
     while (d < start) d.setDate(d.getDate() + step)
-    // if anchor was after start, also fill nothing before (we only forecast forward from start)
     while (d <= end) {
       hits.push(ymd(d))
       d.setDate(d.getDate() + step)
@@ -83,18 +85,19 @@ function recurringHits(r: Recurring, start: Date, end: Date): string[] {
   return hits
 }
 
+type DayItem = { label: string; amount: number; recurring: boolean; recId?: string; originalDate?: string }
+
 // ---------- Page ----------
 export default function ForcastPage() {
   const [doc, setDoc] = useState<ForcastDoc | null>(null)
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
-  // Which two months to show. Default: current + next.
   const now = new Date()
   const [anchorY, setAnchorY] = useState(now.getFullYear())
   const [anchorM, setAnchorM] = useState(now.getMonth())
 
-  // Load
   useEffect(() => {
     fetch('/api/forcast')
       .then((r) => r.json())
@@ -109,7 +112,6 @@ export default function ForcastPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Debounced save
   const save = useCallback((next: ForcastDoc) => {
     setSaving(true)
     fetch('/api/forcast', {
@@ -133,7 +135,6 @@ export default function ForcastPage() {
     [save]
   )
 
-  // Build the two visible months
   const months = useMemo(() => {
     const m1 = { y: anchorY, m: anchorM }
     const m2Date = new Date(anchorY, anchorM + 1, 1)
@@ -141,42 +142,23 @@ export default function ForcastPage() {
     return [m1, m2]
   }, [anchorY, anchorM])
 
-  // Compute per-day items + running balance across the full visible window
   const computed = useMemo(() => {
     if (!doc) return null
     const startDate = parseYmd(doc.startingDate)
-
-    // Window: from earliest of (startingDate, first visible day) to last visible day
     const firstVisible = new Date(months[0].y, months[0].m, 1)
     const lastVisible = new Date(months[1].y, months[1].m, daysInMonth(months[1].y, months[1].m))
     const windowStart = startDate < firstVisible ? startDate : firstVisible
 
-    // Collect all items keyed by date. Recurring instances carry the rule id
-    // and the date the rule originally generated, so a single occurrence can
-    // be moved via an override without altering the rule.
-    const byDate: Record<
-      string,
-      { label: string; amount: number; recurring: boolean; recId?: string; originalDate?: string }[]
-    > = {}
-    const add = (
-      date: string,
-      label: string,
-      amount: number,
-      rec: boolean,
-      recId?: string,
-      originalDate?: string
-    ) => {
+    const byDate: Record<string, DayItem[]> = {}
+    const add = (date: string, label: string, amount: number, rec: boolean, recId?: string, originalDate?: string) => {
       ;(byDate[date] ||= []).push({ label, amount, recurring: rec, recId, originalDate })
     }
     for (const o of doc.oneOffs) add(o.date, o.label, o.amount, false)
 
-    // Fast lookup: recId|originalDate -> newDate
     const ovMap: Record<string, string> = {}
     for (const ov of doc.overrides || []) ovMap[`${ov.recId}|${ov.originalDate}`] = ov.newDate
 
     for (const r of doc.recurring) {
-      // Expand across a slightly padded window so an occurrence moved INTO view
-      // from just outside still appears.
       const padStart = new Date(windowStart); padStart.setDate(padStart.getDate() - 40)
       const padEnd = new Date(lastVisible); padEnd.setDate(padEnd.getDate() + 40)
       for (const hit of recurringHits(r, padStart, padEnd)) {
@@ -185,7 +167,6 @@ export default function ForcastPage() {
       }
     }
 
-    // Running balance day-by-day from startingDate forward
     const balByDate: Record<string, number> = {}
     let bal = doc.startingBalance
     const totalDays = diffDays(lastVisible, startDate)
@@ -203,54 +184,59 @@ export default function ForcastPage() {
 
   if (!loaded || !doc || !computed) {
     return (
-      <main style={S.loadingWrap}>
-        <div style={S.loading}>Loading forecast…</div>
+      <main style={S.page}>
+        <div style={S.bgGlow} />
+        <div style={S.loadingWrap}><div style={S.loading}>Loading forecast…</div></div>
       </main>
     )
   }
 
   const todayKey = ymd(now)
 
-  const goPrev = () => {
-    const d = new Date(anchorY, anchorM - 1, 1)
-    setAnchorY(d.getFullYear())
-    setAnchorM(d.getMonth())
-  }
-  const goNext = () => {
-    const d = new Date(anchorY, anchorM + 1, 1)
-    setAnchorY(d.getFullYear())
-    setAnchorM(d.getMonth())
-  }
-  const goToday = () => {
-    setAnchorY(now.getFullYear())
-    setAnchorM(now.getMonth())
+  const goPrev = () => { const d = new Date(anchorY, anchorM - 1, 1); setAnchorY(d.getFullYear()); setAnchorM(d.getMonth()) }
+  const goNext = () => { const d = new Date(anchorY, anchorM + 1, 1); setAnchorY(d.getFullYear()); setAnchorM(d.getMonth()) }
+  const goToday = () => { setAnchorY(now.getFullYear()); setAnchorM(now.getMonth()) }
+
+  const addOneOffTo = (date: string) => {
+    const label = prompt('Label (e.g. Paycheck, Rent):')
+    if (label == null) return
+    const raw = prompt('Amount — positive = income, negative = expense:')
+    if (raw == null) return
+    const amount = Number(raw)
+    if (!isFinite(amount)) return
+    update((d) => ({ ...d, oneOffs: [...d.oneOffs, { id: uid(), date, label: label.trim(), amount }] }))
   }
 
   return (
     <main style={S.page}>
+      <div style={S.bgGlow} />
+      <div style={S.bgGlow2} />
       <div style={S.container}>
         {/* Header */}
         <header style={S.header}>
           <div>
             <h1 style={S.h1}>Forecast</h1>
-            <p style={S.sub}>Two months at a glance. Balance carried forward, day by day.</p>
+            <p style={S.sub}>Two months at a glance · balance carried forward daily</p>
           </div>
-          <div style={S.saveInd}>{saving ? 'Saving…' : 'Saved'}</div>
+          <div style={S.headerRight}>
+            <div style={S.saveInd}>
+              <span style={{ ...S.saveDot, background: saving ? '#fbbf24' : '#34d399' }} />
+              {saving ? 'Saving' : 'Saved'}
+            </div>
+            <button style={S.gearBtn} onClick={() => setSettingsOpen((o) => !o)} title="Settings">⚙</button>
+          </div>
         </header>
-
-        {/* Starting balance bar */}
-        <StartBar doc={doc} update={update} />
 
         {/* Nav */}
         <div style={S.nav}>
-          <button style={S.navBtn} onClick={goPrev}>‹ Prev</button>
+          <button style={S.navBtn} onClick={goPrev}>‹</button>
           <button style={S.navBtnGhost} onClick={goToday}>Today</button>
-          <button style={S.navBtn} onClick={goNext}>Next ›</button>
+          <button style={S.navBtn} onClick={goNext}>›</button>
         </div>
 
         {/* Two months */}
         <div style={S.monthsRow}>
-          {months.map((mm, i) => (
+          {months.map((mm) => (
             <MonthCalendar
               key={`${mm.y}-${mm.m}`}
               year={mm.y}
@@ -259,33 +245,14 @@ export default function ForcastPage() {
               balByDate={computed.balByDate}
               todayKey={todayKey}
               startKey={doc.startingDate}
-              onAddOneOff={(date) => {
-                const label = prompt('Label (e.g. Paycheck, Rent):')
-                if (label == null) return
-                const raw = prompt('Amount — positive = income, negative = expense:')
-                if (raw == null) return
-                const amount = Number(raw)
-                if (!isFinite(amount)) return
-                update((d) => ({
-                  ...d,
-                  oneOffs: [...d.oneOffs, { id: uid(), date, label: label.trim(), amount }],
-                }))
-              }}
-              onRemoveOneOff={(id) =>
-                update((d) => ({ ...d, oneOffs: d.oneOffs.filter((o) => o.id !== id) }))
-              }
+              onAddOneOff={addOneOffTo}
+              onRemoveOneOff={(id) => update((d) => ({ ...d, oneOffs: d.oneOffs.filter((o) => o.id !== id) }))}
               onMoveOneOff={(id, newDate) =>
-                update((d) => ({
-                  ...d,
-                  oneOffs: d.oneOffs.map((o) => (o.id === id ? { ...o, date: newDate } : o)),
-                }))
+                update((d) => ({ ...d, oneOffs: d.oneOffs.map((o) => (o.id === id ? { ...o, date: newDate } : o)) }))
               }
               onMoveRecurring={(recId, originalDate, newDate) =>
                 update((d) => {
-                  const others = (d.overrides || []).filter(
-                    (ov) => !(ov.recId === recId && ov.originalDate === originalDate)
-                  )
-                  // If moved back to its original date, just drop the override.
+                  const others = (d.overrides || []).filter((ov) => !(ov.recId === recId && ov.originalDate === originalDate))
                   if (newDate === originalDate) return { ...d, overrides: others }
                   return { ...d, overrides: [...others, { recId, originalDate, newDate }] }
                 })
@@ -298,16 +265,28 @@ export default function ForcastPage() {
         {/* Recurring manager */}
         <RecurringManager doc={doc} update={update} />
 
-        <footer style={S.footer}>
-          Tap any day to add a one-off item. Recurring items repeat automatically.
-        </footer>
+        {/* Settings drawer (starting balance lives here now) */}
+        {settingsOpen && (
+          <div style={S.drawerOverlay} onClick={() => setSettingsOpen(false)}>
+            <div style={S.drawer} onClick={(e) => e.stopPropagation()}>
+              <div style={S.drawerHead}>
+                <span style={S.drawerTitle}>Settings</span>
+                <button style={S.drawerClose} onClick={() => setSettingsOpen(false)}>✕</button>
+              </div>
+              <StartFields doc={doc} update={update} />
+              <p style={S.recHint}>Your starting balance anchors the forecast. Everything after this date is projected forward.</p>
+            </div>
+          </div>
+        )}
+
+        <footer style={S.footer}>Tap any day to add · tap an item to move or remove</footer>
       </div>
     </main>
   )
 }
 
-// ---------- Starting balance ----------
-function StartBar({ doc, update }: { doc: ForcastDoc; update: (m: (d: ForcastDoc) => ForcastDoc) => void }) {
+// ---------- Starting balance fields (in drawer) ----------
+function StartFields({ doc, update }: { doc: ForcastDoc; update: (m: (d: ForcastDoc) => ForcastDoc) => void }) {
   const [bal, setBal] = useState(String(doc.startingBalance))
   const [date, setDate] = useState(doc.startingDate)
   useEffect(() => { setBal(String(doc.startingBalance)); setDate(doc.startingDate) }, [doc.startingBalance, doc.startingDate])
@@ -315,23 +294,15 @@ function StartBar({ doc, update }: { doc: ForcastDoc; update: (m: (d: ForcastDoc
     <div style={S.startBar}>
       <div style={S.startField}>
         <label style={S.startLabel}>Starting balance</label>
-        <input
-          style={S.startInput}
-          type="number"
-          value={bal}
+        <input style={S.startInput} type="number" value={bal}
           onChange={(e) => setBal(e.target.value)}
-          onBlur={() => update((d) => ({ ...d, startingBalance: Number(bal) || 0 }))}
-        />
+          onBlur={() => update((d) => ({ ...d, startingBalance: Number(bal) || 0 }))} />
       </div>
       <div style={S.startField}>
         <label style={S.startLabel}>As of</label>
-        <input
-          style={S.startInput}
-          type="date"
-          value={date}
+        <input style={S.startInput} type="date" value={date}
           onChange={(e) => setDate(e.target.value)}
-          onBlur={() => update((d) => ({ ...d, startingDate: date }))}
-        />
+          onBlur={() => update((d) => ({ ...d, startingDate: date }))} />
       </div>
     </div>
   )
@@ -342,7 +313,7 @@ function MonthCalendar({
   year, month, byDate, balByDate, todayKey, startKey, onAddOneOff, onRemoveOneOff, onMoveOneOff, onMoveRecurring, oneOffs,
 }: {
   year: number; month: number
-  byDate: Record<string, { label: string; amount: number; recurring: boolean; recId?: string; originalDate?: string }[]>
+  byDate: Record<string, DayItem[]>
   balByDate: Record<string, number>
   todayKey: string; startKey: string
   onAddOneOff: (date: string) => void
@@ -363,15 +334,15 @@ function MonthCalendar({
   return (
     <div style={S.month}>
       <div style={S.monthHead}>
-        <span style={S.monthTitle}>{MONTHS[month]} {year}</span>
+        <span style={S.monthTitle}>{MONTHS[month]}<span style={S.monthYear}> {year}</span></span>
         {endBal != null && (
-          <span style={{ ...S.monthEnd, color: endBal < 0 ? '#dc2626' : '#059669' }}>
-            End: {money(endBal)}
+          <span style={{ ...S.monthEnd, ...(endBal < 0 ? S.monthEndNeg : S.monthEndPos) }}>
+            {money(endBal)}
           </span>
         )}
       </div>
       <div style={S.dow}>
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
           <div key={i} style={S.dowCell}>{d}</div>
         ))}
       </div>
@@ -383,65 +354,63 @@ function MonthCalendar({
           const bal = balByDate[key]
           const isToday = key === todayKey
           const isStart = key === startKey
+          const hasItems = items.length > 0
           return (
             <div
               key={i}
-              style={{
-                ...S.day,
-                ...(isToday ? S.dayToday : {}),
-                ...(isStart ? S.dayStart : {}),
-              }}
+              style={{ ...S.day, ...(isToday ? S.dayToday : {}), ...(isStart ? S.dayStart : {}) }}
               onClick={() => onAddOneOff(key)}
             >
-              <div style={S.dayNum}>{d}</div>
-              {items.map((it, j) => {
-                const oneOff = !it.recurring && oneOffs.find((o) => o.date === key && o.label === it.label && o.amount === it.amount)
-                const moved = it.recurring && it.originalDate && it.originalDate !== key
-                const handleTap = (e: React.MouseEvent) => {
-                  e.stopPropagation()
-                  // Menu: Move or Remove (recurring can only be moved, not removed here)
-                  if (it.recurring && it.recId && it.originalDate) {
-                    const to = prompt(
-                      `Move "${it.label}" ${money(it.amount)} to which date? (YYYY-MM-DD)\n\nThis only moves this one occurrence — the recurring rule stays put.\nEnter its original date (${it.originalDate}) to move it back.`,
-                      key
-                    )
-                    if (to == null) return
-                    const t = to.trim()
-                    if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) { alert('Use format YYYY-MM-DD'); return }
-                    onMoveRecurring(it.recId, it.originalDate, t)
-                    return
-                  }
-                  if (oneOff) {
-                    const choice = prompt(
-                      `"${it.label}" ${money(it.amount)}\n\nType a new date (YYYY-MM-DD) to MOVE it, or type "x" to REMOVE it.`,
-                      key
-                    )
-                    if (choice == null) return
-                    const c = choice.trim().toLowerCase()
-                    if (c === 'x' || c === 'delete' || c === 'remove') {
-                      onRemoveOneOff((oneOff as OneOff).id); return
+              <div style={S.dayTop}>
+                <span style={{ ...S.dayNum, ...(isToday ? S.dayNumToday : {}) }}>{d}</span>
+              </div>
+
+              <div style={S.dayItems}>
+                {items.map((it, j) => {
+                  const oneOff = !it.recurring && oneOffs.find((o) => o.date === key && o.label === it.label && o.amount === it.amount)
+                  const moved = it.recurring && it.originalDate && it.originalDate !== key
+                  const handleTap = (e: React.MouseEvent) => {
+                    e.stopPropagation()
+                    if (it.recurring && it.recId && it.originalDate) {
+                      const to = prompt(
+                        `Move "${it.label}" ${money(it.amount)} to which date? (YYYY-MM-DD)\n\nOnly this occurrence moves — the recurring rule stays put.\nEnter its original date (${it.originalDate}) to move it back.`,
+                        key
+                      )
+                      if (to == null) return
+                      const t = to.trim()
+                      if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) { alert('Use format YYYY-MM-DD'); return }
+                      onMoveRecurring(it.recId, it.originalDate, t)
+                      return
                     }
-                    if (/^\d{4}-\d{2}-\d{2}$/.test(choice.trim())) {
-                      onMoveOneOff((oneOff as OneOff).id, choice.trim())
-                    } else {
-                      alert('Use format YYYY-MM-DD to move, or "x" to remove.')
+                    if (oneOff) {
+                      const choice = prompt(
+                        `"${it.label}" ${money(it.amount)}\n\nType a new date (YYYY-MM-DD) to MOVE it, or "x" to REMOVE it.`,
+                        key
+                      )
+                      if (choice == null) return
+                      const c = choice.trim().toLowerCase()
+                      if (c === 'x' || c === 'delete' || c === 'remove') { onRemoveOneOff((oneOff as OneOff).id); return }
+                      if (/^\d{4}-\d{2}-\d{2}$/.test(choice.trim())) onMoveOneOff((oneOff as OneOff).id, choice.trim())
+                      else alert('Use format YYYY-MM-DD to move, or "x" to remove.')
                     }
                   }
-                }
-                return (
-                  <div
-                    key={j}
-                    style={{ ...S.item, color: it.amount < 0 ? '#dc2626' : '#059669' }}
-                    onClick={handleTap}
-                    title={it.recurring ? (moved ? 'Recurring (moved this month) — tap to move' : 'Recurring — tap to move this occurrence') : 'Tap to move or remove'}
-                  >
-                    <span style={S.itemLabel}>{it.recurring ? (moved ? '→ ' : '↻ ') : ''}{it.label}</span>
-                    <span>{it.amount < 0 ? '' : '+'}{money(it.amount)}</span>
-                  </div>
-                )
-              })}
+                  const income = it.amount >= 0
+                  return (
+                    <div
+                      key={j}
+                      style={{ ...S.item, ...(income ? S.itemIncome : S.itemExpense) }}
+                      onClick={handleTap}
+                      title={it.recurring ? (moved ? 'Recurring (moved) — tap to move' : 'Recurring — tap to move') : 'Tap to move or remove'}
+                    >
+                      <span style={S.itemLabel}>{it.recurring ? (moved ? '→ ' : '↻ ') : ''}{it.label}</span>
+                      <span style={S.itemAmt}>{income ? '+' : ''}{moneyShort(it.amount)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+
               {bal != null && (
-                <div style={{ ...S.dayBal, color: bal < 0 ? '#dc2626' : '#334155' }}>
+                <div style={{ ...S.balChip, ...(bal < 0 ? S.balChipNeg : hasItems ? S.balChipPos : S.balChipIdle) }}>
                   {money(bal)}
                 </div>
               )}
@@ -466,10 +435,7 @@ function RecurringManager({ doc, update }: { doc: ForcastDoc; update: (m: (d: Fo
   const addRec = () => {
     if (!label.trim() || !isFinite(Number(amount))) return
     const r: Recurring = {
-      id: uid(),
-      label: label.trim(),
-      amount: Number(amount),
-      cadence,
+      id: uid(), label: label.trim(), amount: Number(amount), cadence,
       ...(cadence === 'monthly' ? { dayOfMonth: Number(dayOfMonth) } : {}),
       ...(cadence !== 'monthly' ? { weekday: Number(weekday), startDate } : {}),
     }
@@ -480,7 +446,8 @@ function RecurringManager({ doc, update }: { doc: ForcastDoc; update: (m: (d: Fo
   return (
     <section style={S.recSection}>
       <button style={S.recToggle} onClick={() => setOpen((o) => !o)}>
-        {open ? '▾' : '▸'} Recurring income & expenses ({doc.recurring.length})
+        <span>{open ? '▾' : '▸'} Recurring income & expenses</span>
+        <span style={S.recCount}>{doc.recurring.length}</span>
       </button>
       {open && (
         <div style={S.recBody}>
@@ -488,21 +455,14 @@ function RecurringManager({ doc, update }: { doc: ForcastDoc; update: (m: (d: Fo
             {doc.recurring.length === 0 && <div style={S.recEmpty}>None yet. Add one below.</div>}
             {doc.recurring.map((r) => (
               <div key={r.id} style={S.recRow}>
-                <span style={{ ...S.recAmt, color: r.amount < 0 ? '#dc2626' : '#059669' }}>
+                <span style={{ ...S.recAmt, color: r.amount < 0 ? '#f87171' : '#34d399' }}>
                   {r.amount < 0 ? '' : '+'}{money(r.amount)}
                 </span>
                 <span style={S.recLbl}>{r.label}</span>
                 <span style={S.recCad}>
-                  {r.cadence === 'monthly'
-                    ? `day ${r.dayOfMonth}`
-                    : `${r.cadence} · ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][r.weekday ?? 0]}`}
+                  {r.cadence === 'monthly' ? `day ${r.dayOfMonth}` : `${r.cadence} · ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][r.weekday ?? 0]}`}
                 </span>
-                <button
-                  style={S.recDel}
-                  onClick={() => update((d) => ({ ...d, recurring: d.recurring.filter((x) => x.id !== r.id) }))}
-                >
-                  ✕
-                </button>
+                <button style={S.recDel} onClick={() => update((d) => ({ ...d, recurring: d.recurring.filter((x) => x.id !== r.id) }))}>✕</button>
               </div>
             ))}
           </div>
@@ -521,60 +481,119 @@ function RecurringManager({ doc, update }: { doc: ForcastDoc; update: (m: (d: Fo
             )}
             <button style={S.recAdd} onClick={addRec}>Add</button>
           </div>
-          <p style={S.recHint}>Tip: use a negative amount for expenses (e.g. -850 for rent), positive for income.</p>
+          <p style={S.recHint}>Negative = expense (e.g. -850 rent), positive = income.</p>
         </div>
       )}
     </section>
   )
 }
 
-// ---------- Styles ----------
+// ---------- Styles (liquid glass) ----------
+const glass: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.55)',
+  backdropFilter: 'blur(20px) saturate(180%)',
+  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+  border: '1px solid rgba(255,255,255,0.6)',
+  boxShadow: '0 8px 32px rgba(31,38,135,0.12), inset 0 1px 0 rgba(255,255,255,0.7)',
+}
+
 const S: Record<string, React.CSSProperties> = {
-  page: { minHeight: '100vh', background: '#f1f5f9', padding: '16px 12px 60px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
-  container: { maxWidth: 1200, margin: '0 auto' },
-  loadingWrap: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9' },
+  page: {
+    minHeight: '100vh', position: 'relative', overflow: 'hidden',
+    background: 'linear-gradient(160deg, #eef2ff 0%, #f6f0ff 40%, #eafcff 100%)',
+    padding: '18px 12px 70px',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    color: '#1e293b',
+  },
+  bgGlow: { position: 'fixed', top: -120, left: -80, width: 380, height: 380, borderRadius: '50%', background: 'radial-gradient(circle, rgba(129,140,248,0.35), transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none', zIndex: 0 },
+  bgGlow2: { position: 'fixed', bottom: -140, right: -100, width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(94,234,212,0.28), transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none', zIndex: 0 },
+  container: { maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 },
+  loadingWrap: { minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 },
   loading: { color: '#64748b', fontSize: 16 },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8 },
-  h1: { margin: 0, fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: -0.5 },
+
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap', gap: 10 },
+  h1: { margin: 0, fontSize: 34, fontWeight: 800, letterSpacing: -1, background: 'linear-gradient(135deg, #4f46e5, #0ea5e9)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' },
   sub: { margin: '4px 0 0', fontSize: 13, color: '#64748b' },
-  saveInd: { fontSize: 12, color: '#94a3b8', padding: '4px 10px', background: '#fff', borderRadius: 999, border: '1px solid #e2e8f0' },
-  startBar: { display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' },
-  startField: { display: 'flex', flexDirection: 'column', gap: 4 },
+  headerRight: { display: 'flex', alignItems: 'center', gap: 8 },
+  saveInd: { ...glass, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#475569', padding: '6px 12px', borderRadius: 999 },
+  saveDot: { width: 7, height: 7, borderRadius: '50%', display: 'inline-block' },
+  gearBtn: { ...glass, width: 38, height: 38, borderRadius: 12, fontSize: 17, cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+
+  nav: { display: 'flex', gap: 8, marginBottom: 16, justifyContent: 'center', alignItems: 'center' },
+  navBtn: { ...glass, width: 44, height: 40, fontSize: 20, fontWeight: 700, borderRadius: 12, color: '#4f46e5', cursor: 'pointer' },
+  navBtnGhost: { background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: '#fff', border: 'none', padding: '10px 22px', fontSize: 14, fontWeight: 700, borderRadius: 12, cursor: 'pointer', boxShadow: '0 4px 14px rgba(79,70,229,0.4)' },
+
+  monthsRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18 },
+  month: { ...glass, borderRadius: 24, overflow: 'hidden' },
+  monthHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,0.5)' },
+  monthTitle: { fontSize: 19, fontWeight: 800, color: '#1e293b' },
+  monthYear: { fontWeight: 500, color: '#94a3b8' },
+  monthEnd: { fontSize: 15, fontWeight: 800, padding: '6px 14px', borderRadius: 999 },
+  monthEndPos: { color: '#047857', background: 'rgba(52,211,153,0.18)', boxShadow: 'inset 0 0 0 1px rgba(52,211,153,0.35)' },
+  monthEndNeg: { color: '#b91c1c', background: 'rgba(248,113,113,0.18)', boxShadow: 'inset 0 0 0 1px rgba(248,113,113,0.4)' },
+
+  dow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' },
+  dowCell: { textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#94a3b8', padding: '8px 0', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, padding: '4px 6px 8px' },
+  emptyCell: { minHeight: 96, borderRadius: 12, background: 'rgba(255,255,255,0.12)' },
+  day: {
+    minHeight: 96, borderRadius: 12, padding: '6px 6px 4px', cursor: 'pointer',
+    display: 'flex', flexDirection: 'column', position: 'relative',
+    background: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.4)',
+    transition: 'transform 0.1s',
+  },
+  dayToday: { background: 'rgba(99,102,241,0.16)', border: '1px solid rgba(99,102,241,0.55)', boxShadow: '0 0 0 3px rgba(99,102,241,0.15), 0 4px 14px rgba(99,102,241,0.2)' },
+  dayStart: { background: 'rgba(52,211,153,0.14)', border: '1px solid rgba(52,211,153,0.4)' },
+  dayTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  dayNum: { fontSize: 12, fontWeight: 700, color: '#94a3b8', lineHeight: 1 },
+  dayNumToday: { color: '#4f46e5' },
+  dayItems: { display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4, flex: 1 },
+
+  item: { fontSize: 10.5, fontWeight: 600, display: 'flex', justifyContent: 'space-between', gap: 3, lineHeight: 1.25, cursor: 'pointer', padding: '2px 5px', borderRadius: 6 },
+  itemIncome: { color: '#047857', background: 'rgba(52,211,153,0.16)' },
+  itemExpense: { color: '#b91c1c', background: 'rgba(248,113,113,0.14)' },
+  itemLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '62%' },
+  itemAmt: { fontWeight: 800, fontVariantNumeric: 'tabular-nums' },
+
+  balChip: {
+    marginTop: 'auto', textAlign: 'center', fontSize: 11, fontWeight: 800,
+    padding: '3px 6px', borderRadius: 8, fontVariantNumeric: 'tabular-nums',
+    backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+  },
+  balChipPos: { color: '#0f766e', background: 'rgba(45,212,191,0.22)', boxShadow: 'inset 0 0 0 1px rgba(45,212,191,0.3)' },
+  balChipNeg: { color: '#fff', background: 'linear-gradient(135deg, rgba(239,68,68,0.9), rgba(244,63,94,0.9))', boxShadow: '0 2px 8px rgba(239,68,68,0.4)' },
+  balChipIdle: { color: '#94a3b8', background: 'rgba(148,163,184,0.12)' },
+
+  // Settings drawer
+  drawerOverlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 },
+  drawer: { ...glass, borderRadius: 24, padding: 22, width: '100%', maxWidth: 440 },
+  drawerHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  drawerTitle: { fontSize: 18, fontWeight: 800, color: '#1e293b' },
+  drawerClose: { background: 'none', border: 'none', fontSize: 18, color: '#94a3b8', cursor: 'pointer' },
+
+  startBar: { display: 'flex', gap: 12, flexWrap: 'wrap' },
+  startField: { display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minWidth: 140 },
   startLabel: { fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
-  startInput: { padding: '8px 12px', fontSize: 16, border: '1px solid #cbd5e1', borderRadius: 8, background: '#fff', color: '#0f172a', minWidth: 140 },
-  nav: { display: 'flex', gap: 8, marginBottom: 16, justifyContent: 'center' },
-  navBtn: { padding: '8px 16px', fontSize: 14, fontWeight: 700, border: '1px solid #cbd5e1', borderRadius: 8, background: '#fff', color: '#334155', cursor: 'pointer' },
-  navBtnGhost: { padding: '8px 16px', fontSize: 14, fontWeight: 700, border: '1px solid #0f172a', borderRadius: 8, background: '#0f172a', color: '#fff', cursor: 'pointer' },
-  monthsRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 },
-  month: { background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
-  monthHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid #f1f5f9' },
-  monthTitle: { fontSize: 16, fontWeight: 800, color: '#0f172a' },
-  monthEnd: { fontSize: 13, fontWeight: 700 },
-  dow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#f8fafc' },
-  dowCell: { textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#94a3b8', padding: '6px 0' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' },
-  emptyCell: { minHeight: 64, background: '#fafbfc', borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' },
-  day: { minHeight: 64, padding: 4, borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 2, position: 'relative' },
-  dayToday: { background: '#eff6ff', outline: '2px solid #3b82f6', outlineOffset: -2 },
-  dayStart: { background: '#f0fdf4' },
-  dayNum: { fontSize: 11, fontWeight: 700, color: '#94a3b8' },
-  item: { fontSize: 10, fontWeight: 600, display: 'flex', justifyContent: 'space-between', gap: 2, lineHeight: 1.2, cursor: 'pointer' },
-  itemLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' },
-  dayBal: { fontSize: 10, fontWeight: 800, marginTop: 'auto', paddingTop: 2, borderTop: '1px dashed #e2e8f0', textAlign: 'right' },
-  recSection: { marginTop: 20, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0' },
-  recToggle: { width: '100%', textAlign: 'left', padding: '14px 16px', fontSize: 15, fontWeight: 700, color: '#0f172a', background: 'none', border: 'none', cursor: 'pointer' },
-  recBody: { padding: '0 16px 16px' },
-  recList: { display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 },
+  startInput: { padding: '11px 14px', fontSize: 16, border: '1px solid rgba(148,163,184,0.4)', borderRadius: 12, background: 'rgba(255,255,255,0.7)', color: '#1e293b', outline: 'none' },
+
+  // Recurring
+  recSection: { ...glass, marginTop: 20, borderRadius: 20 },
+  recToggle: { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', fontSize: 15, fontWeight: 700, color: '#1e293b', background: 'none', border: 'none', cursor: 'pointer' },
+  recCount: { fontSize: 12, fontWeight: 800, color: '#4f46e5', background: 'rgba(99,102,241,0.15)', borderRadius: 999, padding: '2px 10px' },
+  recBody: { padding: '0 18px 18px' },
+  recList: { display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 14 },
   recEmpty: { fontSize: 13, color: '#94a3b8', padding: '8px 0' },
-  recRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#f8fafc', borderRadius: 8 },
-  recAmt: { fontSize: 14, fontWeight: 800, minWidth: 90 },
-  recLbl: { fontSize: 14, fontWeight: 600, color: '#0f172a', flex: 1 },
+  recRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'rgba(255,255,255,0.5)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.5)' },
+  recAmt: { fontSize: 14, fontWeight: 800, minWidth: 92, fontVariantNumeric: 'tabular-nums' },
+  recLbl: { fontSize: 14, fontWeight: 600, color: '#1e293b', flex: 1 },
   recCad: { fontSize: 12, color: '#64748b' },
-  recDel: { border: 'none', background: 'none', color: '#cbd5e1', fontSize: 16, cursor: 'pointer', padding: 4 },
+  recDel: { border: 'none', background: 'none', color: '#cbd5e1', fontSize: 15, cursor: 'pointer', padding: 4 },
   recForm: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
-  recInput: { flex: 1, minWidth: 140, padding: '8px 12px', fontSize: 14, border: '1px solid #cbd5e1', borderRadius: 8 },
-  recInputSm: { padding: '8px 10px', fontSize: 14, border: '1px solid #cbd5e1', borderRadius: 8, background: '#fff' },
-  recAdd: { padding: '8px 18px', fontSize: 14, fontWeight: 700, background: '#0f172a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' },
-  recHint: { fontSize: 12, color: '#94a3b8', marginTop: 10, marginBottom: 0 },
-  footer: { textAlign: 'center', fontSize: 12, color: '#94a3b8', marginTop: 24 },
+  recInput: { flex: 1, minWidth: 140, padding: '10px 14px', fontSize: 14, border: '1px solid rgba(148,163,184,0.4)', borderRadius: 12, background: 'rgba(255,255,255,0.7)', outline: 'none' },
+  recInputSm: { padding: '10px 12px', fontSize: 14, border: '1px solid rgba(148,163,184,0.4)', borderRadius: 12, background: 'rgba(255,255,255,0.7)', outline: 'none' },
+  recAdd: { padding: '10px 20px', fontSize: 14, fontWeight: 700, background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: '#fff', border: 'none', borderRadius: 12, cursor: 'pointer', boxShadow: '0 4px 14px rgba(79,70,229,0.35)' },
+  recHint: { fontSize: 12, color: '#94a3b8', marginTop: 12, marginBottom: 0 },
+
+  footer: { textAlign: 'center', fontSize: 12, color: '#94a3b8', marginTop: 28 },
 }
