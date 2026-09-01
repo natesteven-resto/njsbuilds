@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 
 // ---------- Types ----------
 type OneOff = { id: string; date: string; label: string; amount: number }
@@ -87,8 +87,132 @@ function recurringHits(r: Recurring, start: Date, end: Date): string[] {
 
 type DayItem = { label: string; amount: number; recurring: boolean; recId?: string; originalDate?: string }
 
-// ---------- Page ----------
+const IDLE_MS = 30 * 60 * 1000 // 30 minutes
+
+// ---------- Gate wrapper ----------
 export default function ForcastPage() {
+  const [authed, setAuthed] = useState<boolean | null>(null) // null = checking
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Check existing cookie on mount
+  useEffect(() => {
+    fetch('/api/forcast/auth')
+      .then((r) => r.json())
+      .then((d) => setAuthed(!!d.authed))
+      .catch(() => setAuthed(false))
+  }, [])
+
+  const lock = useCallback(() => {
+    fetch('/api/forcast/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'lock' }),
+    }).catch(() => {})
+    setAuthed(false)
+  }, [])
+
+  // 30-min idle auto-lock. Any activity resets the timer.
+  useEffect(() => {
+    if (!authed) return
+    const reset = () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current)
+      idleTimer.current = setTimeout(lock, IDLE_MS)
+    }
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click']
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }))
+    reset()
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, reset))
+      if (idleTimer.current) clearTimeout(idleTimer.current)
+    }
+  }, [authed, lock])
+
+  if (authed === null) {
+    return (
+      <main style={S.page}>
+        <div style={S.bgGlow} /><div style={S.bgGlow2} />
+        <div style={S.loadingWrap}><div style={S.loading}>Loading…</div></div>
+      </main>
+    )
+  }
+  if (!authed) return <LockScreen onUnlock={() => setAuthed(true)} />
+  return <ForcastApp onLock={lock} />
+}
+
+// ---------- Lock screen ----------
+function LockScreen({ onUnlock }: { onUnlock: () => void }) {
+  const [pin, setPin] = useState('')
+  const [err, setErr] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const submit = useCallback(async (value: string) => {
+    setBusy(true)
+    setErr(false)
+    try {
+      const r = await fetch('/api/forcast/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: value }),
+      })
+      if (r.ok) { onUnlock(); return }
+      setErr(true); setPin('')
+    } catch {
+      setErr(true); setPin('')
+    } finally {
+      setBusy(false)
+    }
+  }, [onUnlock])
+
+  const press = (d: string) => {
+    if (busy) return
+    setErr(false)
+    const next = (pin + d).slice(0, 6)
+    setPin(next)
+    if (next.length === 6) submit(next)
+  }
+  const back = () => { setErr(false); setPin((p) => p.slice(0, -1)) }
+
+  // Physical keyboard support
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9') press(e.key)
+      else if (e.key === 'Backspace') back()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pin, busy])
+
+  return (
+    <main style={S.page}>
+      <div style={S.bgGlow} /><div style={S.bgGlow2} />
+      <div style={S.lockWrap}>
+        <div style={{ ...glass, ...S.lockCard }}>
+          <div style={S.lockIcon}>☉</div>
+          <h1 style={S.lockTitle}>Forecast</h1>
+          <p style={S.lockSub}>Enter your PIN</p>
+          <div style={{ ...S.pinDots, ...(err ? S.pinShake : {}) }}>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <span key={i} style={{ ...S.pinDot, ...(i < pin.length ? S.pinDotFilled : {}), ...(err ? S.pinDotErr : {}) }} />
+            ))}
+          </div>
+          {err && <div style={S.lockErr}>Wrong PIN — try again</div>}
+          <div style={S.pad}>
+            {['1','2','3','4','5','6','7','8','9'].map((n) => (
+              <button key={n} style={S.padKey} onClick={() => press(n)}>{n}</button>
+            ))}
+            <span />
+            <button style={S.padKey} onClick={() => press('0')}>0</button>
+            <button style={{ ...S.padKey, ...S.padBack }} onClick={back}>⌫</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+// ---------- App ----------
+function ForcastApp({ onLock }: { onLock: () => void }) {
   const [doc, setDoc] = useState<ForcastDoc | null>(null)
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -220,6 +344,7 @@ export default function ForcastPage() {
               {saving ? 'Saving' : 'Saved'}
             </div>
             <button style={S.gearBtn} onClick={() => setSettingsOpen((o) => !o)} title="Settings">⚙</button>
+            <button style={S.gearBtn} onClick={onLock} title="Lock now">🔒</button>
           </div>
         </header>
 
@@ -504,6 +629,22 @@ const S: Record<string, React.CSSProperties> = {
   container: { maxWidth: 1500, margin: '0 auto', position: 'relative', zIndex: 1, width: '96vw' },
   loadingWrap: { minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 },
   loading: { color: '#64748b', fontSize: 16 },
+
+  // Lock screen
+  lockWrap: { minHeight: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1, padding: 16 },
+  lockCard: { borderRadius: 28, padding: '32px 28px 28px', width: '100%', maxWidth: 340, textAlign: 'center' as const },
+  lockIcon: { fontSize: 40, background: 'linear-gradient(135deg, #4f46e5, #0ea5e9)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', lineHeight: 1 },
+  lockTitle: { margin: '10px 0 2px', fontSize: 26, fontWeight: 800, letterSpacing: -0.6, color: '#1e293b' },
+  lockSub: { margin: 0, fontSize: 13, color: '#64748b' },
+  lockErr: { fontSize: 13, fontWeight: 600, color: '#dc2626', marginBottom: 6 },
+  pinDots: { display: 'flex', gap: 12, justifyContent: 'center', margin: '22px 0 14px' },
+  pinShake: { animation: 'fcShake 0.35s' },
+  pinDot: { width: 14, height: 14, borderRadius: '50%', background: 'rgba(148,163,184,0.3)', boxShadow: 'inset 0 0 0 1px rgba(148,163,184,0.4)', transition: 'all 0.15s' },
+  pinDotFilled: { background: 'linear-gradient(135deg, #4f46e5, #6366f1)', boxShadow: '0 2px 8px rgba(79,70,229,0.4)' },
+  pinDotErr: { background: 'rgba(239,68,68,0.4)', boxShadow: 'inset 0 0 0 1px rgba(239,68,68,0.5)' },
+  pad: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 10 },
+  padKey: { ...glass, height: 62, borderRadius: 18, fontSize: 24, fontWeight: 600, color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  padBack: { fontSize: 22, color: '#64748b' },
 
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap', gap: 10 },
   h1: { margin: 0, fontSize: 34, fontWeight: 800, letterSpacing: -1, background: 'linear-gradient(135deg, #4f46e5, #0ea5e9)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' },
