@@ -13,11 +13,13 @@ type Recurring = {
   weekday?: number
   startDate?: string
 }
+type Override = { recId: string; originalDate: string; newDate: string }
 type ForcastDoc = {
   startingBalance: number
   startingDate: string
   oneOffs: OneOff[]
   recurring: Recurring[]
+  overrides: Override[]
 }
 
 // ---------- Helpers ----------
@@ -97,11 +99,11 @@ export default function ForcastPage() {
     fetch('/api/forcast')
       .then((r) => r.json())
       .then((d) => {
-        if (d.ok) setDoc(d.doc)
-        else setDoc({ startingBalance: 0, startingDate: ymd(now), oneOffs: [], recurring: [] })
+        if (d.ok) setDoc({ overrides: [], ...d.doc })
+        else setDoc({ startingBalance: 0, startingDate: ymd(now), oneOffs: [], recurring: [], overrides: [] })
       })
       .catch(() =>
-        setDoc({ startingBalance: 0, startingDate: ymd(now), oneOffs: [], recurring: [] })
+        setDoc({ startingBalance: 0, startingDate: ymd(now), oneOffs: [], recurring: [], overrides: [] })
       )
       .finally(() => setLoaded(true))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -149,15 +151,37 @@ export default function ForcastPage() {
     const lastVisible = new Date(months[1].y, months[1].m, daysInMonth(months[1].y, months[1].m))
     const windowStart = startDate < firstVisible ? startDate : firstVisible
 
-    // Collect all items keyed by date
-    const byDate: Record<string, { label: string; amount: number; recurring: boolean }[]> = {}
-    const add = (date: string, label: string, amount: number, rec: boolean) => {
-      ;(byDate[date] ||= []).push({ label, amount, recurring: rec })
+    // Collect all items keyed by date. Recurring instances carry the rule id
+    // and the date the rule originally generated, so a single occurrence can
+    // be moved via an override without altering the rule.
+    const byDate: Record<
+      string,
+      { label: string; amount: number; recurring: boolean; recId?: string; originalDate?: string }[]
+    > = {}
+    const add = (
+      date: string,
+      label: string,
+      amount: number,
+      rec: boolean,
+      recId?: string,
+      originalDate?: string
+    ) => {
+      ;(byDate[date] ||= []).push({ label, amount, recurring: rec, recId, originalDate })
     }
     for (const o of doc.oneOffs) add(o.date, o.label, o.amount, false)
+
+    // Fast lookup: recId|originalDate -> newDate
+    const ovMap: Record<string, string> = {}
+    for (const ov of doc.overrides || []) ovMap[`${ov.recId}|${ov.originalDate}`] = ov.newDate
+
     for (const r of doc.recurring) {
-      for (const hit of recurringHits(r, windowStart, lastVisible)) {
-        add(hit, r.label, r.amount, true)
+      // Expand across a slightly padded window so an occurrence moved INTO view
+      // from just outside still appears.
+      const padStart = new Date(windowStart); padStart.setDate(padStart.getDate() - 40)
+      const padEnd = new Date(lastVisible); padEnd.setDate(padEnd.getDate() + 40)
+      for (const hit of recurringHits(r, padStart, padEnd)) {
+        const shown = ovMap[`${r.id}|${hit}`] ?? hit
+        add(shown, r.label, r.amount, true, r.id, hit)
       }
     }
 
@@ -250,6 +274,22 @@ export default function ForcastPage() {
               onRemoveOneOff={(id) =>
                 update((d) => ({ ...d, oneOffs: d.oneOffs.filter((o) => o.id !== id) }))
               }
+              onMoveOneOff={(id, newDate) =>
+                update((d) => ({
+                  ...d,
+                  oneOffs: d.oneOffs.map((o) => (o.id === id ? { ...o, date: newDate } : o)),
+                }))
+              }
+              onMoveRecurring={(recId, originalDate, newDate) =>
+                update((d) => {
+                  const others = (d.overrides || []).filter(
+                    (ov) => !(ov.recId === recId && ov.originalDate === originalDate)
+                  )
+                  // If moved back to its original date, just drop the override.
+                  if (newDate === originalDate) return { ...d, overrides: others }
+                  return { ...d, overrides: [...others, { recId, originalDate, newDate }] }
+                })
+              }
               oneOffs={doc.oneOffs}
             />
           ))}
@@ -299,14 +339,16 @@ function StartBar({ doc, update }: { doc: ForcastDoc; update: (m: (d: ForcastDoc
 
 // ---------- Month calendar ----------
 function MonthCalendar({
-  year, month, byDate, balByDate, todayKey, startKey, onAddOneOff, onRemoveOneOff, oneOffs,
+  year, month, byDate, balByDate, todayKey, startKey, onAddOneOff, onRemoveOneOff, onMoveOneOff, onMoveRecurring, oneOffs,
 }: {
   year: number; month: number
-  byDate: Record<string, { label: string; amount: number; recurring: boolean }[]>
+  byDate: Record<string, { label: string; amount: number; recurring: boolean; recId?: string; originalDate?: string }[]>
   balByDate: Record<string, number>
   todayKey: string; startKey: string
   onAddOneOff: (date: string) => void
   onRemoveOneOff: (id: string) => void
+  onMoveOneOff: (id: string, newDate: string) => void
+  onMoveRecurring: (recId: string, originalDate: string, newDate: string) => void
   oneOffs: OneOff[]
 }) {
   const dim = daysInMonth(year, month)
@@ -354,19 +396,46 @@ function MonthCalendar({
               <div style={S.dayNum}>{d}</div>
               {items.map((it, j) => {
                 const oneOff = !it.recurring && oneOffs.find((o) => o.date === key && o.label === it.label && o.amount === it.amount)
+                const moved = it.recurring && it.originalDate && it.originalDate !== key
+                const handleTap = (e: React.MouseEvent) => {
+                  e.stopPropagation()
+                  // Menu: Move or Remove (recurring can only be moved, not removed here)
+                  if (it.recurring && it.recId && it.originalDate) {
+                    const to = prompt(
+                      `Move "${it.label}" ${money(it.amount)} to which date? (YYYY-MM-DD)\n\nThis only moves this one occurrence — the recurring rule stays put.\nEnter its original date (${it.originalDate}) to move it back.`,
+                      key
+                    )
+                    if (to == null) return
+                    const t = to.trim()
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) { alert('Use format YYYY-MM-DD'); return }
+                    onMoveRecurring(it.recId, it.originalDate, t)
+                    return
+                  }
+                  if (oneOff) {
+                    const choice = prompt(
+                      `"${it.label}" ${money(it.amount)}\n\nType a new date (YYYY-MM-DD) to MOVE it, or type "x" to REMOVE it.`,
+                      key
+                    )
+                    if (choice == null) return
+                    const c = choice.trim().toLowerCase()
+                    if (c === 'x' || c === 'delete' || c === 'remove') {
+                      onRemoveOneOff((oneOff as OneOff).id); return
+                    }
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(choice.trim())) {
+                      onMoveOneOff((oneOff as OneOff).id, choice.trim())
+                    } else {
+                      alert('Use format YYYY-MM-DD to move, or "x" to remove.')
+                    }
+                  }
+                }
                 return (
                   <div
                     key={j}
                     style={{ ...S.item, color: it.amount < 0 ? '#dc2626' : '#059669' }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (oneOff && confirm(`Remove "${it.label}" ${money(it.amount)}?`)) {
-                        onRemoveOneOff((oneOff as OneOff).id)
-                      }
-                    }}
-                    title={it.recurring ? 'Recurring' : 'Tap to remove'}
+                    onClick={handleTap}
+                    title={it.recurring ? (moved ? 'Recurring (moved this month) — tap to move' : 'Recurring — tap to move this occurrence') : 'Tap to move or remove'}
                   >
-                    <span style={S.itemLabel}>{it.recurring ? '↻ ' : ''}{it.label}</span>
+                    <span style={S.itemLabel}>{it.recurring ? (moved ? '→ ' : '↻ ') : ''}{it.label}</span>
                     <span>{it.amount < 0 ? '' : '+'}{money(it.amount)}</span>
                   </div>
                 )

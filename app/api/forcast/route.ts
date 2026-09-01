@@ -26,11 +26,20 @@ export type Recurring = {
   startDate?: string // YYYY-MM-DD anchor for weekly/biweekly
 }
 
+// Move a single occurrence of a recurring item to a different date without
+// touching the rule. Keyed by the recurring id + the date it *would* land on.
+export type Override = {
+  recId: string
+  originalDate: string // YYYY-MM-DD the rule generated
+  newDate: string // YYYY-MM-DD to show it on instead
+}
+
 export type ForcastDoc = {
   startingBalance: number
   startingDate: string // YYYY-MM-DD — balance is "as of" this date
   oneOffs: OneOff[]
   recurring: Recurring[]
+  overrides: Override[]
 }
 
 const EMPTY: ForcastDoc = {
@@ -38,6 +47,7 @@ const EMPTY: ForcastDoc = {
   startingDate: new Date().toISOString().slice(0, 10),
   oneOffs: [],
   recurring: [],
+  overrides: [],
 }
 
 export async function GET() {
@@ -81,6 +91,15 @@ export async function POST(req: NextRequest) {
               dayOfMonth: r.dayOfMonth != null ? Number(r.dayOfMonth) : undefined,
               weekday: r.weekday != null ? Number(r.weekday) : undefined,
               startDate: r.startDate ? String(r.startDate) : undefined,
+            }))
+        : [],
+      overrides: Array.isArray(body.overrides)
+        ? body.overrides
+            .filter((o) => o && o.recId && o.originalDate && o.newDate)
+            .map((o) => ({
+              recId: String(o.recId),
+              originalDate: String(o.originalDate),
+              newDate: String(o.newDate),
             }))
         : [],
     }
