@@ -15,12 +15,14 @@ type Recurring = {
   endDate?: string // last date this rule generates (inclusive); past preserved
 }
 type Override = { recId: string; originalDate: string; newDate: string }
+type PendingBill = { id: string; label: string; amount: number }
 type ForcastDoc = {
   startingBalance: number
   startingDate: string
   oneOffs: OneOff[]
   recurring: Recurring[]
   overrides: Override[]
+  pending: PendingBill[]
 }
 
 // ---------- Helpers ----------
@@ -234,11 +236,11 @@ function ForcastApp({ onLock }: { onLock: () => void }) {
     fetch('/api/forcast')
       .then((r) => r.json())
       .then((d) => {
-        if (d.ok) setDoc({ overrides: [], ...d.doc })
-        else setDoc({ startingBalance: 0, startingDate: ymd(now), oneOffs: [], recurring: [], overrides: [] })
+        if (d.ok) setDoc({ overrides: [], pending: [], ...d.doc })
+        else setDoc({ startingBalance: 0, startingDate: ymd(now), oneOffs: [], recurring: [], overrides: [], pending: [] })
       })
       .catch(() =>
-        setDoc({ startingBalance: 0, startingDate: ymd(now), oneOffs: [], recurring: [], overrides: [] })
+        setDoc({ startingBalance: 0, startingDate: ymd(now), oneOffs: [], recurring: [], overrides: [], pending: [] })
       )
       .finally(() => setLoaded(true))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -363,36 +365,39 @@ function ForcastApp({ onLock }: { onLock: () => void }) {
           <button style={S.navBtn} onClick={goNext}>›</button>
         </div>
 
-        {/* Single month */}
-        <div style={S.monthsRow}>
-          <MonthCalendar
-            key={`${view.y}-${view.m}`}
-            year={view.y}
-            month={view.m}
-            byDate={computed.byDate}
-            balByDate={computed.balByDate}
-            todayKey={todayKey}
-            startKey={doc.startingDate}
-            onAddOneOff={addOneOffTo}
-            onRemoveOneOff={(id) => update((d) => ({ ...d, oneOffs: d.oneOffs.filter((o) => o.id !== id) }))}
-            onMoveOneOff={(id, newDate) =>
-              update((d) => ({ ...d, oneOffs: d.oneOffs.map((o) => (o.id === id ? { ...o, date: newDate } : o)) }))
-            }
-            onMoveRecurring={(recId, originalDate, newDate) =>
-              update((d) => {
-                const others = (d.overrides || []).filter((ov) => !(ov.recId === recId && ov.originalDate === originalDate))
-                if (newDate === originalDate) return { ...d, overrides: others }
-                return { ...d, overrides: [...others, { recId, originalDate, newDate }] }
-              })
-            }
-            onEndRecurring={(recId, endDate) =>
-              update((d) => ({
-                ...d,
-                recurring: d.recurring.map((r) => (r.id === recId ? { ...r, endDate } : r)),
-              }))
-            }
-            oneOffs={doc.oneOffs}
-          />
+        {/* Bills sidebar + month */}
+        <div style={S.layout}>
+          <BillsSidebar doc={doc} update={update} />
+          <div style={S.monthsRow}>
+            <MonthCalendar
+              key={`${view.y}-${view.m}`}
+              year={view.y}
+              month={view.m}
+              byDate={computed.byDate}
+              balByDate={computed.balByDate}
+              todayKey={todayKey}
+              startKey={doc.startingDate}
+              onAddOneOff={addOneOffTo}
+              onRemoveOneOff={(id) => update((d) => ({ ...d, oneOffs: d.oneOffs.filter((o) => o.id !== id) }))}
+              onMoveOneOff={(id, newDate) =>
+                update((d) => ({ ...d, oneOffs: d.oneOffs.map((o) => (o.id === id ? { ...o, date: newDate } : o)) }))
+              }
+              onMoveRecurring={(recId, originalDate, newDate) =>
+                update((d) => {
+                  const others = (d.overrides || []).filter((ov) => !(ov.recId === recId && ov.originalDate === originalDate))
+                  if (newDate === originalDate) return { ...d, overrides: others }
+                  return { ...d, overrides: [...others, { recId, originalDate, newDate }] }
+                })
+              }
+              onEndRecurring={(recId, endDate) =>
+                update((d) => ({
+                  ...d,
+                  recurring: d.recurring.map((r) => (r.id === recId ? { ...r, endDate } : r)),
+                }))
+              }
+              oneOffs={doc.oneOffs}
+            />
+          </div>
         </div>
 
         {/* Recurring manager */}
@@ -438,6 +443,75 @@ function StartFields({ doc, update }: { doc: ForcastDoc; update: (m: (d: Forcast
           onBlur={() => update((d) => ({ ...d, startingDate: date }))} />
       </div>
     </div>
+  )
+}
+
+// ---------- Bills sidebar (staging area) ----------
+function BillsSidebar({ doc, update }: { doc: ForcastDoc; update: (m: (d: ForcastDoc) => ForcastDoc) => void }) {
+  const [label, setLabel] = useState('')
+  const [amount, setAmount] = useState('')
+  const pending = doc.pending || []
+
+  const addBill = () => {
+    if (!label.trim() || !isFinite(Number(amount))) return
+    // Default to an expense: if they typed a positive number, treat as a bill (negative).
+    let amt = Number(amount)
+    if (amt > 0) amt = -amt
+    update((d) => ({ ...d, pending: [...(d.pending || []), { id: uid(), label: label.trim(), amount: amt }] }))
+    setLabel(''); setAmount('')
+  }
+
+  const schedule = (bill: PendingBill) => {
+    const date = prompt(`Schedule "${bill.label}" ${money(bill.amount)} on which date? (YYYY-MM-DD)`, ymd(new Date()))
+    if (date == null) return
+    const t = date.trim()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) { alert('Use format YYYY-MM-DD'); return }
+    update((d) => ({
+      ...d,
+      oneOffs: [...d.oneOffs, { id: uid(), date: t, label: bill.label, amount: bill.amount }],
+      pending: (d.pending || []).filter((p) => p.id !== bill.id),
+    }))
+  }
+
+  const removeBill = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    update((d) => ({ ...d, pending: (d.pending || []).filter((p) => p.id !== id) }))
+  }
+
+  return (
+    <aside style={S.sidebar}>
+      <div style={S.sbHead}>
+        <span style={S.sbTitle}>Bills to schedule</span>
+        <span style={S.sbCount}>{pending.length}</span>
+      </div>
+      <p style={S.sbSub}>Park bills here, then click one to drop it on a date.</p>
+
+      <div style={S.sbList}>
+        {pending.length === 0 && <div style={S.sbEmpty}>No bills waiting.<br />Add one below.</div>}
+        {pending.map((b) => (
+          <div key={b.id} style={S.sbBill} onClick={() => schedule(b)} title="Click to schedule on a date">
+            <div style={S.sbBillMain}>
+              <div style={S.sbBillLabel}>{b.label}</div>
+              <div style={{ ...S.sbBillAmt, color: b.amount < 0 ? '#b91c1c' : '#047857' }}>
+                {b.amount < 0 ? '' : '+'}{money(b.amount)}
+              </div>
+            </div>
+            <button style={S.sbBillDel} onClick={(e) => removeBill(b.id, e)} title="Remove">✕</button>
+          </div>
+        ))}
+      </div>
+
+      <div style={S.sbForm}>
+        <input style={S.sbInput} placeholder="Bill name" value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') addBill() }} />
+        <input style={S.sbInput} placeholder="Amount" type="number" value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') addBill() }} />
+        <button style={S.sbAdd} onClick={addBill}>Add bill</button>
+      </div>
+      <p style={S.sbHint}>Enter a positive number — saved as an expense. For income to stage, type it negative.</p>
+    </aside>
   )
 }
 
@@ -680,8 +754,27 @@ const S: Record<string, React.CSSProperties> = {
   navBtn: { ...glass, width: 44, height: 40, fontSize: 20, fontWeight: 700, borderRadius: 12, color: '#4f46e5', cursor: 'pointer' },
   navBtnGhost: { background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: '#fff', border: 'none', padding: '10px 22px', fontSize: 14, fontWeight: 700, borderRadius: 12, cursor: 'pointer', boxShadow: '0 4px 14px rgba(79,70,229,0.4)' },
 
-  monthsRow: { display: 'block' },
-  month: { ...glass, borderRadius: 24, overflow: 'hidden', maxWidth: 1400, margin: '0 auto' },
+  layout: { display: 'flex', gap: 16, alignItems: 'flex-start' },
+  monthsRow: { display: 'block', flex: 1, minWidth: 0 },
+  month: { ...glass, borderRadius: 24, overflow: 'hidden' },
+
+  // Bills sidebar
+  sidebar: { ...glass, borderRadius: 20, padding: 16, width: 240, flexShrink: 0, alignSelf: 'stretch' },
+  sbHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 },
+  sbTitle: { fontSize: 15, fontWeight: 800, color: '#1e293b' },
+  sbCount: { fontSize: 12, fontWeight: 800, color: '#4f46e5', background: 'rgba(99,102,241,0.15)', borderRadius: 999, padding: '2px 9px' },
+  sbSub: { fontSize: 11.5, color: '#94a3b8', margin: '0 0 12px' },
+  sbList: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 },
+  sbEmpty: { fontSize: 12.5, color: '#94a3b8', padding: '10px 0', textAlign: 'center' as const, lineHeight: 1.5 },
+  sbBill: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 11px', background: 'rgba(255,255,255,0.55)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.6)', cursor: 'pointer', transition: 'transform 0.1s' },
+  sbBillMain: { flex: 1, minWidth: 0 },
+  sbBillLabel: { fontSize: 13, fontWeight: 700, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  sbBillAmt: { fontSize: 12, fontWeight: 800, fontVariantNumeric: 'tabular-nums' },
+  sbBillDel: { border: 'none', background: 'none', color: '#cbd5e1', fontSize: 15, cursor: 'pointer', padding: 2, flexShrink: 0 },
+  sbForm: { display: 'flex', flexDirection: 'column', gap: 8 },
+  sbInput: { padding: '9px 12px', fontSize: 13, border: '1px solid rgba(148,163,184,0.4)', borderRadius: 10, background: 'rgba(255,255,255,0.7)', outline: 'none', width: '100%', boxSizing: 'border-box' as const },
+  sbAdd: { padding: '9px 14px', fontSize: 13, fontWeight: 700, background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', boxShadow: '0 4px 14px rgba(79,70,229,0.3)' },
+  sbHint: { fontSize: 11, color: '#94a3b8', marginTop: 10, marginBottom: 0, lineHeight: 1.4 },
   monthHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,0.5)' },
   monthTitle: { fontSize: 19, fontWeight: 800, color: '#1e293b' },
   monthYear: { fontWeight: 500, color: '#94a3b8' },

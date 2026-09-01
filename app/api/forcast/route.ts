@@ -35,12 +35,21 @@ export type Override = {
   newDate: string // YYYY-MM-DD to show it on instead
 }
 
+// A bill entered but not yet placed on a date. Sits in the sidebar until
+// the user is ready to schedule it onto a specific day.
+export type PendingBill = {
+  id: string
+  label: string
+  amount: number // stored as entered; typically negative (expense)
+}
+
 export type ForcastDoc = {
   startingBalance: number
   startingDate: string // YYYY-MM-DD — balance is "as of" this date
   oneOffs: OneOff[]
   recurring: Recurring[]
   overrides: Override[]
+  pending: PendingBill[]
 }
 
 const EMPTY: ForcastDoc = {
@@ -49,6 +58,7 @@ const EMPTY: ForcastDoc = {
   oneOffs: [],
   recurring: [],
   overrides: [],
+  pending: [],
 }
 
 export async function GET() {
@@ -102,6 +112,15 @@ export async function POST(req: NextRequest) {
               recId: String(o.recId),
               originalDate: String(o.originalDate),
               newDate: String(o.newDate),
+            }))
+        : [],
+      pending: Array.isArray(body.pending)
+        ? body.pending
+            .filter((p) => p && p.label != null)
+            .map((p) => ({
+              id: String(p.id),
+              label: String(p.label),
+              amount: Number(p.amount) || 0,
             }))
         : [],
     }
