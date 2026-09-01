@@ -581,7 +581,7 @@ function DrillTimer({ duration, drillId, onComplete }: {
 }) {
   const [timeLeft, setTimeLeft] = useState(duration)
   const [running, setRunning] = useState(false)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     setTimeLeft(duration)
