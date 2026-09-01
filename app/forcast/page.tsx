@@ -12,6 +12,7 @@ type Recurring = {
   dayOfMonth?: number
   weekday?: number
   startDate?: string
+  endDate?: string // last date this rule generates (inclusive); past preserved
 }
 type Override = { recId: string; originalDate: string; newDate: string }
 type ForcastDoc = {
@@ -57,9 +58,16 @@ function diffDays(a: Date, b: Date): number {
   return Math.round(ms / 86400000)
 }
 
-// Expand a recurring rule into concrete YYYY-MM-DD hits within [start,end]
+// Expand a recurring rule into concrete YYYY-MM-DD hits within [start,end].
+// If the rule has an endDate, nothing generates after it (past preserved).
 function recurringHits(r: Recurring, start: Date, end: Date): string[] {
   const hits: string[] = []
+  // Clamp the window end to the rule's endDate if set.
+  if (r.endDate) {
+    const ed = parseYmd(r.endDate)
+    if (ed < end) end = ed
+    if (end < start) return hits
+  }
   if (r.cadence === 'monthly') {
     const cur = new Date(start.getFullYear(), start.getMonth(), 1)
     while (cur <= end) {
@@ -377,6 +385,12 @@ function ForcastApp({ onLock }: { onLock: () => void }) {
                 return { ...d, overrides: [...others, { recId, originalDate, newDate }] }
               })
             }
+            onEndRecurring={(recId, endDate) =>
+              update((d) => ({
+                ...d,
+                recurring: d.recurring.map((r) => (r.id === recId ? { ...r, endDate } : r)),
+              }))
+            }
             oneOffs={doc.oneOffs}
           />
         </div>
@@ -429,7 +443,7 @@ function StartFields({ doc, update }: { doc: ForcastDoc; update: (m: (d: Forcast
 
 // ---------- Month calendar ----------
 function MonthCalendar({
-  year, month, byDate, balByDate, todayKey, startKey, onAddOneOff, onRemoveOneOff, onMoveOneOff, onMoveRecurring, oneOffs,
+  year, month, byDate, balByDate, todayKey, startKey, onAddOneOff, onRemoveOneOff, onMoveOneOff, onMoveRecurring, onEndRecurring, oneOffs,
 }: {
   year: number; month: number
   byDate: Record<string, DayItem[]>
@@ -439,6 +453,7 @@ function MonthCalendar({
   onRemoveOneOff: (id: string) => void
   onMoveOneOff: (id: string, newDate: string) => void
   onMoveRecurring: (recId: string, originalDate: string, newDate: string) => void
+  onEndRecurring: (recId: string, endDate: string) => void
   oneOffs: OneOff[]
 }) {
   const dim = daysInMonth(year, month)
@@ -491,13 +506,20 @@ function MonthCalendar({
                   const handleTap = (e: React.MouseEvent) => {
                     e.stopPropagation()
                     if (it.recurring && it.recId && it.originalDate) {
-                      const to = prompt(
-                        `Move "${it.label}" ${money(it.amount)} to which date? (YYYY-MM-DD)\n\nOnly this occurrence moves — the recurring rule stays put.\nEnter its original date (${it.originalDate}) to move it back.`,
+                      const action = prompt(
+                        `"${it.label}" ${money(it.amount)} (recurring)\n\nType:\n• a date (YYYY-MM-DD) to MOVE just this occurrence\n• "end" to STOP this recurring item after this date (past stays, future removed)`,
                         key
                       )
-                      if (to == null) return
-                      const t = to.trim()
-                      if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) { alert('Use format YYYY-MM-DD'); return }
+                      if (action == null) return
+                      const a = action.trim().toLowerCase()
+                      if (a === 'end' || a === 'stop') {
+                        if (confirm(`End "${it.label}" after ${key}?\n\nAll occurrences on/before this date stay. Future ones are removed. You can then add a new one (e.g. after a raise).`)) {
+                          onEndRecurring(it.recId, key)
+                        }
+                        return
+                      }
+                      const t = action.trim()
+                      if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) { alert('Type a date (YYYY-MM-DD) to move, or "end" to stop it.'); return }
                       onMoveRecurring(it.recId, it.originalDate, t)
                       return
                     }

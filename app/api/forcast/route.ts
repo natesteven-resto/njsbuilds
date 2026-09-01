@@ -24,6 +24,7 @@ export type Recurring = {
   dayOfMonth?: number
   weekday?: number
   startDate?: string // YYYY-MM-DD anchor for weekly/biweekly
+  endDate?: string // YYYY-MM-DD — last date this rule generates (inclusive). Past preserved.
 }
 
 // Move a single occurrence of a recurring item to a different date without
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
               dayOfMonth: r.dayOfMonth != null ? Number(r.dayOfMonth) : undefined,
               weekday: r.weekday != null ? Number(r.weekday) : undefined,
               startDate: r.startDate ? String(r.startDate) : undefined,
+              endDate: r.endDate ? String(r.endDate) : undefined,
             }))
         : [],
       overrides: Array.isArray(body.overrides)
