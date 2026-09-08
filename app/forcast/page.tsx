@@ -52,8 +52,7 @@ function money(n: number): string {
 function moneyShort(n: number): string {
   const abs = Math.abs(n)
   const sign = n < 0 ? '-' : ''
-  if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1)}k`
-  return `${sign}$${abs.toFixed(0)}`
+  return `${sign}$${abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 function diffDays(a: Date, b: Date): number {
   const ms = parseYmd(ymd(a)).getTime() - parseYmd(ymd(b)).getTime()
