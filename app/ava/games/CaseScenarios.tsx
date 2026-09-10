@@ -1,14 +1,17 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { byChapters, shuffle, shuffleOptions, type ShuffledQuestion } from '../lib'
+import { byChapters, bySubjectAndChapters, shuffle, shuffleOptions, type ShuffledQuestion, type SubjectId } from '../lib'
 
 // Case scenarios = application-style questions. We surface questions whose text
 // reads like a scenario ("A patient..."), falling back to all MC if few exist.
-export default function CaseScenarios({ chapters }: { chapters: number[] }) {
+export default function CaseScenarios({ chapters, subject }: { chapters: number[]; subject?: SubjectId }) {
   const [seed, setSeed] = useState(0)
   const deck = useMemo<ShuffledQuestion[]>(() => {
-    const all = byChapters(chapters).filter((q) => q.type === 'mc')
+    const all = (subject
+      ? bySubjectAndChapters(subject, chapters)
+      : byChapters(chapters)
+    ).filter((q) => q.type === 'mc')
     const scenarios = all.filter((q) => /patient|client|presents|admitted|reports|year-old|develops|experiencing|comes in|nurse/i.test(q.question))
     const base = scenarios.length >= 6 ? scenarios : all
     return shuffle(base).map(shuffleOptions)

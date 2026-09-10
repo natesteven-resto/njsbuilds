@@ -1,10 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { termPairs, shuffle } from '../lib'
+import { termPairs, shuffle, type SubjectId } from '../lib'
 
-export default function Flashcards({ chapters }: { chapters: number[] }) {
-  const cards = useMemo(() => shuffle(termPairs(chapters)), [chapters])
+export default function Flashcards({ chapters, subject = 'patho' }: { chapters: number[]; subject?: SubjectId }) {
+  const cards = useMemo(() => shuffle(termPairs(subject, chapters)), [subject, chapters])
   const [i, setI] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const [known, setKnown] = useState<Set<number>>(new Set())

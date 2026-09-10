@@ -1,12 +1,12 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { termPairs, shuffle } from '../lib'
+import { termPairs, shuffle, type SubjectId } from '../lib'
 
 const ROUND_SIZE = 6
 
-export default function Matching({ chapters }: { chapters: number[] }) {
-  const allPairs = useMemo(() => termPairs(chapters), [chapters])
+export default function Matching({ chapters, subject = 'patho' }: { chapters: number[]; subject?: SubjectId }) {
+  const allPairs = useMemo(() => termPairs(subject, chapters), [subject, chapters])
   const [seed, setSeed] = useState(0)
 
   const round = useMemo(() => shuffle(allPairs).slice(0, ROUND_SIZE), [allPairs, seed])

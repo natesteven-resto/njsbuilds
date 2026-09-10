@@ -1,12 +1,17 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { byChapters, shuffle, shuffleOptions, type ShuffledQuestion } from '../lib'
+import { byChapters, bySubjectAndChapters, shuffle, shuffleOptions, type ShuffledQuestion, type SubjectId } from '../lib'
 
 const ROUND_SECONDS = 60
 
-export default function TimedQuiz({ chapters }: { chapters: number[] }) {
-  const pool = useMemo(() => byChapters(chapters).filter((q) => q.type === 'mc'), [chapters])
+export default function TimedQuiz({ chapters, subject }: { chapters: number[]; subject?: SubjectId }) {
+  const pool = useMemo(
+    () => subject
+      ? bySubjectAndChapters(subject, chapters).filter((q) => q.type === 'mc')
+      : byChapters(chapters).filter((q) => q.type === 'mc'),
+    [subject, chapters]
+  )
   const [seed, setSeed] = useState(0)
   const deck = useMemo<ShuffledQuestion[]>(
     () => shuffle(pool).map(shuffleOptions),

@@ -1,10 +1,12 @@
 export type Question = {
   id: string
-  chapter: 1 | 2 | 3 | 4 | 5
-  type: 'mc' | 'tf'
+  subject: 'patho' | 'health-assessment' | 'foundations' | 'math'
+  chapter: number
+  type: 'mc' | 'tf' | 'sata' | 'priority'
   question: string
   options: string[]
-  answer: number
+  answer?: number
+  answers?: number[]     // SATA: array of all correct indices
   explanation: string
   term?: string
   definition?: string
@@ -13,7 +15,7 @@ export type Question = {
 export const QUESTIONS: Question[] = [
   // ============ CHAPTER 1: Intro to Pathophysiology ============
   {
-    id: 'c1-q1', chapter: 1, type: 'mc',
+    id: 'c1-q1', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'Pathophysiology is best defined as the study of:',
     options: [
       'The structure of body organs and systems',
@@ -26,7 +28,7 @@ export const QUESTIONS: Question[] = [
     term: 'Pathophysiology', definition: 'The study of functional changes in the body caused by injury, disorder, or disease.',
   },
   {
-    id: 'c1-q2', chapter: 1, type: 'mc',
+    id: 'c1-q2', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A disease is defined as a functional impairment of cells, tissues, organs, or organ systems. It serves as an umbrella term that includes all of the following EXCEPT:',
     options: ['Injuries', 'Disorders', 'Syndromes', 'Homeostasis'],
     answer: 3,
@@ -34,7 +36,7 @@ export const QUESTIONS: Question[] = [
     term: 'Disease', definition: 'Functional impairment of cells, tissues, organs, or organ systems; umbrella term for injuries, disorders, illnesses, and syndromes.',
   },
   {
-    id: 'c1-q3', chapter: 1, type: 'mc',
+    id: 'c1-q3', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'The term that describes the origination and development of an illness or disease over time is:',
     options: ['Etiology', 'Pathogenesis', 'Prognosis', 'Diagnosis'],
     answer: 1,
@@ -42,7 +44,7 @@ export const QUESTIONS: Question[] = [
     term: 'Pathogenesis', definition: 'The origination and development of an illness or disease, from onset to clinical presentation.',
   },
   {
-    id: 'c1-q4', chapter: 1, type: 'mc',
+    id: 'c1-q4', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'Etiology refers to:',
     options: [
       'The predicted outcome of a disease',
@@ -55,7 +57,7 @@ export const QUESTIONS: Question[] = [
     term: 'Etiology', definition: 'The exact cause of a disease.',
   },
   {
-    id: 'c1-q5', chapter: 1, type: 'mc',
+    id: 'c1-q5', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A patient develops a bloodstream infection three days after being admitted to the hospital for surgery. This infection is best classified as:',
     options: ['Idiopathic', 'Iatrogenic', 'Nosocomial', 'Multifactorial'],
     answer: 2,
@@ -63,7 +65,7 @@ export const QUESTIONS: Question[] = [
     term: 'Nosocomial', definition: 'An infection acquired in a healthcare environment (e.g., a hospital).',
   },
   {
-    id: 'c1-q6', chapter: 1, type: 'mc',
+    id: 'c1-q6', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A disease that arises as an unintended result of medical treatment is termed:',
     options: ['Nosocomial', 'Iatrogenic', 'Idiopathic', 'Endemic'],
     answer: 1,
@@ -71,7 +73,7 @@ export const QUESTIONS: Question[] = [
     term: 'Iatrogenic', definition: 'A condition caused inadvertently by medical treatment or intervention.',
   },
   {
-    id: 'c1-q7', chapter: 1, type: 'mc',
+    id: 'c1-q7', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A condition with no identifiable cause is described as:',
     options: ['Multifactorial', 'Idiopathic', 'Iatrogenic', 'Pathogenic'],
     answer: 1,
@@ -79,7 +81,7 @@ export const QUESTIONS: Question[] = [
     term: 'Idiopathic', definition: 'A disease or condition with no known or identifiable cause.',
   },
   {
-    id: 'c1-q8', chapter: 1, type: 'mc',
+    id: 'c1-q8', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A disease-causing microorganism is called a:',
     options: ['Pathogen', 'Antigen', 'Antibody', 'Cytokine'],
     answer: 0,
@@ -87,7 +89,7 @@ export const QUESTIONS: Question[] = [
     term: 'Pathogen', definition: 'A disease-causing microorganism.',
   },
   {
-    id: 'c1-q9', chapter: 1, type: 'mc',
+    id: 'c1-q9', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'When a disease has more than one contributing cause, it is described as:',
     options: ['Idiopathic', 'Multifactorial', 'Iatrogenic', 'Systemic'],
     answer: 1,
@@ -95,7 +97,7 @@ export const QUESTIONS: Question[] = [
     term: 'Multifactorial', definition: 'Having more than one contributing cause.',
   },
   {
-    id: 'c1-q10', chapter: 1, type: 'mc',
+    id: 'c1-q10', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'Which statement correctly distinguishes a sign from a symptom?',
     options: [
       'A sign is subjective; a symptom is objective',
@@ -108,7 +110,7 @@ export const QUESTIONS: Question[] = [
     term: 'Sign vs. symptom', definition: 'A sign is objective and observable by others; a symptom is subjective and reported by the patient.',
   },
   {
-    id: 'c1-q11', chapter: 1, type: 'mc',
+    id: 'c1-q11', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A patient with rheumatoid arthritis experiences a period where symptoms nearly disappear, followed later by a flare-up. These periods are called:',
     options: [
       'Acute and subacute phases',
@@ -121,7 +123,7 @@ export const QUESTIONS: Question[] = [
     term: 'Remission vs. exacerbation', definition: 'Remission is a period of reduced or absent symptoms; exacerbation is a worsening or flare-up of the disease.',
   },
   {
-    id: 'c1-q12', chapter: 1, type: 'mc',
+    id: 'c1-q12', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A disease process that has a rapid onset and short duration is described as:',
     options: ['Chronic', 'Acute', 'Idiopathic', 'Systemic'],
     answer: 1,
@@ -129,7 +131,7 @@ export const QUESTIONS: Question[] = [
     term: 'Acute', definition: 'A disease with rapid onset and short duration.',
   },
   {
-    id: 'c1-q13', chapter: 1, type: 'mc',
+    id: 'c1-q13', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A symptom present throughout the entire body, such as fever affecting the whole system, is described as:',
     options: ['Local', 'Systemic', 'Focal', 'Asymptomatic'],
     answer: 1,
@@ -137,7 +139,7 @@ export const QUESTIONS: Question[] = [
     term: 'Systemic', definition: 'Affecting the entire body or multiple organ systems rather than a single localized area.',
   },
   {
-    id: 'c1-q14', chapter: 1, type: 'mc',
+    id: 'c1-q14', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'Labeling a disease based on diagnostic criteria is known as:',
     options: ['Prognosis', 'Diagnosis', 'Pathogenesis', 'Etiology'],
     answer: 1,
@@ -145,7 +147,7 @@ export const QUESTIONS: Question[] = [
     term: 'Diagnosis', definition: 'The identification/labeling of a disease based on diagnostic criteria.',
   },
   {
-    id: 'c1-q15', chapter: 1, type: 'mc',
+    id: 'c1-q15', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A prediction of how a patient will proceed through the disease process is called the:',
     options: ['Diagnosis', 'Etiology', 'Prognosis', 'Manifestation'],
     answer: 2,
@@ -153,7 +155,7 @@ export const QUESTIONS: Question[] = [
     term: 'Prognosis', definition: 'The prediction of how a patient will progress through and recover from a disease.',
   },
   {
-    id: 'c1-q16', chapter: 1, type: 'mc',
+    id: 'c1-q16', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'Which pair correctly defines morbidity and mortality?',
     options: [
       'Morbidity = death rate; mortality = disease rate',
@@ -166,7 +168,7 @@ export const QUESTIONS: Question[] = [
     term: 'Morbidity vs. mortality', definition: 'Morbidity is the rate of disease/illness in a population; mortality is the rate of death.',
   },
   {
-    id: 'c1-q17', chapter: 1, type: 'mc',
+    id: 'c1-q17', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'Homeostasis is best described as:',
     options: [
       'A state of suffering or distress',
@@ -179,7 +181,7 @@ export const QUESTIONS: Question[] = [
     term: 'Homeostasis', definition: 'A steady state of internal balance maintained by the body.',
   },
   {
-    id: 'c1-q18', chapter: 1, type: 'mc',
+    id: 'c1-q18', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'Epidemiology is the study of health and disease in populations. Which pair does it use to measure disease frequency?',
     options: [
       'Signs and symptoms',
@@ -192,7 +194,7 @@ export const QUESTIONS: Question[] = [
     term: 'Epidemiology', definition: 'The study of the distribution and determinants of health and disease in populations.',
   },
   {
-    id: 'c1-q19', chapter: 1, type: 'mc',
+    id: 'c1-q19', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'Which correctly distinguishes incidence from prevalence?',
     options: [
       'Incidence = total existing cases; prevalence = new cases',
@@ -205,7 +207,7 @@ export const QUESTIONS: Question[] = [
     term: 'Incidence vs. prevalence', definition: 'Incidence is the number of new cases over a period; prevalence is the total existing cases at a point in time.',
   },
   {
-    id: 'c1-q20', chapter: 1, type: 'mc',
+    id: 'c1-q20', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A disease outbreak that spreads across multiple countries or worldwide is classified as a(n):',
     options: ['Endemic', 'Epidemic', 'Pandemic', 'Sporadic'],
     answer: 2,
@@ -213,7 +215,7 @@ export const QUESTIONS: Question[] = [
     term: 'Pandemic', definition: 'A disease epidemic that has spread across multiple countries or worldwide.',
   },
   {
-    id: 'c1-q21', chapter: 1, type: 'mc',
+    id: 'c1-q21', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A disease that is constantly present at a predictable baseline level within a particular population or region is:',
     options: ['Epidemic', 'Pandemic', 'Endemic', 'Iatrogenic'],
     answer: 2,
@@ -221,7 +223,7 @@ export const QUESTIONS: Question[] = [
     term: 'Endemic', definition: 'A disease constantly present at a predictable baseline level in a specific population or region.',
   },
   {
-    id: 'c1-q22', chapter: 1, type: 'mc',
+    id: 'c1-q22', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'Administering childhood vaccinations to prevent disease from ever occurring is an example of which level of prevention?',
     options: ['Primary prevention', 'Secondary prevention', 'Tertiary prevention', 'Quaternary prevention'],
     answer: 0,
@@ -229,7 +231,7 @@ export const QUESTIONS: Question[] = [
     term: 'Primary prevention', definition: 'Prevention of disease before it occurs, e.g., vaccinations and health education.',
   },
   {
-    id: 'c1-q23', chapter: 1, type: 'mc',
+    id: 'c1-q23', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A mammogram performed to detect breast cancer early in an asymptomatic woman is an example of:',
     options: ['Primary prevention', 'Secondary prevention', 'Tertiary prevention', 'Evidence-based practice'],
     answer: 1,
@@ -237,7 +239,7 @@ export const QUESTIONS: Question[] = [
     term: 'Secondary prevention', definition: 'Early detection of disease through screening before symptoms are advanced.',
   },
   {
-    id: 'c1-q24', chapter: 1, type: 'mc',
+    id: 'c1-q24', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A stroke patient participating in physical therapy to regain function and prevent further complications is receiving:',
     options: ['Primary prevention', 'Secondary prevention', 'Tertiary prevention', 'Screening'],
     answer: 2,
@@ -245,7 +247,7 @@ export const QUESTIONS: Question[] = [
     term: 'Tertiary prevention', definition: 'Rehabilitation of a patient with established disease to prevent complications or progression.',
   },
   {
-    id: 'c1-q25', chapter: 1, type: 'mc',
+    id: 'c1-q25', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'Evidence-based practice is best characterized by which statement?',
     options: [
       'Relying on a single research study',
@@ -258,7 +260,7 @@ export const QUESTIONS: Question[] = [
     term: 'Evidence-based practice', definition: 'Care informed by the totality of current research, clinical knowledge, and expert practice, respecting human variation.',
   },
   {
-    id: 'c1-q26', chapter: 1, type: 'mc',
+    id: 'c1-q26', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'A modifiable risk factor is one that:',
     options: [
       'Cannot be changed, such as age or genetics',
@@ -271,7 +273,7 @@ export const QUESTIONS: Question[] = [
     term: 'Modifiable risk factor', definition: 'A risk factor that can be changed or controlled, such as smoking, diet, or activity level.',
   },
   {
-    id: 'c1-q27', chapter: 1, type: 'tf',
+    id: 'c1-q27', subject: 'patho' as const, chapter: 1, type: 'tf',
     question: 'True or False: An asymptomatic patient has a disease but displays no symptoms.',
     options: ['True', 'False'],
     answer: 0,
@@ -279,14 +281,14 @@ export const QUESTIONS: Question[] = [
     term: 'Asymptomatic', definition: 'Having a disease present but displaying no symptoms.',
   },
   {
-    id: 'c1-q28', chapter: 1, type: 'tf',
+    id: 'c1-q28', subject: 'patho' as const, chapter: 1, type: 'tf',
     question: 'True or False: Prevalence measures only the number of new cases of a disease during a specific time period.',
     options: ['True', 'False'],
     answer: 1,
     explanation: 'False. That describes INCIDENCE (new cases). Prevalence measures the total number of existing cases at a point in time.',
   },
   {
-    id: 'c1-q29', chapter: 1, type: 'tf',
+    id: 'c1-q29', subject: 'patho' as const, chapter: 1, type: 'tf',
     question: 'True or False: Age and genetics are examples of nonmodifiable risk factors.',
     options: ['True', 'False'],
     answer: 0,
@@ -294,7 +296,7 @@ export const QUESTIONS: Question[] = [
     term: 'Nonmodifiable risk factor', definition: 'A risk factor that cannot be changed, such as age, sex, or genetics.',
   },
   {
-    id: 'c1-q30', chapter: 1, type: 'mc',
+    id: 'c1-q30', subject: 'patho' as const, chapter: 1, type: 'mc',
     question: 'Which of the following is a goal of studying pathogenesis?',
     options: [
       'To assign blame for the disease',
@@ -308,7 +310,7 @@ export const QUESTIONS: Question[] = [
 
   // ============ CHAPTER 2: Altered Cells & Tissues ============
   {
-    id: 'c2-q1', chapter: 2, type: 'mc',
+    id: 'c2-q1', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Which cellular structure provides a protective barrier and regulates transport into and out of the cell to maintain homeostasis?',
     options: ['Nucleus', 'Plasma membrane', 'Mitochondria', 'Golgi apparatus'],
     answer: 1,
@@ -316,7 +318,7 @@ export const QUESTIONS: Question[] = [
     term: 'Plasma membrane', definition: 'The cell\u2019s outer barrier that protects it and regulates transport in and out to maintain homeostasis.',
   },
   {
-    id: 'c2-q2', chapter: 2, type: 'mc',
+    id: 'c2-q2', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Which organelle is considered the \u201cpowerhouse\u201d of the cell, producing ATP?',
     options: ['Lysosome', 'Ribosome', 'Mitochondria', 'Peroxisome'],
     answer: 2,
@@ -324,7 +326,7 @@ export const QUESTIONS: Question[] = [
     term: 'Mitochondria', definition: 'The organelle that produces ATP, the cell\u2019s main energy source.',
   },
   {
-    id: 'c2-q3', chapter: 2, type: 'mc',
+    id: 'c2-q3', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'The movement of solute particles from an area of high concentration to an area of low concentration, requiring no energy, is called:',
     options: ['Osmosis', 'Diffusion', 'Active transport', 'Endocytosis'],
     answer: 1,
@@ -332,7 +334,7 @@ export const QUESTIONS: Question[] = [
     term: 'Diffusion', definition: 'Passive movement of solute from an area of high concentration to low concentration; no energy required.',
   },
   {
-    id: 'c2-q4', chapter: 2, type: 'mc',
+    id: 'c2-q4', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Osmosis specifically refers to the movement of:',
     options: [
       'Solutes across a membrane against a gradient',
@@ -345,7 +347,7 @@ export const QUESTIONS: Question[] = [
     term: 'Osmosis', definition: 'Passive movement of water across a membrane from an area of low solute concentration to high solute concentration.',
   },
   {
-    id: 'c2-q5', chapter: 2, type: 'mc',
+    id: 'c2-q5', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'The sodium-potassium pump moves ions against their concentration gradients using ATP. This is an example of:',
     options: ['Diffusion', 'Osmosis', 'Facilitated transport', 'Active transport'],
     answer: 3,
@@ -353,7 +355,7 @@ export const QUESTIONS: Question[] = [
     term: 'Active transport', definition: 'Movement of a substance against its concentration gradient using cellular energy (ATP).',
   },
   {
-    id: 'c2-q6', chapter: 2, type: 'mc',
+    id: 'c2-q6', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Facilitated transport differs from simple diffusion in that it:',
     options: [
       'Requires ATP',
@@ -366,7 +368,7 @@ export const QUESTIONS: Question[] = [
     term: 'Facilitated transport', definition: 'Passive movement of a substance down its gradient with the help of a carrier or channel protein; no energy required.',
   },
   {
-    id: 'c2-q7', chapter: 2, type: 'mc',
+    id: 'c2-q7', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'The increase in the number of cells in a tissue is termed:',
     options: ['Hypertrophy', 'Proliferation', 'Differentiation', 'Metaplasia'],
     answer: 1,
@@ -374,7 +376,7 @@ export const QUESTIONS: Question[] = [
     term: 'Proliferation', definition: 'An increase in the number of cells.',
   },
   {
-    id: 'c2-q8', chapter: 2, type: 'mc',
+    id: 'c2-q8', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'The process by which cells develop specialized physical and functional properties is called:',
     options: ['Proliferation', 'Differentiation', 'Hyperplasia', 'Apoptosis'],
     answer: 1,
@@ -382,7 +384,7 @@ export const QUESTIONS: Question[] = [
     term: 'Differentiation', definition: 'The process by which cells develop specialized physical and functional properties.',
   },
   {
-    id: 'c2-q9', chapter: 2, type: 'mc',
+    id: 'c2-q9', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'A decrease in the size of cells, resulting in reduced tissue or organ size (such as muscle wasting after prolonged bed rest), is called:',
     options: ['Hypertrophy', 'Atrophy', 'Hyperplasia', 'Metaplasia'],
     answer: 1,
@@ -390,7 +392,7 @@ export const QUESTIONS: Question[] = [
     term: 'Atrophy', definition: 'A decrease in the size of cells, causing reduced tissue or organ size.',
   },
   {
-    id: 'c2-q10', chapter: 2, type: 'mc',
+    id: 'c2-q10', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'A weightlifter\u2019s skeletal muscle cells enlarge in response to increased workload. This adaptive response is called:',
     options: ['Hyperplasia', 'Hypertrophy', 'Metaplasia', 'Dysplasia'],
     answer: 1,
@@ -398,7 +400,7 @@ export const QUESTIONS: Question[] = [
     term: 'Hypertrophy', definition: 'An increase in the size of individual cells, enlarging the tissue or organ.',
   },
   {
-    id: 'c2-q11', chapter: 2, type: 'mc',
+    id: 'c2-q11', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'An increase in the number of cells in a tissue, such as endometrial thickening in response to estrogen, is called:',
     options: ['Hypertrophy', 'Hyperplasia', 'Atrophy', 'Dysplasia'],
     answer: 1,
@@ -406,7 +408,7 @@ export const QUESTIONS: Question[] = [
     term: 'Hyperplasia', definition: 'An increase in the number of cells in a tissue.',
   },
   {
-    id: 'c2-q12', chapter: 2, type: 'mc',
+    id: 'c2-q12', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'The reversible replacement of one mature cell type by another, such as columnar cells becoming squamous cells in the airway of a smoker, is called:',
     options: ['Metaplasia', 'Dysplasia', 'Hyperplasia', 'Anaplasia'],
     answer: 0,
@@ -414,7 +416,7 @@ export const QUESTIONS: Question[] = [
     term: 'Metaplasia', definition: 'The reversible replacement of one mature cell type with another in response to stress or irritation.',
   },
   {
-    id: 'c2-q13', chapter: 2, type: 'mc',
+    id: 'c2-q13', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Abnormal changes in the size, shape, and organization of cells\u2014often considered a precancerous change\u2014is termed:',
     options: ['Metaplasia', 'Hyperplasia', 'Dysplasia', 'Hypertrophy'],
     answer: 2,
@@ -422,7 +424,7 @@ export const QUESTIONS: Question[] = [
     term: 'Dysplasia', definition: 'Abnormal changes in the size, shape, and organization of cells; often a precancerous change.',
   },
   {
-    id: 'c2-q14', chapter: 2, type: 'mc',
+    id: 'c2-q14', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Programmed, orderly cell death that is a normal physiologic process is called:',
     options: ['Necrosis', 'Apoptosis', 'Atrophy', 'Autolysis'],
     answer: 1,
@@ -430,7 +432,7 @@ export const QUESTIONS: Question[] = [
     term: 'Apoptosis', definition: 'Programmed, orderly cell death that is a normal physiologic process and does not cause inflammation.',
   },
   {
-    id: 'c2-q15', chapter: 2, type: 'mc',
+    id: 'c2-q15', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Which best describes necrosis?',
     options: [
       'Programmed cell death with no inflammation',
@@ -443,7 +445,7 @@ export const QUESTIONS: Question[] = [
     term: 'Necrosis', definition: 'Uncontrolled, pathologic cell death caused by injury, which provokes inflammation.',
   },
   {
-    id: 'c2-q16', chapter: 2, type: 'mc',
+    id: 'c2-q16', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'A patient sustains a burn from touching a hot stove. This is an example of which cause of cellular injury?',
     options: ['Chemical injury', 'Thermal injury', 'Mechanical injury', 'Ischemic injury'],
     answer: 1,
@@ -451,7 +453,7 @@ export const QUESTIONS: Question[] = [
     term: 'Thermal injury', definition: 'Cellular injury caused by extremes of temperature, such as burns or frostbite.',
   },
   {
-    id: 'c2-q17', chapter: 2, type: 'mc',
+    id: 'c2-q17', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Ingestion of a caustic household cleaner that damages the esophageal lining is an example of:',
     options: ['Thermal injury', 'Mechanical injury', 'Chemical injury', 'Physical injury'],
     answer: 2,
@@ -459,7 +461,7 @@ export const QUESTIONS: Question[] = [
     term: 'Chemical injury', definition: 'Cellular damage caused by toxic substances such as acids, bases, drugs, or poisons.',
   },
   {
-    id: 'c2-q18', chapter: 2, type: 'mc',
+    id: 'c2-q18', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Cerebral atrophy is characterized by:',
     options: [
       'Enlargement of brain neurons',
@@ -472,14 +474,14 @@ export const QUESTIONS: Question[] = [
     term: 'Cerebral atrophy', definition: 'A progressive reduction in the size of neurons in the cerebrum, shrinking brain tissue.',
   },
   {
-    id: 'c2-q19', chapter: 2, type: 'mc',
+    id: 'c2-q19', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Cerebral atrophy affecting the entire brain rather than one region is described as:',
     options: ['Focal', 'Global', 'Local', 'Systemic'],
     answer: 1,
     explanation: 'Global cerebral atrophy affects the entire brain; focal atrophy is localized to a particular region. \u201cGlobal\u201d = whole; \u201cfocal\u201d = a specific focus/spot.',
   },
   {
-    id: 'c2-q20', chapter: 2, type: 'mc',
+    id: 'c2-q20', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Cardiac hypertrophy most commonly develops as a response to:',
     options: [
       'Decreased cardiac workload',
@@ -492,7 +494,7 @@ export const QUESTIONS: Question[] = [
     term: 'Cardiac hypertrophy', definition: 'An increase in cardiac muscle mass, often from excessive workload or increased functional demand.',
   },
   {
-    id: 'c2-q21', chapter: 2, type: 'mc',
+    id: 'c2-q21', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Which set of clinical manifestations is most consistent with cardiac hypertrophy?',
     options: [
       'Fever, rash, and joint pain',
@@ -504,7 +506,7 @@ export const QUESTIONS: Question[] = [
     explanation: 'Cardiac hypertrophy impairs cardiac function and can cause shortness of breath, chest pain, syncope (fainting), and reduced output. Fever/rash/joint pain point to inflammatory or infectious processes.',
   },
   {
-    id: 'c2-q22', chapter: 2, type: 'mc',
+    id: 'c2-q22', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Which treatment approach for cardiac hypertrophy aims to reduce the workload of the heart?',
     options: [
       'Increasing physical exertion',
@@ -516,35 +518,35 @@ export const QUESTIONS: Question[] = [
     explanation: 'Treatment includes medications that relax the ventricles and lower the pressure (afterload) the heart must pump against, reducing its workload. Activity restriction is also used; increasing exertion or sodium would worsen it.',
   },
   {
-    id: 'c2-q23', chapter: 2, type: 'tf',
+    id: 'c2-q23', subject: 'patho' as const, chapter: 2, type: 'tf',
     question: 'True or False: Apoptosis triggers an inflammatory response, whereas necrosis does not.',
     options: ['True', 'False'],
     answer: 1,
     explanation: 'False. It is the reverse. Necrosis (injury-related, uncontrolled death) triggers inflammation; apoptosis (programmed death) is orderly and does NOT cause inflammation.',
   },
   {
-    id: 'c2-q24', chapter: 2, type: 'tf',
+    id: 'c2-q24', subject: 'patho' as const, chapter: 2, type: 'tf',
     question: 'True or False: Metaplasia is generally a reversible change, while dysplasia involves abnormal, potentially precancerous cell growth.',
     options: ['True', 'False'],
     answer: 0,
     explanation: 'True. Metaplasia is a reversible swap of one mature cell type for another; dysplasia is disordered, atypical growth that can be precancerous.',
   },
   {
-    id: 'c2-q25', chapter: 2, type: 'tf',
+    id: 'c2-q25', subject: 'patho' as const, chapter: 2, type: 'tf',
     question: 'True or False: Active transport moves substances down their concentration gradient and requires no energy.',
     options: ['True', 'False'],
     answer: 1,
     explanation: 'False. Active transport moves substances AGAINST the gradient and requires ATP. Moving DOWN the gradient without energy describes diffusion or facilitated transport.',
   },
   {
-    id: 'c2-q26', chapter: 2, type: 'mc',
+    id: 'c2-q26', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Acromegaly, in which bones and tissues enlarge due to excess growth hormone, is an example of which cellular adaptation?',
     options: ['Atrophy', 'Metaplasia', 'Hyperplasia/hypertrophy of tissues', 'Apoptosis'],
     answer: 2,
     explanation: 'Acromegaly reflects excessive tissue growth (enlargement) driven by growth hormone — an example of hyperplasia/hypertrophy of tissues. It is not a shrinkage (atrophy) or cell-type change (metaplasia).',
   },
   {
-    id: 'c2-q27', chapter: 2, type: 'mc',
+    id: 'c2-q27', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Which organelle is primarily responsible for digesting cellular waste and worn-out organelles?',
     options: ['Lysosome', 'Ribosome', 'Golgi apparatus', 'Endoplasmic reticulum'],
     answer: 0,
@@ -552,21 +554,21 @@ export const QUESTIONS: Question[] = [
     term: 'Lysosome', definition: 'An organelle containing digestive enzymes that break down cellular waste and worn-out organelles.',
   },
   {
-    id: 'c2-q28', chapter: 2, type: 'mc',
+    id: 'c2-q28', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Cervical metaplasia and dysplasia are commonly detected by which screening test?',
     options: ['Complete blood count', 'Pap smear', 'Chest X-ray', 'Urinalysis'],
     answer: 1,
     explanation: 'A Pap smear screens for cervical metaplasia and dysplasia (abnormal cervical cells), enabling early detection before progression to cancer — a classic example of secondary prevention.',
   },
   {
-    id: 'c2-q29', chapter: 2, type: 'mc',
+    id: 'c2-q29', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'A patient on prolonged bed rest develops shrinking, weakened leg muscles. This is best described as which type of atrophy?',
     options: ['Denervation atrophy', 'Disuse atrophy', 'Ischemic atrophy', 'Hypertrophic atrophy'],
     answer: 1,
     explanation: 'Disuse atrophy results from lack of use (immobility, bed rest), causing muscle cells to shrink. Denervation atrophy follows loss of nerve supply; \u201chypertrophic atrophy\u201d is not a real term.',
   },
   {
-    id: 'c2-q30', chapter: 2, type: 'mc',
+    id: 'c2-q30', subject: 'patho' as const, chapter: 2, type: 'mc',
     question: 'Which statement about cellular differentiation and proliferation is correct?',
     options: [
       'Proliferation changes a cell\u2019s function; differentiation increases cell number',
@@ -580,7 +582,7 @@ export const QUESTIONS: Question[] = [
 
   // ============ CHAPTER 3: Inflammation & Tissue Repair ============
   {
-    id: 'c3-q1', chapter: 3, type: 'mc',
+    id: 'c3-q1', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'The skin and mucous membranes that physically block pathogens from entering the body represent which line of defense?',
     options: ['First line of defense', 'Second line of defense', 'Third line of defense', 'Adaptive immunity'],
     answer: 0,
@@ -588,7 +590,7 @@ export const QUESTIONS: Question[] = [
     term: 'First line of defense', definition: 'Physical and chemical barriers such as skin and mucous membranes that keep pathogens out.',
   },
   {
-    id: 'c3-q2', chapter: 3, type: 'mc',
+    id: 'c3-q2', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'What is the primary trigger for acute inflammation?',
     options: ['Antibody production', 'Tissue injury', 'Vaccination', 'Cellular differentiation'],
     answer: 1,
@@ -596,7 +598,7 @@ export const QUESTIONS: Question[] = [
     term: 'Acute inflammation', definition: 'The immediate, short-term inflammatory response triggered by tissue injury.',
   },
   {
-    id: 'c3-q3', chapter: 3, type: 'mc',
+    id: 'c3-q3', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Which of the following is NOT a goal of the acute inflammatory response?',
     options: [
       'Increase blood flow to the injured site',
@@ -608,7 +610,7 @@ export const QUESTIONS: Question[] = [
     explanation: 'The goals of inflammation are to increase blood flow, bring healing cells, and prep for repair. Destroying healthy tissue is not a goal — in fact, proteinase inhibitors work to protect healthy tissue.',
   },
   {
-    id: 'c3-q4', chapter: 3, type: 'mc',
+    id: 'c3-q4', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'During the vascular response of inflammation, chemical mediators cause vasodilation and increased capillary permeability in order to:',
     options: [
       'Decrease blood flow to the area',
@@ -621,7 +623,7 @@ export const QUESTIONS: Question[] = [
     term: 'Vascular response', definition: 'Vasodilation and increased capillary permeability that bring more blood and cells to an injured site.',
   },
   {
-    id: 'c3-q5', chapter: 3, type: 'mc',
+    id: 'c3-q5', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Which cells are considered the “first responders” of inflammation, releasing histamine when they break apart?',
     options: ['Platelets', 'Mast cells', 'Red blood cells', 'Fibroblasts'],
     answer: 1,
@@ -629,7 +631,7 @@ export const QUESTIONS: Question[] = [
     term: 'Mast cells', definition: 'First-responder inflammatory cells that release histamine, leukotrienes, and prostaglandins.',
   },
   {
-    id: 'c3-q6', chapter: 3, type: 'mc',
+    id: 'c3-q6', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Histamine, released early in inflammation, primarily causes:',
     options: [
       'Vasoconstriction and decreased permeability',
@@ -642,7 +644,7 @@ export const QUESTIONS: Question[] = [
     term: 'Histamine', definition: 'An inflammatory mediator released by mast cells that causes vasodilation and increased capillary permeability.',
   },
   {
-    id: 'c3-q7', chapter: 3, type: 'mc',
+    id: 'c3-q7', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Cytokines are best described as:',
     options: [
       'Structural proteins that rebuild tissue',
@@ -655,7 +657,7 @@ export const QUESTIONS: Question[] = [
     term: 'Cytokines', definition: 'Cell-signaling proteins from white blood cells that help regulate inflammation and immune responses.',
   },
   {
-    id: 'c3-q8', chapter: 3, type: 'mc',
+    id: 'c3-q8', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'The movement of leukocytes toward the site of injury, directed by chemical signals, is called:',
     options: ['Chemotaxis', 'Diapedesis', 'Opsonization', 'Phagocytosis'],
     answer: 0,
@@ -663,7 +665,7 @@ export const QUESTIONS: Question[] = [
     term: 'Chemotaxis', definition: 'The directed movement of leukocytes toward the site of injury in response to chemical signals.',
   },
   {
-    id: 'c3-q9', chapter: 3, type: 'mc',
+    id: 'c3-q9', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Which of the following are the classic LOCAL manifestations of inflammation?',
     options: [
       'Fever, fatigue, and elevated WBC count',
@@ -676,7 +678,7 @@ export const QUESTIONS: Question[] = [
     term: 'Local manifestations of inflammation', definition: 'Redness, heat, swelling, pain, and loss of function at the injured site.',
   },
   {
-    id: 'c3-q10', chapter: 3, type: 'mc',
+    id: 'c3-q10', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Redness of the skin caused by increased blood flow during inflammation is termed:',
     options: ['Erythema', 'Pyrexia', 'Leukocytosis', 'Lymphadenitis'],
     answer: 0,
@@ -684,7 +686,7 @@ export const QUESTIONS: Question[] = [
     term: 'Erythema', definition: 'Redness of the skin caused by increased blood flow during inflammation.',
   },
   {
-    id: 'c3-q11', chapter: 3, type: 'mc',
+    id: 'c3-q11', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Pyrexia is the medical term for:',
     options: ['Redness', 'Fever', 'Swelling', 'Elevated white blood cell count'],
     answer: 1,
@@ -692,7 +694,7 @@ export const QUESTIONS: Question[] = [
     term: 'Pyrexia', definition: 'Fever; an elevated body temperature and systemic sign of inflammation.',
   },
   {
-    id: 'c3-q12', chapter: 3, type: 'mc',
+    id: 'c3-q12', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'An elevated white blood cell count in response to inflammation is called:',
     options: ['Leukopenia', 'Leukocytosis', 'Lymphadenitis', 'Anemia'],
     answer: 1,
@@ -700,7 +702,7 @@ export const QUESTIONS: Question[] = [
     term: 'Leukocytosis', definition: 'An elevated white blood cell count, often seen in inflammation and infection.',
   },
   {
-    id: 'c3-q13', chapter: 3, type: 'mc',
+    id: 'c3-q13', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'A patient sprains an ankle. Which standard first-line treatment is summarized by the acronym RICE?',
     options: [
       'Run, Ice, Compress, Exercise',
@@ -713,7 +715,7 @@ export const QUESTIONS: Question[] = [
     term: 'RICE', definition: 'Rest, Ice, Compression, Elevation — first-line treatment to reduce inflammation and swelling.',
   },
   {
-    id: 'c3-q14', chapter: 3, type: 'mc',
+    id: 'c3-q14', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'NSAIDs such as aspirin and ibuprofen reduce inflammation primarily by:',
     options: [
       'Increasing histamine release',
@@ -726,7 +728,7 @@ export const QUESTIONS: Question[] = [
     term: 'NSAIDs', definition: 'Nonsteroidal anti-inflammatory drugs that reduce inflammation by blocking prostaglandin production.',
   },
   {
-    id: 'c3-q15', chapter: 3, type: 'mc',
+    id: 'c3-q15', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Which nutrients are especially important for promoting wound healing?',
     options: [
       'Simple sugars and saturated fats only',
@@ -738,7 +740,7 @@ export const QUESTIONS: Question[] = [
     explanation: 'Adequate protein plus vitamins A and C (along with water, fats, and minerals) support wound healing. Protein rebuilds tissue; vitamin C is needed for collagen synthesis; vitamin A supports epithelial repair.',
   },
   {
-    id: 'c3-q16', chapter: 3, type: 'mc',
+    id: 'c3-q16', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'The separation or bursting open of a surgical wound along its suture line is called:',
     options: ['Dehiscence', 'Adhesion', 'Keloid', 'Ulceration'],
     answer: 0,
@@ -746,7 +748,7 @@ export const QUESTIONS: Question[] = [
     term: 'Dehiscence', definition: 'The separation or rupture of a surgical wound along its suture line.',
   },
   {
-    id: 'c3-q17', chapter: 3, type: 'mc',
+    id: 'c3-q17', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'An overgrowth of collagen and scar tissue that extends beyond the original wound boundaries is called a:',
     options: ['Adhesion', 'Keloid', 'Granuloma', 'Fissure'],
     answer: 1,
@@ -754,7 +756,7 @@ export const QUESTIONS: Question[] = [
     term: 'Keloid', definition: 'An overgrowth of scar tissue that extends beyond the boundaries of the original wound.',
   },
   {
-    id: 'c3-q18', chapter: 3, type: 'mc',
+    id: 'c3-q18', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Chronic inflammation is best defined as inflammation that:',
     options: [
       'Resolves within 24 hours',
@@ -767,7 +769,7 @@ export const QUESTIONS: Question[] = [
     term: 'Chronic inflammation', definition: 'Recurrent or persistent inflammation lasting several weeks or longer, involving macrophages and lymphocytes.',
   },
   {
-    id: 'c3-q19', chapter: 3, type: 'mc',
+    id: 'c3-q19', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'A granuloma is best described as a:',
     options: [
       'Type of white blood cell',
@@ -780,7 +782,7 @@ export const QUESTIONS: Question[] = [
     term: 'Granuloma', definition: 'A nodular inflammatory lesion that encases a harmful substance the body cannot eliminate.',
   },
   {
-    id: 'c3-q20', chapter: 3, type: 'mc',
+    id: 'c3-q20', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Which cells are more prominently involved in chronic inflammation than in acute inflammation?',
     options: [
       'Monocytes, macrophages, and lymphocytes',
@@ -792,7 +794,7 @@ export const QUESTIONS: Question[] = [
     explanation: 'Chronic inflammation prominently involves monocytes, macrophages, and lymphocytes. Acute inflammation relies more on neutrophils and mast cells as first responders.',
   },
   {
-    id: 'c3-q21', chapter: 3, type: 'mc',
+    id: 'c3-q21', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'A superficial partial-thickness burn typically presents with:',
     options: [
       'Charred, painless, leathery skin',
@@ -804,7 +806,7 @@ export const QUESTIONS: Question[] = [
     explanation: 'Superficial partial-thickness burns show heat, swelling, pain, redness, and loss of function. Painless, leathery eschar suggests a full-thickness burn (nerve endings destroyed).',
   },
   {
-    id: 'c3-q22', chapter: 3, type: 'mc',
+    id: 'c3-q22', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'A full-thickness burn is characterized by:',
     options: [
       'Redness and blistering that are extremely painful',
@@ -816,7 +818,7 @@ export const QUESTIONS: Question[] = [
     explanation: 'Full-thickness burns show redness, eschar (dead leathery tissue), edema, and exudate. Because nerve endings are destroyed, the deepest areas may be less painful than partial-thickness burns.',
   },
   {
-    id: 'c3-q23', chapter: 3, type: 'mc',
+    id: 'c3-q23', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'The “Rule of 9’s” is used in burn assessment to estimate:',
     options: [
       'The depth of the burn',
@@ -829,7 +831,7 @@ export const QUESTIONS: Question[] = [
     term: 'Rule of 9’s', definition: 'A method of estimating the total body surface area affected by a burn.',
   },
   {
-    id: 'c3-q24', chapter: 3, type: 'mc',
+    id: 'c3-q24', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Rheumatoid arthritis (RA) is best described as:',
     options: [
       'A degenerative wear-and-tear joint disease',
@@ -842,7 +844,7 @@ export const QUESTIONS: Question[] = [
     term: 'Rheumatoid arthritis', definition: 'A chronic autoimmune disease causing inflammation of the synovial membranes of joints.',
   },
   {
-    id: 'c3-q25', chapter: 3, type: 'mc',
+    id: 'c3-q25', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'A hallmark clinical feature that distinguishes rheumatoid arthritis is:',
     options: [
       'Involvement of a single random joint',
@@ -854,7 +856,7 @@ export const QUESTIONS: Question[] = [
     explanation: 'RA classically affects joints SYMMETRICALLY (same joints on both sides) with pain, stiffness, redness, heat, swelling, and decreased mobility. It follows a remission/exacerbation pattern.',
   },
   {
-    id: 'c3-q26', chapter: 3, type: 'mc',
+    id: 'c3-q26', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'In rheumatoid arthritis, the abnormal growth of inflamed synovial tissue that erodes cartilage is called:',
     options: ['Pannus', 'Ankylosis', 'Eschar', 'Exudate'],
     answer: 0,
@@ -862,7 +864,7 @@ export const QUESTIONS: Question[] = [
     term: 'Pannus', definition: 'Abnormal inflamed synovial tissue in rheumatoid arthritis that erodes cartilage and bone.',
   },
   {
-    id: 'c3-q27', chapter: 3, type: 'mc',
+    id: 'c3-q27', subject: 'patho' as const, chapter: 3, type: 'mc',
     question: 'Which laboratory findings support a diagnosis of rheumatoid arthritis?',
     options: [
       'Low blood glucose and high sodium',
@@ -874,21 +876,21 @@ export const QUESTIONS: Question[] = [
     explanation: 'RA has no single definitive test, but elevated ESR and CRP (inflammation markers), positive rheumatoid factor, and ANA increase likelihood. Joint fluid analysis and X-rays also support the diagnosis.',
   },
   {
-    id: 'c3-q28', chapter: 3, type: 'tf',
+    id: 'c3-q28', subject: 'patho' as const, chapter: 3, type: 'tf',
     question: 'True or False: Fever and leukocytosis are systemic manifestations of inflammation, while redness and swelling are local manifestations.',
     options: ['True', 'False'],
     answer: 0,
     explanation: 'True. Fever (pyrexia) and elevated WBCs (leukocytosis) are systemic (whole-body) signs; redness, heat, swelling, pain, and loss of function are local signs at the injury site.',
   },
   {
-    id: 'c3-q29', chapter: 3, type: 'tf',
+    id: 'c3-q29', subject: 'patho' as const, chapter: 3, type: 'tf',
     question: 'True or False: The inflammatory response is always harmful and should be completely eliminated whenever possible.',
     options: ['True', 'False'],
     answer: 1,
     explanation: 'False. Inflammation is a necessary, protective response that promotes healing. Treatment aims to moderate an excessive response — not eliminate it entirely.',
   },
   {
-    id: 'c3-q30', chapter: 3, type: 'tf',
+    id: 'c3-q30', subject: 'patho' as const, chapter: 3, type: 'tf',
     question: 'True or False: In rheumatoid arthritis, joint involvement is typically symmetrical.',
     options: ['True', 'False'],
     answer: 0,
@@ -897,7 +899,7 @@ export const QUESTIONS: Question[] = [
 
   // ============ CHAPTER 4: Altered Immunity ============
   {
-    id: 'c4-q1', chapter: 4, type: 'mc',
+    id: 'c4-q1', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'The immune response is considered which line of defense?',
     options: ['First line', 'Second line', 'Third line', 'It is not a line of defense'],
     answer: 2,
@@ -905,7 +907,7 @@ export const QUESTIONS: Question[] = [
     term: 'Third line of defense', definition: 'The specific immune response that recognizes and neutralizes foreign substances.',
   },
   {
-    id: 'c4-q2', chapter: 4, type: 'mc',
+    id: 'c4-q2', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'A substance that the immune system recognizes as foreign and mounts a response against is called a(n):',
     options: ['Antibody', 'Antigen', 'Cytokine', 'Histamine'],
     answer: 1,
@@ -913,7 +915,7 @@ export const QUESTIONS: Question[] = [
     term: 'Antigen', definition: 'A foreign substance recognized by the immune system that triggers an immune response.',
   },
   {
-    id: 'c4-q3', chapter: 4, type: 'mc',
+    id: 'c4-q3', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'The ability of the immune system to remember a prior exposure and respond faster on re-exposure is called:',
     options: ['Specificity', 'Diversity', 'Immunologic memory', 'Self/non-self recognition'],
     answer: 2,
@@ -921,14 +923,14 @@ export const QUESTIONS: Question[] = [
     term: 'Immunologic memory', definition: 'The immune system’s ability to remember prior antigens and respond faster upon re-exposure.',
   },
   {
-    id: 'c4-q4', chapter: 4, type: 'mc',
+    id: 'c4-q4', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Where do immune cells (leukocytes) originate?',
     options: ['The liver', 'The bone marrow', 'The spleen', 'The thymus only'],
     answer: 1,
     explanation: 'All immune cells originate in the bone marrow from lymphoid and myeloid progenitor cells. T lymphocytes later mature in the thymus, but their origin is the bone marrow.',
   },
   {
-    id: 'c4-q5', chapter: 4, type: 'mc',
+    id: 'c4-q5', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Which type of T lymphocyte directly destroys antigen-carrying cells?',
     options: ['Helper T cells', 'Cytotoxic T cells', 'Suppressor T cells', 'Plasma cells'],
     answer: 1,
@@ -936,7 +938,7 @@ export const QUESTIONS: Question[] = [
     term: 'Cytotoxic T cells', definition: 'T lymphocytes (CD8) that directly destroy cells carrying foreign antigens.',
   },
   {
-    id: 'c4-q6', chapter: 4, type: 'mc',
+    id: 'c4-q6', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Helper T lymphocytes (CD4) function to:',
     options: [
       'Directly kill infected cells',
@@ -949,7 +951,7 @@ export const QUESTIONS: Question[] = [
     term: 'Helper T cells', definition: 'T lymphocytes (CD4) that enhance both humoral and cell-mediated immune responses.',
   },
   {
-    id: 'c4-q7', chapter: 4, type: 'mc',
+    id: 'c4-q7', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'B lymphocytes, once activated by an antigen, differentiate into plasma cells that produce:',
     options: ['Histamine', 'Antibodies (immunoglobulins)', 'Cytotoxic enzymes', 'Red blood cells'],
     answer: 1,
@@ -957,7 +959,7 @@ export const QUESTIONS: Question[] = [
     term: 'B lymphocytes', definition: 'Immune cells that differentiate into plasma cells and produce antibodies against antigens.',
   },
   {
-    id: 'c4-q8', chapter: 4, type: 'mc',
+    id: 'c4-q8', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Which granulocyte is the primary responder to bacterial infections?',
     options: ['Eosinophils', 'Basophils', 'Neutrophils', 'Lymphocytes'],
     answer: 2,
@@ -965,7 +967,7 @@ export const QUESTIONS: Question[] = [
     term: 'Neutrophils', definition: 'Granulocytes that are the primary phagocytic responders to bacterial infection.',
   },
   {
-    id: 'c4-q9', chapter: 4, type: 'mc',
+    id: 'c4-q9', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Elevated eosinophils most commonly indicate:',
     options: ['A bacterial infection', 'A parasitic infection or allergic reaction', 'A viral infection', 'Normal findings only'],
     answer: 1,
@@ -973,7 +975,7 @@ export const QUESTIONS: Question[] = [
     term: 'Eosinophils', definition: 'Granulocytes that respond primarily to parasites and allergic reactions.',
   },
   {
-    id: 'c4-q10', chapter: 4, type: 'mc',
+    id: 'c4-q10', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Innate immunity is best characterized as:',
     options: [
       'A slow, highly specific response with memory',
@@ -986,7 +988,7 @@ export const QUESTIONS: Question[] = [
     term: 'Innate immunity', definition: 'The rapid, nonspecific first-line immune response involving phagocytes and inflammation.',
   },
   {
-    id: 'c4-q11', chapter: 4, type: 'mc',
+    id: 'c4-q11', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Adaptive immunity differs from innate immunity in that it is:',
     options: [
       'Immediate and nonspecific',
@@ -999,7 +1001,7 @@ export const QUESTIONS: Question[] = [
     term: 'Adaptive immunity', definition: 'A specific immune response targeting a particular antigen, involving T and B lymphocytes and immunologic memory.',
   },
   {
-    id: 'c4-q12', chapter: 4, type: 'mc',
+    id: 'c4-q12', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'A person recovers from chickenpox and develops lifelong protection through their own antibody production. This is an example of:',
     options: ['Natural active immunity', 'Natural passive immunity', 'Artificial active immunity', 'Artificial passive immunity'],
     answer: 0,
@@ -1007,7 +1009,7 @@ export const QUESTIONS: Question[] = [
     term: 'Natural active immunity', definition: 'Immunity gained by having a disease and producing one’s own antibodies.',
   },
   {
-    id: 'c4-q13', chapter: 4, type: 'mc',
+    id: 'c4-q13', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Receiving a vaccine that prompts your body to make antibodies is an example of:',
     options: ['Natural active immunity', 'Artificial active immunity', 'Natural passive immunity', 'Artificial passive immunity'],
     answer: 1,
@@ -1015,7 +1017,7 @@ export const QUESTIONS: Question[] = [
     term: 'Artificial active immunity', definition: 'Immunity produced when a vaccine stimulates the body to make its own antibodies.',
   },
   {
-    id: 'c4-q14', chapter: 4, type: 'mc',
+    id: 'c4-q14', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'A newborn receives antibodies through breast milk. This is an example of:',
     options: ['Natural active immunity', 'Artificial active immunity', 'Natural passive immunity', 'Artificial passive immunity'],
     answer: 2,
@@ -1023,7 +1025,7 @@ export const QUESTIONS: Question[] = [
     term: 'Natural passive immunity', definition: 'Immunity from receiving pre-made antibodies naturally, such as through the placenta or breast milk.',
   },
   {
-    id: 'c4-q15', chapter: 4, type: 'mc',
+    id: 'c4-q15', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'A patient exposed to rabies receives an injection of pre-formed antibodies. This is an example of:',
     options: ['Natural active immunity', 'Artificial active immunity', 'Natural passive immunity', 'Artificial passive immunity'],
     answer: 3,
@@ -1031,7 +1033,7 @@ export const QUESTIONS: Question[] = [
     term: 'Artificial passive immunity', definition: 'Immunity from an injection of pre-formed antibodies, such as immunoglobulin therapy.',
   },
   {
-    id: 'c4-q16', chapter: 4, type: 'mc',
+    id: 'c4-q16', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Humoral immunity is mediated primarily by:',
     options: [
       'Cytotoxic T cells directly killing cells',
@@ -1044,7 +1046,7 @@ export const QUESTIONS: Question[] = [
     term: 'Humoral immunity', definition: 'Antibody-mediated immunity involving B lymphocytes and plasma cells.',
   },
   {
-    id: 'c4-q17', chapter: 4, type: 'mc',
+    id: 'c4-q17', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Which immunoglobulin is primarily involved in Type I (immediate) hypersensitivity and allergic reactions?',
     options: ['IgA', 'IgG', 'IgM', 'IgE'],
     answer: 3,
@@ -1052,7 +1054,7 @@ export const QUESTIONS: Question[] = [
     term: 'IgE', definition: 'The immunoglobulin responsible for Type I immediate hypersensitivity and allergic reactions.',
   },
   {
-    id: 'c4-q18', chapter: 4, type: 'mc',
+    id: 'c4-q18', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'A patient stung by a bee rapidly develops hives, difficulty breathing, and a drop in blood pressure. This is which type of hypersensitivity reaction?',
     options: ['Type I (immediate)', 'Type II (antibody-mediated)', 'Type III (immune complex)', 'Type IV (delayed)'],
     answer: 0,
@@ -1060,7 +1062,7 @@ export const QUESTIONS: Question[] = [
     term: 'Type I hypersensitivity', definition: 'An immediate, IgE-mediated hypersensitivity reaction, as in allergies and anaphylaxis.',
   },
   {
-    id: 'c4-q19', chapter: 4, type: 'mc',
+    id: 'c4-q19', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'A Type IV hypersensitivity reaction differs from the others in that it is:',
     options: [
       'Mediated by IgE and immediate',
@@ -1073,7 +1075,7 @@ export const QUESTIONS: Question[] = [
     term: 'Type IV hypersensitivity', definition: 'A delayed, T lymphocyte–mediated hypersensitivity reaction, such as a TB skin test or contact dermatitis.',
   },
   {
-    id: 'c4-q20', chapter: 4, type: 'mc',
+    id: 'c4-q20', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Autoimmunity occurs when:',
     options: [
       'The body fails to distinguish self from non-self and attacks its own tissues',
@@ -1086,7 +1088,7 @@ export const QUESTIONS: Question[] = [
     term: 'Autoimmunity', definition: 'A failure to distinguish self from non-self, causing the immune system to attack the body’s own tissues.',
   },
   {
-    id: 'c4-q21', chapter: 4, type: 'mc',
+    id: 'c4-q21', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Rejection of a transplanted organ, in which the immune system attacks foreign donor tissue, is an example of:',
     options: ['Autoimmunity', 'Alloimmunity', 'Immunodeficiency', 'Passive immunity'],
     answer: 1,
@@ -1094,7 +1096,7 @@ export const QUESTIONS: Question[] = [
     term: 'Alloimmunity', definition: 'An immune response against tissue from another individual, as in transplant rejection.',
   },
   {
-    id: 'c4-q22', chapter: 4, type: 'mc',
+    id: 'c4-q22', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'AIDS results from HIV infecting and destroying which cells?',
     options: ['CD8 cytotoxic T cells', 'CD4 helper T lymphocytes', 'B lymphocytes', 'Red blood cells'],
     answer: 1,
@@ -1102,7 +1104,7 @@ export const QUESTIONS: Question[] = [
     term: 'HIV/AIDS', definition: 'A secondary immunodeficiency from HIV infection destroying CD4 helper T lymphocytes.',
   },
   {
-    id: 'c4-q23', chapter: 4, type: 'mc',
+    id: 'c4-q23', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'The opportunistic infections seen in AIDS (such as candidiasis, Pneumocystis pneumonia, and Kaposi sarcoma) occur because:',
     options: [
       'The patient has too many white blood cells',
@@ -1114,7 +1116,7 @@ export const QUESTIONS: Question[] = [
     explanation: 'As CD4 helper T cells are destroyed, cell-mediated immunity collapses, allowing opportunistic infections and cancers that a healthy immune system would normally control.',
   },
   {
-    id: 'c4-q24', chapter: 4, type: 'mc',
+    id: 'c4-q24', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'The primary treatment to suppress viral load and preserve immune function in HIV is:',
     options: ['Antibiotics', 'Antiretroviral therapy (ART)', 'Antihistamines', 'Corticosteroids'],
     answer: 1,
@@ -1122,14 +1124,14 @@ export const QUESTIONS: Question[] = [
     term: 'Antiretroviral therapy (ART)', definition: 'Combination drug therapy that suppresses HIV viral load and preserves immune function.',
   },
   {
-    id: 'c4-q25', chapter: 4, type: 'mc',
+    id: 'c4-q25', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'Anaphylaxis is an exaggerated systemic response caused by which type of hypersensitivity?',
     options: ['Type I (IgE-mediated)', 'Type II', 'Type III', 'Type IV'],
     answer: 0,
     explanation: 'Anaphylaxis is a severe, systemic Type I (IgE-mediated) hypersensitivity reaction. Mast cells and basophils degranulate, releasing mediators that cause airway constriction and vascular collapse.',
   },
   {
-    id: 'c4-q26', chapter: 4, type: 'mc',
+    id: 'c4-q26', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'The first-line emergency treatment for a severe anaphylactic reaction is:',
     options: ['Oral antihistamine', 'Epinephrine (EpiPen)', 'A cool compress', 'Aspirin'],
     answer: 1,
@@ -1137,28 +1139,28 @@ export const QUESTIONS: Question[] = [
     term: 'Epinephrine', definition: 'The first-line emergency drug for anaphylaxis; it raises blood pressure and opens the airways.',
   },
   {
-    id: 'c4-q27', chapter: 4, type: 'mc',
+    id: 'c4-q27', subject: 'patho' as const, chapter: 4, type: 'mc',
     question: 'In an anaphylactic reaction, the constriction of bronchial smooth muscle leads to which symptom?',
     options: ['Increased urine output', 'Difficulty breathing and wheezing', 'Joint pain', 'Skin thickening'],
     answer: 1,
     explanation: 'Bronchial smooth muscle constriction narrows the airways, causing difficulty breathing, wheezing, and cough. Simultaneously, vascular dilation drops blood pressure — a dangerous combination.',
   },
   {
-    id: 'c4-q28', chapter: 4, type: 'tf',
+    id: 'c4-q28', subject: 'patho' as const, chapter: 4, type: 'tf',
     question: 'True or False: Active immunity involves the body producing its own antibodies, while passive immunity involves receiving antibodies made by another source.',
     options: ['True', 'False'],
     answer: 0,
     explanation: 'True. Active immunity = your body makes the antibodies (disease or vaccine). Passive immunity = you receive ready-made antibodies (placenta, breast milk, or injection).',
   },
   {
-    id: 'c4-q29', chapter: 4, type: 'tf',
+    id: 'c4-q29', subject: 'patho' as const, chapter: 4, type: 'tf',
     question: 'True or False: A CD4 count below 200 is one of the criteria used to define AIDS.',
     options: ['True', 'False'],
     answer: 0,
     explanation: 'True. A CD4 count below 200 cells/mm³ (or the presence of an AIDS-defining opportunistic infection) marks the progression from HIV infection to AIDS.',
   },
   {
-    id: 'c4-q30', chapter: 4, type: 'tf',
+    id: 'c4-q30', subject: 'patho' as const, chapter: 4, type: 'tf',
     question: 'True or False: Natural killer (NK) cells are part of the adaptive immune response and require prior exposure to an antigen.',
     options: ['True', 'False'],
     answer: 1,
@@ -1167,7 +1169,7 @@ export const QUESTIONS: Question[] = [
 
   // ============ CHAPTER 5: Infection ============
   {
-    id: 'c5-q1', chapter: 5, type: 'mc',
+    id: 'c5-q1', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Infection is best defined as:',
     options: [
       'A normal state of homeostasis',
@@ -1180,7 +1182,7 @@ export const QUESTIONS: Question[] = [
     term: 'Infection', definition: 'Cellular, tissue, and organ destruction resulting from invasion by microorganisms.',
   },
   {
-    id: 'c5-q2', chapter: 5, type: 'mc',
+    id: 'c5-q2', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Which of the following is NOT a mechanism by which pathogens cause disease?',
     options: [
       'Direct destruction of host cells',
@@ -1192,7 +1194,7 @@ export const QUESTIONS: Question[] = [
     explanation: 'Pathogens cause disease by directly destroying host cells, disrupting host metabolism, or releasing toxins. Strengthening immune memory is a beneficial immune outcome, not a mechanism of causing disease.',
   },
   {
-    id: 'c5-q3', chapter: 5, type: 'mc',
+    id: 'c5-q3', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'The degree of pathogenicity, or the severity of disease a microbe can cause, is termed:',
     options: ['Infectivity', 'Virulence', 'Antigenicity', 'Toxigenicity'],
     answer: 1,
@@ -1200,7 +1202,7 @@ export const QUESTIONS: Question[] = [
     term: 'Virulence', definition: 'The degree of pathogenicity, or how severe a disease a microbe can cause.',
   },
   {
-    id: 'c5-q4', chapter: 5, type: 'mc',
+    id: 'c5-q4', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'A pathogen’s ability to invade and establish itself in a host is called its:',
     options: ['Virulence', 'Infectivity', 'Toxigenicity', 'Antigenic variability'],
     answer: 1,
@@ -1208,7 +1210,7 @@ export const QUESTIONS: Question[] = [
     term: 'Infectivity', definition: 'A pathogen’s ability to invade and establish itself in a host.',
   },
   {
-    id: 'c5-q5', chapter: 5, type: 'mc',
+    id: 'c5-q5', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'A microorganism that can only survive and replicate inside a host cell (such as a virus) is described as a(n):',
     options: ['Facultative organism', 'Obligate organism', 'Saprophyte', 'Commensal'],
     answer: 1,
@@ -1216,14 +1218,14 @@ export const QUESTIONS: Question[] = [
     term: 'Obligate organism', definition: 'A microorganism that can only survive and replicate inside a host cell.',
   },
   {
-    id: 'c5-q6', chapter: 5, type: 'mc',
+    id: 'c5-q6', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Which type of pathogen is treated with antibacterial (antibiotic) drugs?',
     options: ['Viruses', 'Bacteria', 'Fungi', 'Helminths'],
     answer: 1,
     explanation: 'Antibacterials (antibiotics) treat bacterial infections. Antivirals treat viruses, antifungals treat fungi — antibiotics do NOT work on viruses, a key point for patient education.',
   },
   {
-    id: 'c5-q7', chapter: 5, type: 'mc',
+    id: 'c5-q7', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'A superinfection is best described as:',
     options: [
       'A single mild infection',
@@ -1236,7 +1238,7 @@ export const QUESTIONS: Question[] = [
     term: 'Superinfection', definition: 'A secondary infection occurring during or after treatment of a primary infection.',
   },
   {
-    id: 'c5-q8', chapter: 5, type: 'mc',
+    id: 'c5-q8', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'During which phase of acute infection does the pathogen enter the body, before any symptoms or reproduction occur?',
     options: ['Incubation', 'Exposure', 'Prodrome', 'Convalescence'],
     answer: 1,
@@ -1244,7 +1246,7 @@ export const QUESTIONS: Question[] = [
     term: 'Exposure', definition: 'The phase of infection when a pathogen first enters or contacts the host.',
   },
   {
-    id: 'c5-q9', chapter: 5, type: 'mc',
+    id: 'c5-q9', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'The incubation period of an infection refers to the time:',
     options: [
       'When symptoms are at their worst',
@@ -1257,7 +1259,7 @@ export const QUESTIONS: Question[] = [
     term: 'Incubation', definition: 'The period between exposure to a pathogen and the appearance of the first symptoms.',
   },
   {
-    id: 'c5-q10', chapter: 5, type: 'mc',
+    id: 'c5-q10', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'The prodrome phase of an infection is characterized by:',
     options: [
       'No symptoms at all',
@@ -1270,7 +1272,7 @@ export const QUESTIONS: Question[] = [
     term: 'Prodrome', definition: 'The early phase of infection with vague, nonspecific symptoms before characteristic signs appear.',
   },
   {
-    id: 'c5-q11', chapter: 5, type: 'mc',
+    id: 'c5-q11', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'The convalescence phase of infection refers to the period when:',
     options: [
       'The pathogen first enters the body',
@@ -1283,7 +1285,7 @@ export const QUESTIONS: Question[] = [
     term: 'Convalescence', definition: 'The recovery phase of infection when the body heals and returns toward normal function.',
   },
   {
-    id: 'c5-q12', chapter: 5, type: 'mc',
+    id: 'c5-q12', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'The presence of viable bacteria in the bloodstream is called:',
     options: ['Septicemia', 'Bacteremia', 'Septic shock', 'Leukopenia'],
     answer: 1,
@@ -1291,7 +1293,7 @@ export const QUESTIONS: Question[] = [
     term: 'Bacteremia', definition: 'The presence of viable bacteria in the bloodstream.',
   },
   {
-    id: 'c5-q13', chapter: 5, type: 'mc',
+    id: 'c5-q13', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'A patient with a severe systemic infection develops widespread vasodilation, hypotension, and poor tissue perfusion. This life-threatening complication is:',
     options: ['Bacteremia', 'Septic shock', 'Prodrome', 'Convalescence'],
     answer: 1,
@@ -1299,14 +1301,14 @@ export const QUESTIONS: Question[] = [
     term: 'Septic shock', definition: 'A life-threatening complication of infection with vasodilation, hypotension, and poor tissue perfusion.',
   },
   {
-    id: 'c5-q14', chapter: 5, type: 'mc',
+    id: 'c5-q14', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Which of the following is a SYSTEMIC manifestation of infection?',
     options: ['Localized redness', 'Purulent exudate at a wound', 'Fever and malaise', 'Local heat and pain'],
     answer: 2,
     explanation: 'Systemic manifestations affect the whole body: fever, weakness, fatigue, headache, malaise, anorexia, nausea. Localized redness, heat, pain, and purulent exudate are LOCAL manifestations.',
   },
   {
-    id: 'c5-q15', chapter: 5, type: 'mc',
+    id: 'c5-q15', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Thick, pus-containing drainage from an infected wound is termed:',
     options: ['Serous exudate', 'Purulent exudate', 'Erythema', 'Eschar'],
     answer: 1,
@@ -1314,7 +1316,7 @@ export const QUESTIONS: Question[] = [
     term: 'Purulent exudate', definition: 'Thick, pus-containing wound drainage indicating infection.',
   },
   {
-    id: 'c5-q16', chapter: 5, type: 'mc',
+    id: 'c5-q16', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'A culture and sensitivity test is performed on an infected wound. The “sensitivity” portion identifies:',
     options: [
       'How many white blood cells are present',
@@ -1327,7 +1329,7 @@ export const QUESTIONS: Question[] = [
     term: 'Culture and sensitivity', definition: 'A test that identifies the causative organism (culture) and which antibiotics are effective against it (sensitivity).',
   },
   {
-    id: 'c5-q17', chapter: 5, type: 'mc',
+    id: 'c5-q17', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'A decreased white blood cell count, which can occur with some overwhelming infections, is called:',
     options: ['Leukocytosis', 'Leukopenia', 'Erythema', 'Bacteremia'],
     answer: 1,
@@ -1335,7 +1337,7 @@ export const QUESTIONS: Question[] = [
     term: 'Leukopenia', definition: 'A decreased white blood cell count.',
   },
   {
-    id: 'c5-q18', chapter: 5, type: 'mc',
+    id: 'c5-q18', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Influenza is primarily transmitted by:',
     options: ['Fecal-oral route', 'Respiratory droplets', 'Contaminated blood transfusion', 'Insect bites'],
     answer: 1,
@@ -1343,21 +1345,21 @@ export const QUESTIONS: Question[] = [
     term: 'Influenza', definition: 'A viral infection of the airway epithelium transmitted by respiratory droplets.',
   },
   {
-    id: 'c5-q19', chapter: 5, type: 'mc',
+    id: 'c5-q19', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'The gradual change in the genetic composition of the influenza virus during replication, requiring updated yearly vaccines, is related to:',
     options: ['Reassortment/antigenic change', 'Phagocytosis', 'Chemotaxis', 'Apoptosis'],
     answer: 0,
     explanation: 'Influenza undergoes reassortment/antigenic change — its genetic makeup shifts during replication, so immunity from past strains may not protect against new ones. This is why the flu vaccine is updated annually.',
   },
   {
-    id: 'c5-q20', chapter: 5, type: 'mc',
+    id: 'c5-q20', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'The single most effective way to prevent the spread of most infections in healthcare settings is:',
     options: ['Antibiotics for everyone', 'Handwashing', 'Bed rest', 'Increasing fluid intake'],
     answer: 1,
     explanation: 'Handwashing is the single most effective infection-control measure. Vaccination is also key, but routine hand hygiene prevents the widest range of transmission.',
   },
   {
-    id: 'c5-q21', chapter: 5, type: 'mc',
+    id: 'c5-q21', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Hepatitis refers to inflammation of the:',
     options: ['Kidneys', 'Liver', 'Lungs', 'Pancreas'],
     answer: 1,
@@ -1365,21 +1367,21 @@ export const QUESTIONS: Question[] = [
     term: 'Hepatitis', definition: 'Inflammation of the liver, caused by viruses, alcohol, or toxins.',
   },
   {
-    id: 'c5-q22', chapter: 5, type: 'mc',
+    id: 'c5-q22', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Hepatitis A is most commonly transmitted by the:',
     options: ['Respiratory droplet route', 'Fecal-oral route', 'Insect bite', 'Airborne route'],
     answer: 1,
     explanation: 'Hepatitis A spreads via the fecal-oral route (contaminated food/water, poor hand hygiene). Hepatitis B and C spread through infected blood and body fluids.',
   },
   {
-    id: 'c5-q23', chapter: 5, type: 'mc',
+    id: 'c5-q23', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Which hepatitis viruses are primarily transmitted through infected blood and body fluids?',
     options: ['Hepatitis A and E', 'Hepatitis B and C', 'Hepatitis A only', 'None of them'],
     answer: 1,
     explanation: 'Hepatitis B and C are bloodborne, spread by infected blood/body fluids (needles, transfusions, sexual contact). Hepatitis A and E spread by the fecal-oral route.',
   },
   {
-    id: 'c5-q24', chapter: 5, type: 'mc',
+    id: 'c5-q24', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Acute pyelonephritis is a bacterial infection of the:',
     options: ['Bladder', 'Kidneys', 'Urethra', 'Ureters only'],
     answer: 1,
@@ -1387,21 +1389,21 @@ export const QUESTIONS: Question[] = [
     term: 'Acute pyelonephritis', definition: 'A bacterial infection of the kidneys, most often caused by E. coli.',
   },
   {
-    id: 'c5-q25', chapter: 5, type: 'mc',
+    id: 'c5-q25', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Which organism most commonly causes acute pyelonephritis?',
     options: ['Staphylococcus aureus', 'Escherichia coli (E. coli)', 'Candida albicans', 'Influenza virus'],
     answer: 1,
     explanation: 'E. coli, a gram-negative bacterium from the GI tract, is the most common cause of acute pyelonephritis and UTIs — it ascends from the urethra into the urinary tract.',
   },
   {
-    id: 'c5-q26', chapter: 5, type: 'mc',
+    id: 'c5-q26', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'A patient presents with fever, costovertebral angle (flank) pain, dysuria, and urinary frequency. These findings are most consistent with:',
     options: ['Influenza', 'Acute pyelonephritis', 'Hepatitis A', 'Anaphylaxis'],
     answer: 1,
     explanation: 'Fever, costovertebral angle (flank) pain, dysuria, and urinary frequency/urgency are classic signs of acute pyelonephritis (kidney infection). Flank pain over the kidney area is a key distinguishing feature.',
   },
   {
-    id: 'c5-q27', chapter: 5, type: 'mc',
+    id: 'c5-q27', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'A key patient-education point regarding antibiotics is that they:',
     options: [
       'Are effective against viral infections like the common cold',
@@ -1413,28 +1415,28 @@ export const QUESTIONS: Question[] = [
     explanation: 'Antibiotics treat bacterial infections, not viruses. Patients should complete the full course (stopping early breeds resistance), and overuse contributes to multidrug-resistant organisms.',
   },
   {
-    id: 'c5-q28', chapter: 5, type: 'tf',
+    id: 'c5-q28', subject: 'patho' as const, chapter: 5, type: 'tf',
     question: 'True or False: Antibiotics are an effective treatment for viral infections such as influenza.',
     options: ['True', 'False'],
     answer: 1,
     explanation: 'False. Antibiotics only work against bacteria. Viral infections like influenza require antivirals or supportive care — misusing antibiotics fuels antibiotic resistance.',
   },
   {
-    id: 'c5-q29', chapter: 5, type: 'tf',
+    id: 'c5-q29', subject: 'patho' as const, chapter: 5, type: 'tf',
     question: 'True or False: During the incubation period, a person may be asymptomatic but the pathogen is already multiplying in the body.',
     options: ['True', 'False'],
     answer: 0,
     explanation: 'True. Incubation is the interval between exposure and first symptoms; the pathogen multiplies during this time even though the person may feel fine and may already be contagious.',
   },
   {
-    id: 'c5-q30', chapter: 5, type: 'tf',
+    id: 'c5-q30', subject: 'patho' as const, chapter: 5, type: 'tf',
     question: 'True or False: Septicemia is a more serious systemic condition than simple bacteremia.',
     options: ['True', 'False'],
     answer: 0,
     explanation: 'True. Bacteremia is merely bacteria present in the blood; septicemia is a serious systemic infection where organisms actively multiply and cause illness, and can progress to septic shock.',
   },
   {
-    id: 'c5-q31', chapter: 5, type: 'mc',
+    id: 'c5-q31', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'The chain of infection describes the sequence required for an infection to spread. Breaking any link:',
     options: [
       'Has no effect on transmission',
@@ -1447,7 +1449,7 @@ export const QUESTIONS: Question[] = [
     term: 'Chain of infection', definition: 'The sequence of elements required for an infection to spread; breaking any link stops transmission.',
   },
   {
-    id: 'c5-q32', chapter: 5, type: 'mc',
+    id: 'c5-q32', subject: 'patho' as const, chapter: 5, type: 'mc',
     question: 'Which type of drug would be used to treat a fungal infection such as candidiasis?',
     options: ['Antibacterial', 'Antiviral', 'Antifungal', 'Antihistamine'],
     answer: 2,
