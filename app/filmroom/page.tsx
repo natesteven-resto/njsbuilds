@@ -307,16 +307,18 @@ export default function FilmRoomHome() {
           </div>
         )}
 
-        {/* Upload info banner */}
-        <div className="mt-8 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-4 flex items-start gap-3">
-          <Upload className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm text-orange-300 font-medium">Cloudflare Stream not yet connected</p>
-            <p className="text-xs text-orange-400/60 mt-0.5">
-              Video upload is ready to wire up. Add <code className="font-mono bg-black/30 px-1 rounded">CLOUDFLARE_ACCOUNT_ID</code>, <code className="font-mono bg-black/30 px-1 rounded">CLOUDFLARE_STREAM_TOKEN</code>, and <code className="font-mono bg-black/30 px-1 rounded">CLOUDFLARE_R2_*</code> to your env. Until then, paste any direct video URL when adding a game.
-            </p>
+        {/* Upload info */}
+        {games.length > 0 && (
+          <div className="mt-8 rounded-2xl border border-blue-500/15 bg-blue-500/5 p-4 flex items-start gap-3">
+            <Upload className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-blue-300 font-medium">To upload game film</p>
+              <p className="text-xs text-blue-400/60 mt-0.5">
+                Click any game → drag-and-drop your video file in the film room. Cloudflare R2 storage is active. HLS playback via Cloudflare Stream available once a Stream API token is added.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
       {showAdd && <AddGameModal onClose={() => setShowAdd(false)} onAdd={g => setGames(prev => [g, ...prev])} />}

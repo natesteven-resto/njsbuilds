@@ -15,6 +15,18 @@ const nextConfig: NextConfig = {
         hostname: '*.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'videodelivery.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'imagedelivery.net',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.r2.cloudflarestorage.com',
+      },
     ],
   },
   // Note: bodyParser is configured per-route via export const config in Next.js App Router

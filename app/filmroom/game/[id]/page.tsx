@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Play, Pause, SkipBack, SkipForward, ChevronLeft,
   Scissors, Bookmark, Star, MessageSquare,
-  Tag, Users, BarChart2, Pencil, X, Check,
+  Users, BarChart2, Pencil, X, Check,
   Plus, Trash2, Loader2, ChevronDown, ChevronUp, Upload,
-  ZoomIn,
+  ZoomIn, AlertCircle, CheckCircle2,
 } from 'lucide-react'
 import type { Game, Clip, Player, ClipCategory, ClipComment } from '@/types/filmroom'
 import { CATEGORY_LABELS, CATEGORY_COLORS, TEST_TEAM_ID } from '@/types/filmroom'
@@ -29,43 +29,241 @@ function formatDuration(startMs: number, endMs: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
 }
 
+// ─── Video Upload Zone ───────────────────────────────────────────────────────
+
+type UploadState =
+  | { phase: 'idle' }
+  | { phase: 'signing' }
+  | { phase: 'uploading'; progress: number; method: 'stream' | 'r2' }
+  | { phase: 'processing'; videoId?: string }
+  | { phase: 'done'; url: string; videoId?: string }
+  | { phase: 'error'; message: string }
+
+function VideoUploadZone({
+  gameId,
+  onComplete,
+}: {
+  gameId: string
+  onComplete: (url: string, videoId?: string) => void
+}) {
+  const [state, setState] = useState<UploadState>({ phase: 'idle' })
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const upload = async (file: File) => {
+    setState({ phase: 'signing' })
+    try {
+      // 1. Get upload URL from our API
+      const signRes = await fetch('/api/filmroom/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type || 'video/mp4',
+          gameId,
+          fileSizeBytes: file.size,
+        }),
+      })
+      if (!signRes.ok) throw new Error(`Sign error ${signRes.status}: ${await signRes.text()}`)
+      const sign = await signRes.json()
+
+      setState({ phase: 'uploading', progress: 0, method: sign.method })
+
+      if (sign.method === 'stream') {
+        // Cloudflare Stream TUS upload
+        await tusUpload(file, sign.uploadUrl, (p) =>
+          setState({ phase: 'uploading', progress: p, method: 'stream' })
+        )
+        setState({ phase: 'processing', videoId: sign.videoId })
+        // Poll until ready
+        await pollStreamReady(sign.videoId)
+        const hlsUrl = `https://videodelivery.net/${sign.videoId}/manifest/video.m3u8`
+        onComplete(hlsUrl, sign.videoId)
+        setState({ phase: 'done', url: hlsUrl, videoId: sign.videoId })
+      } else {
+        // R2 presigned PUT
+        await xhrUpload(file, sign.uploadUrl, (p) =>
+          setState({ phase: 'uploading', progress: p, method: 'r2' })
+        )
+        onComplete(sign.playbackUrl)
+        setState({ phase: 'done', url: sign.playbackUrl })
+      }
+    } catch (err) {
+      setState({ phase: 'error', message: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file && file.type.startsWith('video/')) upload(file)
+  }
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) upload(file)
+  }
+
+  if (state.phase === 'done') return null // Player takes over
+
+  return (
+    <div
+      onDrop={handleDrop}
+      onDragOver={(e) => e.preventDefault()}
+      className="w-full aspect-video bg-[#0e1015] rounded-xl border-2 border-dashed border-white/10 hover:border-white/20 transition-colors flex flex-col items-center justify-center gap-4 cursor-pointer group"
+      onClick={() => state.phase === 'idle' && inputRef.current?.click()}
+    >
+      <input ref={inputRef} type="file" accept="video/*" className="hidden" onChange={handleFile} />
+
+      {state.phase === 'idle' && (
+        <>
+          <div className="w-16 h-16 rounded-2xl bg-white/4 group-hover:bg-white/6 flex items-center justify-center transition-colors">
+            <Upload className="w-7 h-7 text-white/30" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-white/50 font-medium">Drop game film here</p>
+            <p className="text-xs text-white/25 mt-1">or click to browse · MP4, MOV, MKV</p>
+          </div>
+        </>
+      )}
+
+      {state.phase === 'signing' && (
+        <>
+          <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+          <p className="text-sm text-white/50">Preparing upload…</p>
+        </>
+      )}
+
+      {state.phase === 'uploading' && (
+        <div className="w-full max-w-xs px-6 text-center">
+          <div className="mb-3">
+            <Loader2 className="w-7 h-7 text-blue-400 animate-spin mx-auto" />
+          </div>
+          <p className="text-sm text-white/70 mb-3">
+            Uploading via {state.method === 'stream' ? 'Cloudflare Stream' : 'R2'}… {state.progress}%
+          </p>
+          <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500 rounded-full transition-all duration-300"
+              style={{ width: `${state.progress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {state.phase === 'processing' && (
+        <>
+          <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+          <p className="text-sm text-white/50">Processing video…</p>
+          <p className="text-xs text-white/25">Cloudflare is transcoding. This takes about 30–60s.</p>
+        </>
+      )}
+
+      {state.phase === 'error' && (
+        <div className="text-center px-6">
+          <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+          <p className="text-sm text-red-300 mb-1">Upload failed</p>
+          <p className="text-xs text-red-400/60 mb-3 max-w-xs">{state.message}</p>
+          <button
+            onClick={(e) => { e.stopPropagation(); setState({ phase: 'idle' }) }}
+            className="px-4 py-1.5 rounded-xl bg-white/8 hover:bg-white/12 text-xs text-white/60 transition-colors">
+            Try again
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Simple XHR upload with progress for R2 presigned PUTs
+function xhrUpload(file: File, url: string, onProgress: (p: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', file.type || 'video/mp4')
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+    }
+    xhr.onload = () => xhr.status < 300 ? resolve() : reject(new Error(`R2 PUT ${xhr.status}`))
+    xhr.onerror = () => reject(new Error('Network error during upload'))
+    xhr.send(file)
+  })
+}
+
+// Minimal TUS client for Cloudflare Stream
+async function tusUpload(
+  file: File,
+  uploadUrl: string,
+  onProgress: (p: number) => void,
+  chunkSize = 50 * 1024 * 1024 // 50 MB chunks
+): Promise<void> {
+  // PATCH in chunks
+  let offset = 0
+  while (offset < file.size) {
+    const chunk = file.slice(offset, offset + chunkSize)
+    const res = await fetch(uploadUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/offset+octet-stream',
+        'Tus-Resumable': '1.0.0',
+        'Upload-Offset': String(offset),
+      },
+      body: chunk,
+    })
+    if (!res.ok) throw new Error(`TUS PATCH ${res.status}: ${await res.text()}`)
+    offset += chunk.size
+    onProgress(Math.round((offset / file.size) * 100))
+  }
+}
+
+// Poll Stream until video is ready to stream
+async function pollStreamReady(videoId: string, maxWaitMs = 120_000): Promise<void> {
+  const start = Date.now()
+  while (Date.now() - start < maxWaitMs) {
+    await new Promise((r) => setTimeout(r, 4000))
+    const res = await fetch(`/api/filmroom/upload?videoId=${videoId}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (data.readyToStream) return
+    }
+  }
+  throw new Error('Video took too long to process')
+}
+
 // ─── Video Player Component ───────────────────────────────────────────────────
 
 function VideoPlayer({
   videoUrl,
+  videoId,
   onTimeUpdate,
   onDurationChange,
   playerRef,
 }: {
   videoUrl: string | null
+  videoId: string | null
   onTimeUpdate: (ms: number) => void
   onDurationChange: (ms: number) => void
   playerRef: React.RefObject<HTMLVideoElement | null>
 }) {
-  if (!videoUrl) {
-    return (
-      <div className="w-full aspect-video bg-[#111317] flex flex-col items-center justify-center gap-4 rounded-xl border border-white/8">
-        <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center">
-          <Upload className="w-7 h-7 text-white/25" />
-        </div>
-        <div className="text-center">
-          <p className="text-sm text-white/40 font-medium">No video uploaded</p>
-          <p className="text-xs text-white/25 mt-1">Paste a video URL in the game settings to start</p>
-        </div>
-      </div>
-    )
-  }
+  // Stream HLS playback — native HLS supported in Safari; use hls.js for Chrome/Firefox
+  // For simplicity and frame accuracy, use the HLS URL with the native <video> tag
+  // (Safari plays .m3u8 natively; Chrome falls back to the src directly)
+  const src = videoId
+    ? `https://videodelivery.net/${videoId}/manifest/video.m3u8`
+    : videoUrl
+
+  if (!src) return null
 
   return (
     <video
       ref={playerRef}
-      src={videoUrl}
+      src={src}
       className="w-full aspect-video bg-black rounded-xl"
       onTimeUpdate={(e) => onTimeUpdate(Math.round(e.currentTarget.currentTime * 1000))}
       onDurationChange={(e) => onDurationChange(Math.round(e.currentTarget.duration * 1000))}
       onLoadedMetadata={(e) => onDurationChange(Math.round(e.currentTarget.duration * 1000))}
       playsInline
       preload="metadata"
+      controls={false}
     />
   )
 }
@@ -616,7 +814,6 @@ type PanelTab = 'clips' | 'stats' | 'roster'
 
 export default function GameFilmRoom() {
   const params = useParams()
-  const router = useRouter()
   const gameId = params.id as string
 
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -635,6 +832,7 @@ export default function GameFilmRoom() {
   const [showVideoUrl, setShowVideoUrl] = useState(false)
   const [activeClipId, setActiveClipId] = useState<string | null>(null)
   const [panelTab, setPanelTab] = useState<PanelTab>('clips')
+  const [uploadDone, setUploadDone] = useState(false)
 
   // Load data
   useEffect(() => {
@@ -745,10 +943,16 @@ export default function GameFilmRoom() {
             </span>
           </div>
           <div className="flex-1" />
-          <button onClick={() => setShowVideoUrl(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-white/50 hover:text-white hover:bg-white/6 transition-all border border-white/8 hover:border-white/15">
-            <Upload className="w-3 h-3" /> Video URL
-          </button>
+          {game.video_url ? (
+            <button onClick={() => setShowVideoUrl(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-white/50 hover:text-white hover:bg-white/6 transition-all border border-white/8 hover:border-white/15">
+              <Upload className="w-3 h-3" /> Change Video
+            </button>
+          ) : (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-orange-400/80 border border-orange-500/20 bg-orange-500/5">
+              <Upload className="w-3 h-3" /> Drop video below
+            </span>
+          )}
           {highlights.length > 0 && (
             <span className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-yellow-500/15 text-yellow-400 text-xs border border-yellow-500/25">
               <Star className="w-3 h-3 fill-yellow-400" /> {highlights.length} highlight{highlights.length !== 1 ? 's' : ''}
@@ -763,16 +967,39 @@ export default function GameFilmRoom() {
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
           <div className="p-3 sm:p-4 space-y-0">
             {/* Video */}
-            <div className="rounded-t-xl overflow-hidden border border-b-0 border-white/8 bg-black">
-              <VideoPlayer
-                videoUrl={game.video_url}
-                onTimeUpdate={setCurrentMs}
-                onDurationChange={setDurationMs}
-                playerRef={videoRef}
-              />
-            </div>
-            {/* Transport */}
-            <TransportBar
+            {/* Upload zone — shown when no video + not mid-upload */}
+            {!game.video_url && !uploadDone && (
+              <div className="rounded-xl overflow-hidden border border-white/8 mb-0">
+                <VideoUploadZone
+                  gameId={gameId}
+                  onComplete={async (url, videoId) => {
+                    // Persist video URL + video ID back to game record
+                    await fetch(`/api/filmroom/games/${gameId}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ video_url: url, ...(videoId ? { video_id: videoId } : {}) }),
+                    })
+                    setGame(g => g ? { ...g, video_url: url, video_id: videoId ?? null } : g)
+                    setUploadDone(true)
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Video player — shown when video_url is set */}
+            {game.video_url && (
+              <div className="rounded-t-xl overflow-hidden border border-b-0 border-white/8 bg-black">
+                <VideoPlayer
+                  videoUrl={game.video_url}
+                  videoId={game.video_id}
+                  onTimeUpdate={setCurrentMs}
+                  onDurationChange={setDurationMs}
+                  playerRef={videoRef}
+                />
+              </div>
+            )}
+            {/* Transport — only active with video */}
+            {game.video_url && <TransportBar
               isPlaying={isPlaying}
               currentMs={currentMs}
               durationMs={durationMs}
@@ -784,7 +1011,15 @@ export default function GameFilmRoom() {
               markOut={markOut}
               onMarkIn={() => setMarkIn(currentMs)}
               onMarkOut={() => setMarkOut(currentMs)}
-            />
+            />}
+
+            {/* Upload success banner */}
+            {uploadDone && (
+              <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <p className="text-xs text-emerald-300">Video uploaded and ready — use the controls above to start marking clips.</p>
+              </div>
+            )}
 
             {/* Save clip CTA */}
             {canSave && (
