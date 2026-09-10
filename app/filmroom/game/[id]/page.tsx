@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import type { Game, Clip, Player, ClipCategory, ClipComment } from '@/types/filmroom'
 import { CATEGORY_LABELS, CATEGORY_COLORS, TEST_TEAM_ID } from '@/types/filmroom'
+import { DrawingOverlay, type DrawingData } from '@/app/filmroom/components/DrawingOverlay'
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -396,7 +397,7 @@ function TransportBar({
 // ─── Save Clip Modal ──────────────────────────────────────────────────────────
 
 function SaveClipModal({
-  gameId, teamId, startMs, endMs, players,
+  gameId, teamId, startMs, endMs, players, drawingData,
   onClose, onSave,
 }: {
   gameId: string
@@ -404,6 +405,7 @@ function SaveClipModal({
   startMs: number
   endMs: number
   players: Player[]
+  drawingData?: DrawingData | null
   onClose: () => void
   onSave: (clip: Clip) => void
 }) {
@@ -432,6 +434,7 @@ function SaveClipModal({
           category: form.category,
           is_highlight: form.is_highlight,
           player_ids: form.player_ids,
+          drawing_data: drawingData ?? null,
         }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
@@ -833,6 +836,8 @@ export default function GameFilmRoom() {
   const [activeClipId, setActiveClipId] = useState<string | null>(null)
   const [panelTab, setPanelTab] = useState<PanelTab>('clips')
   const [uploadDone, setUploadDone] = useState(false)
+  const [drawingActive, setDrawingActive] = useState(false)
+  const [drawingData, setDrawingData] = useState<DrawingData | null>(null)
 
   // Load data
   useEffect(() => {
@@ -988,13 +993,18 @@ export default function GameFilmRoom() {
 
             {/* Video player — shown when video_url is set */}
             {game.video_url && (
-              <div className="rounded-t-xl overflow-hidden border border-b-0 border-white/8 bg-black">
+              <div className="rounded-t-xl overflow-hidden border border-b-0 border-white/8 bg-black relative">
                 <VideoPlayer
                   videoUrl={game.video_url}
                   videoId={game.video_id}
                   onTimeUpdate={setCurrentMs}
                   onDurationChange={setDurationMs}
                   playerRef={videoRef}
+                />
+                <DrawingOverlay
+                  active={drawingActive}
+                  onDataChange={setDrawingData}
+                  initialData={null}
                 />
               </div>
             )}
@@ -1041,14 +1051,25 @@ export default function GameFilmRoom() {
               </div>
             )}
 
-            {/* Drawing tools hint */}
-            <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-white/6 bg-white/2">
-              <ZoomIn className="w-3.5 h-3.5 text-white/30" />
-              <p className="text-xs text-white/30">
-                Drawing overlay coming soon — arrows, circles, freehand sketches saved per clip.
-              </p>
-              <Pencil className="w-3 h-3 text-white/20 ml-auto" />
-            </div>
+            {/* Drawing toggle */}
+            {game.video_url && (
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={() => setDrawingActive(a => !a)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
+                    drawingActive
+                      ? 'bg-orange-500/15 border-orange-500/30 text-orange-300'
+                      : 'border-white/8 bg-white/3 text-white/40 hover:text-white hover:bg-white/6'
+                  }`}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  {drawingActive ? 'Drawing On — click tools on video' : 'Draw on video'}
+                </button>
+                {drawingActive && (
+                  <p className="text-xs text-white/30">Arrows, circles, freehand, text. Drawing saves with your clip.</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1128,11 +1149,14 @@ export default function GameFilmRoom() {
           startMs={markIn}
           endMs={markOut}
           players={players}
+          drawingData={drawingData}
           onClose={() => setShowSaveClip(false)}
           onSave={(clip) => {
             setClips(c => [...c, clip])
             setMarkIn(null)
             setMarkOut(null)
+            setDrawingActive(false)
+            setDrawingData(null)
           }}
         />
       )}
