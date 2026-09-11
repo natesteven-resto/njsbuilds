@@ -13,6 +13,7 @@ import {
 import type { Game, Clip, Player, ClipCategory, ClipComment } from '@/types/filmroom'
 import { CATEGORY_LABELS, CATEGORY_COLORS, TEST_TEAM_ID } from '@/types/filmroom'
 import { DrawingOverlay, type DrawingData } from '@/app/filmroom/components/DrawingOverlay'
+import { JogWheel } from '@/app/filmroom/components/JogWheel'
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -1664,10 +1665,34 @@ export default function GameFilmRoom() {
                   onDataChange={setDrawingData}
                   initialData={null}
                 />
-                {/* Fullscreen toggle button — always visible on the video */}
+
+                {/* Tap-to-pause overlay — invisible div over video, doesn't block drawing */}
+                {!drawingActive && (
+                  <div
+                    className="absolute inset-0 z-10"
+                    style={{ touchAction: 'manipulation' }}
+                    onClick={playPause}
+                  />
+                )}
+
+                {/* Jog wheel — appears when paused */}
+                <JogWheel
+                  visible={!isPlaying && durationMs > 0}
+                  currentMs={currentMs}
+                  onScrub={(deltaMs) => {
+                    const v = videoRef.current
+                    if (!v) return
+                    const next = Math.max(0, Math.min(durationMs / 1000, v.currentTime + deltaMs / 1000))
+                    v.currentTime = next
+                    setCurrentMs(Math.round(next * 1000))
+                  }}
+                  onTap={playPause}
+                />
+
+                {/* Fullscreen toggle */}
                 <button
                   onClick={() => setIsFullscreen(f => !f)}
-                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 hover:bg-black/80 text-white/70 hover:text-white transition-all z-10"
+                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 hover:bg-black/80 text-white/70 hover:text-white transition-all z-20"
                   title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen (F)'}
                 >
                   {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
