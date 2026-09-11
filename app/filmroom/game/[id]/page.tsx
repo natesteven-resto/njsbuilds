@@ -244,41 +244,41 @@ function StatEntryPanel({
 
         {/* ── Stat grid — NOT in scroll container, fixes iPad tap swallow ── */}
         <div className="shrink-0 px-4 pt-3 pb-1">
-          <div className="grid grid-cols-3 gap-2">
-            {/* MADE column */}
-            <div className="space-y-1.5">
+          <div className="grid grid-cols-3 gap-2 items-stretch">
+            {/* MADE column — buttons grow to fill height */}
+            <div className="flex flex-col gap-1.5">
               <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Made</p>
               {made.map(def => (
                 <button key={def.key} onClick={() => handleStatTap(def.key)}
                   style={{ touchAction: 'manipulation' }}
-                  className={`w-full h-9 rounded-lg text-xs font-semibold ${
+                  className={`w-full flex-1 rounded-lg text-xs font-semibold ${
                     selectedStat === def.key ? 'bg-blue-600 text-white' : 'bg-white text-gray-900'
                   }`}>{def.label}</button>
               ))}
-            </div>
-            {/* MISS column + recent log below */}
-            <div className="space-y-1.5 flex flex-col">
-              <p className="text-[10px] font-bold text-red-400/70 uppercase tracking-widest text-center">Miss</p>
-              {miss.map(def => (
-                <button key={def.key} onClick={() => handleStatTap(def.key)}
-                  style={{ touchAction: 'manipulation' }}
-                  className={`w-full h-9 rounded-lg text-xs font-semibold border ${
-                    selectedStat === def.key ? 'bg-blue-600 text-white border-blue-500' : 'bg-red-950/60 text-red-300 border-red-500/20'
-                  }`}>{def.label}</button>
-              ))}
-              {/* Recent log fills the gap below Miss buttons */}
+              {/* Recent log fills remaining space */}
               {sessionEntries.length > 0 && (
-                <div className="mt-2 space-y-1 flex-1">
-                  <p className="text-[10px] font-bold text-white/25 uppercase tracking-widest text-center mb-1">Recent</p>
-                  {[...sessionEntries].reverse().slice(0, 8).map(e => (
+                <div className="flex-1 mt-1 space-y-1 min-h-0">
+                  <p className="text-[10px] font-bold text-white/25 uppercase tracking-widest text-center">Recent</p>
+                  {[...sessionEntries].reverse().slice(0, 6).map(e => (
                     <div key={e.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/4 text-[11px]">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                      <span className="text-white/50 shrink-0">{e.player_number !== 'OPP' ? `#${e.player_number}` : 'OPP'}</span>
-                      <span className="text-white/70 font-medium truncate">{STAT_DEFS.find(d => d.key === e.stat_type)?.label ?? e.stat_type}</span>
+                      <span className="text-white/50 shrink-0 text-[10px]">{e.player_number !== 'OPP' ? `#${e.player_number}` : 'OPP'}</span>
+                      <span className="text-white/70 font-medium truncate text-[10px]">{STAT_DEFS.find(d => d.key === e.stat_type)?.label ?? e.stat_type}</span>
                     </div>
                   ))}
                 </div>
               )}
+            </div>
+            {/* MISS column — buttons grow to fill height */}
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[10px] font-bold text-red-400/70 uppercase tracking-widest text-center">Miss</p>
+              {miss.map(def => (
+                <button key={def.key} onClick={() => handleStatTap(def.key)}
+                  style={{ touchAction: 'manipulation' }}
+                  className={`w-full flex-1 rounded-lg text-xs font-semibold border ${
+                    selectedStat === def.key ? 'bg-blue-600 text-white border-blue-500' : 'bg-red-950/60 text-red-300 border-red-500/20'
+                  }`}>{def.label}</button>
+              ))}
             </div>
             {/* OTHER column */}
             <div className="space-y-1.5">
