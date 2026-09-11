@@ -405,15 +405,7 @@ export default function FilmRoomHome() {
       {/* Cinematic transition overlay */}
       {transitionGame && (
         <TransitionOverlay
-          gameId={transitionGame.id}
-          videoUrl={transitionGame.video_url}
-          videoId={transitionGame.video_id ?? null}
-          gameTitle={transitionGame.opponent}
-          onExit={() => {
-            // Exit cinema → go to normal film room UI
-            if (transitionGame) window.location.href = `/filmroom/game/${transitionGame.id}`
-            setTransitionGame(null)
-          }}
+          targetUrl={`/filmroom/game/${transitionGame.id}`}
           onCancel={() => setTransitionGame(null)}
         />
       )}
