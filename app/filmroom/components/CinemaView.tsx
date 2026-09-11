@@ -113,10 +113,10 @@ export function CinemaView({ videoUrl, videoId, gameTitle, onExit }: CinemaViewP
       <div
         className="absolute overflow-hidden"
         style={{
-          left: '14%',
-          top: '13%',
-          width: '72%',
-          height: '36%',
+          left: '10%',
+          top: '24%',
+          width: '80%',
+          height: '37%',
           zIndex: 2,
           background: '#000',
         }}
@@ -126,7 +126,8 @@ export function CinemaView({ videoUrl, videoId, gameTitle, onExit }: CinemaViewP
           <video
             ref={videoRef}
             src={playableSrc}
-            className="w-full h-full object-cover"
+            className="w-full h-full"
+            style={{ objectFit: 'fill' }}
             onTimeUpdate={e => setCurrentMs(Math.round(e.currentTarget.currentTime * 1000))}
             onDurationChange={e => setDurationMs(Math.round(e.currentTarget.duration * 1000))}
             onLoadedMetadata={e => setDurationMs(Math.round(e.currentTarget.duration * 1000))}
@@ -160,7 +161,7 @@ export function CinemaView({ videoUrl, videoId, gameTitle, onExit }: CinemaViewP
       </div>
 
       {/* Jog wheel — sits over the screen area */}
-      <div className="absolute pointer-events-none" style={{ left: '14%', top: '13%', width: '72%', height: '36%', zIndex: 3 }}>
+      <div className="absolute pointer-events-none" style={{ left: '10%', top: '24%', width: '80%', height: '37%', zIndex: 3 }}>
         <div className="pointer-events-auto relative w-full h-full">
           <JogWheel
             visible={!isPlaying && durationMs > 0}
