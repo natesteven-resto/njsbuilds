@@ -67,7 +67,7 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
       className="font-medium truncate text-sm hover:text-blue-300 transition-colors flex items-center gap-1 group"
       title="Tap to edit"
     >
-      vs {value}
+      {value}
       <span className="opacity-0 group-hover:opacity-60 text-[10px] text-white/40">(edit)</span>
     </button>
   )
