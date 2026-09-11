@@ -966,7 +966,7 @@ function TransportBar({
   isPlaying, currentMs, durationMs,
   onPlayPause, onSeek, onSkip, onFrameStep,
   markIn, markOut, onMarkIn, onMarkOut,
-  isFullscreen,
+  isFullscreen, onStatTap,
 }: {
   isPlaying: boolean
   currentMs: number
@@ -980,6 +980,7 @@ function TransportBar({
   onMarkIn: () => void
   onMarkOut: () => void
   isFullscreen?: boolean
+  onStatTap?: () => void
 }) {
   const pct = durationMs > 0 ? (currentMs / durationMs) * 100 : 0
   const inPct = (markIn != null && durationMs > 0) ? (markIn / durationMs) * 100 : null
@@ -1071,6 +1072,15 @@ function TransportBar({
             title="Mark Out point (O)">
             OUT <Scissors className="w-3 h-3" />
           </button>
+          {onStatTap && (
+            <button
+              onClick={onStatTap}
+              style={{ touchAction: 'manipulation' }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-semibold transition-all ml-1 border border-blue-500/40"
+            >
+              <BarChart className="w-3 h-3" /> Tag Stat
+            </button>
+          )}
         </div>
       </div>
 
@@ -1714,6 +1724,7 @@ export default function GameFilmRoom() {
               onMarkIn={() => setMarkIn(currentMs)}
               onMarkOut={() => setMarkOut(currentMs)}
               isFullscreen={isFullscreen}
+              onStatTap={!isFullscreen && videoLoaded ? openStatPanel : undefined}
             />}
             {/* Upload success banner — hidden in fullscreen */}
             {!isFullscreen && uploadDone && (
@@ -1757,16 +1768,7 @@ export default function GameFilmRoom() {
                   <Pencil className="w-3.5 h-3.5" />
                   {drawingActive ? 'Drawing On' : 'Draw on video'}
                 </button>
-                {!isFullscreen && videoLoaded && (
-                  <button
-                    onClick={openStatPanel}
-                    style={{ touchAction: 'manipulation' }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-semibold text-xs transition-all shadow-lg shadow-blue-500/20 border border-blue-500/30 ml-auto"
-                  >
-                    <BarChart className="w-3.5 h-3.5" />
-                    Tag Stat
-                  </button>
-                )}
+
               </div>
             )}
           </div>
