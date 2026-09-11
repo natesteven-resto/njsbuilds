@@ -512,7 +512,7 @@ function BoxScorePanel({
                     onClick={() => setExpandedPlayerId(isExpanded ? null : player.id)}
                     className="hover:bg-white/3 transition-colors cursor-pointer"
                   >
-                    <td className="py-2 pr-3 sticky left-0 bg-transparent">
+                    <td className="py-2 pr-3 sticky left-0 bg-[#13161b]">
                       <div className="flex items-center gap-1">
                         {isExpanded ? <ChevronUp className="w-3 h-3 text-white/30 shrink-0" /> : <ChevronDown className="w-3 h-3 text-white/20 shrink-0" />}
                         <span className="font-medium text-white/80 truncate">#{player.number} {player.name.split(' ')[0]}</span>
@@ -549,7 +549,7 @@ function BoxScorePanel({
 
             {/* Team totals row */}
             <tr className="border-t-2 border-white/12">
-              <td className="py-2 pr-3 sticky left-0 bg-transparent">
+              <td className="py-2 pr-3 sticky left-0 bg-[#13161b]">
                 <span className="font-semibold text-white/60 text-[11px] uppercase tracking-wide">Team</span>
               </td>
               {renderBoxRow(calcBoxRow(teamTotals))}
@@ -562,7 +562,7 @@ function BoxScorePanel({
               const oppBox = calcBoxRow(oppEntries)
               return (
                 <tr className="border-t border-red-500/20 bg-red-950/10">
-                  <td className="py-2 pr-3 sticky left-0 bg-transparent">
+                  <td className="py-2 pr-3 sticky left-0 bg-[#13161b]">
                     <span className="font-semibold text-red-400/70 text-[11px] uppercase tracking-wide">OPP</span>
                   </td>
                   {renderBoxRow(oppBox, true)}
