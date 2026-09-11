@@ -422,11 +422,13 @@ function BoxScorePanel({
   players,
   statEntries,
   onSeek,
+  onDeleteEntry,
 }: {
   gameId: string
   players: Player[]
   statEntries: StatEntry[]
   onSeek: (ms: number) => void
+  onDeleteEntry: (id: string) => void
 }) {
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -529,7 +531,14 @@ function BoxScorePanel({
                                 <span className="font-mono text-white/40 tabular-nums text-[11px] w-10 shrink-0">
                                   {msToDisplay(entry.video_time_ms)}
                                 </span>
-                                <span className="font-bold text-blue-300 text-[11px] w-6">{entry.stat_type}</span>
+                                <span className="font-bold text-blue-300 text-[11px] flex-1">{STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type}</span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onDeleteEntry(entry.id) }}
+                                  style={{ touchAction: 'manipulation' }}
+                                  className="p-1 rounded text-white/20 hover:text-red-400 transition-all shrink-0"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
                               </button>
                             ))}
                         </div>
@@ -1511,6 +1520,16 @@ export default function GameFilmRoom() {
     }
   }, [sessionStatEntries])
 
+  const handleDeleteEntry = useCallback(async (id: string) => {
+    try {
+      await fetch(`/api/filmroom/stat-entries?id=${id}`, { method: 'DELETE' })
+      setStatEntries(prev => prev.filter(e => e.id !== id))
+      setSessionStatEntries(prev => prev.filter(e => e.id !== id))
+    } catch {
+      // ignore
+    }
+  }, [])
+
   // Jump to clip
   const jumpToClip = useCallback((startMs: number) => {
     seek(startMs)
@@ -1796,6 +1815,7 @@ export default function GameFilmRoom() {
                   players={players}
                   statEntries={statEntries}
                   onSeek={seekAndPlay}
+                  onDeleteEntry={handleDeleteEntry}
                 />
               </div>
             )}
