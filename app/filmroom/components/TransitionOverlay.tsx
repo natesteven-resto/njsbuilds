@@ -1,57 +1,71 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { CinemaView } from './CinemaView'
 
 interface TransitionOverlayProps {
-  targetUrl: string
-  onComplete: () => void
+  gameId: string
+  videoUrl: string | null
+  videoId: string | null
+  gameTitle: string
+  onExit: () => void        // cinema Exit → full film room UI
+  onCancel: () => void      // if transition fails, close overlay
 }
 
-export function TransitionOverlay({ targetUrl, onComplete }: TransitionOverlayProps) {
+export function TransitionOverlay({ gameId, videoUrl, videoId, gameTitle, onExit, onCancel }: TransitionOverlayProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const router = useRouter()
+  const [phase, setPhase] = useState<'transition' | 'cinema'>('transition')
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
-    // Preload and play immediately
     video.play().catch(() => {
-      // If autoplay blocked, skip straight to destination
-      router.push(targetUrl)
-      onComplete()
+      // Autoplay blocked — skip straight to cinema
+      setPhase('cinema')
     })
 
     const handleEnded = () => {
-      router.push(targetUrl)
-      onComplete()
+      // Video ended — freeze on last frame, mount cinema view on top
+      setPhase('cinema')
     }
 
     video.addEventListener('ended', handleEnded)
     return () => video.removeEventListener('ended', handleEnded)
-  }, [targetUrl, router, onComplete])
+  }, [])
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        background: '#000',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <video
-        ref={videoRef}
-        src="/filmroom-transition.mp4"
-        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-        playsInline
-        muted
-        preload="auto"
-      />
-    </div>
+    <>
+      {/* Transition video — always mounted, freezes on last frame when ended */}
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9998,
+          background: '#000',
+        }}
+      >
+        <video
+          ref={videoRef}
+          src="/filmroom-transition.mp4"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          playsInline
+          muted
+          preload="auto"
+        />
+      </div>
+
+      {/* Cinema view — mounts on top when transition ends, composites game video onto screen */}
+      {phase === 'cinema' && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999 }}>
+          <CinemaView
+            videoUrl={videoUrl}
+            videoId={videoId}
+            gameTitle={gameTitle}
+            onExit={onExit}
+          />
+        </div>
+      )}
+    </>
   )
 }

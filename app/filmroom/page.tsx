@@ -235,11 +235,12 @@ export default function FilmRoomHome() {
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [filter, setFilter] = useState<'all' | 'video' | 'no-video'>('all')
-  const [transitionTarget, setTransitionTarget] = useState<string | null>(null)
+  const [transitionGame, setTransitionGame] = useState<Game | null>(null)
 
   const handleSelectGame = useCallback((id: string) => {
-    setTransitionTarget(`/filmroom/game/${id}`)
-  }, [])
+    const game = games.find(g => g.id === id) ?? null
+    setTransitionGame(game)
+  }, [games])
 
   useEffect(() => {
     fetch(`/api/filmroom/games?team_id=${TEST_TEAM_ID}`)
@@ -402,10 +403,18 @@ export default function FilmRoomHome() {
       {showAdd && <AddGameModal onClose={() => setShowAdd(false)} onAdd={g => setGames(prev => [g, ...prev])} />}
 
       {/* Cinematic transition overlay */}
-      {transitionTarget && (
+      {transitionGame && (
         <TransitionOverlay
-          targetUrl={transitionTarget}
-          onComplete={() => setTransitionTarget(null)}
+          gameId={transitionGame.id}
+          videoUrl={transitionGame.video_url}
+          videoId={transitionGame.video_id ?? null}
+          gameTitle={transitionGame.opponent}
+          onExit={() => {
+            // Exit cinema → go to normal film room UI
+            if (transitionGame) window.location.href = `/filmroom/game/${transitionGame.id}`
+            setTransitionGame(null)
+          }}
+          onCancel={() => setTransitionGame(null)}
         />
       )}
     </div>
