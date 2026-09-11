@@ -256,8 +256,8 @@ function StatEntryPanel({
                   }`}>{def.label}</button>
               ))}
             </div>
-            {/* MISS column */}
-            <div className="space-y-1.5">
+            {/* MISS column + recent log below */}
+            <div className="space-y-1.5 flex flex-col">
               <p className="text-[10px] font-bold text-red-400/70 uppercase tracking-widest text-center">Miss</p>
               {miss.map(def => (
                 <button key={def.key} onClick={() => handleStatTap(def.key)}
@@ -266,6 +266,19 @@ function StatEntryPanel({
                     selectedStat === def.key ? 'bg-blue-600 text-white border-blue-500' : 'bg-red-950/60 text-red-300 border-red-500/20'
                   }`}>{def.label}</button>
               ))}
+              {/* Recent log fills the gap below Miss buttons */}
+              {sessionEntries.length > 0 && (
+                <div className="mt-2 space-y-1 flex-1">
+                  <p className="text-[10px] font-bold text-white/25 uppercase tracking-widest text-center mb-1">Recent</p>
+                  {[...sessionEntries].reverse().slice(0, 8).map(e => (
+                    <div key={e.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/4 text-[11px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                      <span className="text-white/50 shrink-0">{e.player_number !== 'OPP' ? `#${e.player_number}` : 'OPP'}</span>
+                      <span className="text-white/70 font-medium truncate">{STAT_DEFS.find(d => d.key === e.stat_type)?.label ?? e.stat_type}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             {/* OTHER column */}
             <div className="space-y-1.5">
@@ -326,63 +339,6 @@ function StatEntryPanel({
           </div>
         </div>
 
-        {/* ── Running log — scrollable only this section ── */}
-        <div className="flex-1 overflow-y-auto border-t border-white/6">
-          {sessionEntries.length > 0 && (
-            <div className="px-4 py-3">
-              <p className="text-[11px] font-semibold text-white/30 uppercase tracking-wider mb-1.5">Recent</p>
-              <div className="space-y-1">
-                {[...sessionEntries].reverse().slice(0, 8).map((e) => (
-                  <div key={e.id} className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white/3 text-xs">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                    <span className="text-white/60 flex-1 truncate">
-                      {e.player_number !== 'OPP' ? `#${e.player_number} ` : ''}{e.player_name.split(' ')[0]}
-                    </span>
-                    <span className="font-medium text-white/70">{statLabel(e.stat_type)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Box Score (read-only) ── */}
-          {sessionEntries.length > 0 && players.length > 0 && (
-            <div className="px-4 pb-5 border-t border-white/6 pt-3">
-              <p className="text-[11px] font-semibold text-white/30 uppercase tracking-wider mb-2">Box Score</p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs min-w-[340px]">
-                  <thead>
-                    <tr className="border-b border-white/8">
-                      <th className="text-left text-white/30 font-medium pb-1.5 pr-2">Player</th>
-                      {(['PTS','REB','AST','STL','BLK'] as const).map(col => (
-                        <th key={col} className="text-center text-white/30 font-medium pb-1.5 px-1.5 min-w-[28px]">{col}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/4">
-                    {players.map(p => {
-                      const pe = sessionEntries.filter(e => e.player_id === p.id)
-                      if (pe.length === 0) return null
-                      const box = calcBoxRow(pe)
-                      return (
-                        <tr key={p.id}>
-                          <td className="py-1.5 pr-2 text-white/60 font-medium truncate max-w-[90px]">
-                            #{p.number} {p.name.split(' ')[0]}
-                          </td>
-                          <td className="text-center px-1.5 py-1.5"><span className={box.pts > 0 ? 'text-white font-semibold' : 'text-white/20'}>{box.pts}</span></td>
-                          <td className="text-center px-1.5 py-1.5"><span className={box.reb > 0 ? 'text-white font-semibold' : 'text-white/20'}>{box.reb}</span></td>
-                          <td className="text-center px-1.5 py-1.5"><span className={box.ast > 0 ? 'text-white font-semibold' : 'text-white/20'}>{box.ast}</span></td>
-                          <td className="text-center px-1.5 py-1.5"><span className={box.stl > 0 ? 'text-white font-semibold' : 'text-white/20'}>{box.stl}</span></td>
-                          <td className="text-center px-1.5 py-1.5"><span className={box.blk > 0 ? 'text-white font-semibold' : 'text-white/20'}>{box.blk}</span></td>
-                        </tr>
-                      )
-                    }).filter(Boolean)}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   )
