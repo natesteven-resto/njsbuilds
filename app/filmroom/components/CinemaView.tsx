@@ -51,21 +51,13 @@ export function CinemaView({ videoUrl, videoId, gameTitle, onExit }: CinemaViewP
 
     if (!videoUrl) return
 
-    // If it's an R2 private URL, get a signed URL
+    // If it's an R2 private URL, proxy through our API (avoids CORS/auth issues)
     if (videoUrl.includes('.r2.cloudflarestorage.com')) {
       const key = extractR2Key(videoUrl)
       if (!key) { setSrcError(true); return }
-      fetch('/api/filmroom/signed-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key }),
-      })
-        .then(r => r.json())
-        .then(d => {
-          if (d.url) setPlayableSrc(d.url)
-          else setSrcError(true)
-        })
-        .catch(() => setSrcError(true))
+      // Use the video proxy route — server fetches from R2 with credentials
+      const gameId = key.split('/')[1] ?? 'unknown'
+      setPlayableSrc(`/api/filmroom/video/${gameId}?key=${encodeURIComponent(key)}`)
     } else {
       setPlayableSrc(videoUrl)
     }
