@@ -114,9 +114,9 @@ export function CinemaView({ videoUrl, videoId, gameTitle, onExit }: CinemaViewP
         className="absolute overflow-hidden"
         style={{
           left: '10%',
-          top: '24%',
+          top: '38%',
           width: '80%',
-          height: '37%',
+          height: '32%',
           zIndex: 2,
           background: '#000',
         }}
@@ -161,7 +161,7 @@ export function CinemaView({ videoUrl, videoId, gameTitle, onExit }: CinemaViewP
       </div>
 
       {/* Jog wheel — sits over the screen area */}
-      <div className="absolute pointer-events-none" style={{ left: '10%', top: '24%', width: '80%', height: '37%', zIndex: 3 }}>
+      <div className="absolute pointer-events-none" style={{ left: '10%', top: '38%', width: '80%', height: '32%', zIndex: 3 }}>
         <div className="pointer-events-auto relative w-full h-full">
           <JogWheel
             visible={!isPlaying && durationMs > 0}
