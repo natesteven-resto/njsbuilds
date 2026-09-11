@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 
-const VALID_STAT_TYPES = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TO', '2M', '3M', 'FT'] as const
+const VALID_STAT_TYPES = ['2M', '3M', 'FTM', '2X', '3X', 'FTX', 'OREB', 'DREB', 'AST', 'STL', 'BLK', 'DEF', 'TO', 'FOUL'] as const
 type StatType = typeof VALID_STAT_TYPES[number]
 
 export async function GET(req: NextRequest) {
@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
 
   const { game_id, player_id, stat_type, video_time_ms } = body
 
-  if (!game_id || !player_id || !stat_type) {
-    return NextResponse.json({ error: 'game_id, player_id, stat_type required' }, { status: 400 })
+  if (!game_id || !stat_type) {
+    return NextResponse.json({ error: 'game_id and stat_type required' }, { status: 400 })
   }
 
   if (!VALID_STAT_TYPES.includes(stat_type as StatType)) {
