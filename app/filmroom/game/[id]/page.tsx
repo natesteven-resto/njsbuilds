@@ -718,6 +718,20 @@ async function pollStreamReady(videoId: string, maxWaitMs = 120_000): Promise<vo
 
 // ─── Video Player Component ───────────────────────────────────────────────────
 
+// Extract R2 key from a stored video_url (the raw R2 endpoint URL)
+// e.g. https://filmroom-videos.108ae2b237d537d16e57f93a1a13444f.r2.cloudflarestorage.com/games/...
+// or   https://108ae2b237d537d16e57f93a1a13444f.r2.cloudflarestorage.com/filmroom-videos/games/...
+function extractR2Key(url: string): string | null {
+  try {
+    const u = new URL(url)
+    if (!u.hostname.includes('r2.cloudflarestorage.com')) return null
+    // Virtual-hosted style: filmroom-videos.account.r2.cloudflarestorage.com/KEY
+    if (u.hostname.startsWith('filmroom-videos.')) return u.pathname.replace(/^\//, '')
+    // Path style: account.r2.cloudflarestorage.com/filmroom-videos/KEY
+    return u.pathname.replace(/^\/filmroom-videos\//, '')
+  } catch { return null }
+}
+
 function VideoPlayer({
   videoUrl,
   videoId,
@@ -731,16 +745,32 @@ function VideoPlayer({
   onDurationChange: (ms: number) => void
   playerRef: React.RefObject<HTMLVideoElement | null>
 }) {
-  const src = videoId
-    ? `https://videodelivery.net/${videoId}/manifest/video.m3u8`
-    : videoUrl
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(null)
 
-  if (!src) return null
+  useEffect(() => {
+    if (videoId) {
+      setResolvedSrc(`https://videodelivery.net/${videoId}/manifest/video.m3u8`)
+      return
+    }
+    if (!videoUrl) return
+    // If it's a raw R2 endpoint URL, fetch a presigned playback URL
+    const key = extractR2Key(videoUrl)
+    if (key) {
+      fetch(`/api/filmroom/upload/multipart?action=sign-get&key=${encodeURIComponent(key)}`)
+        .then(r => r.json())
+        .then(d => { if (d.signedUrl) setResolvedSrc(d.signedUrl) })
+        .catch(() => setResolvedSrc(videoUrl)) // fallback to raw url
+    } else {
+      setResolvedSrc(videoUrl)
+    }
+  }, [videoUrl, videoId])
+
+  if (!resolvedSrc) return null
 
   return (
     <video
       ref={playerRef}
-      src={src}
+      src={resolvedSrc}
       className="w-full aspect-video bg-black rounded-xl"
       onTimeUpdate={(e) => onTimeUpdate(Math.round(e.currentTarget.currentTime * 1000))}
       onDurationChange={(e) => onDurationChange(Math.round(e.currentTarget.duration * 1000))}

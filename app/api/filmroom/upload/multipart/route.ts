@@ -13,6 +13,7 @@ import {
   UploadPartCommand,
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
@@ -33,6 +34,27 @@ function r2Client() {
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',
   })
+}
+
+// GET handler for presigned playback URLs (?action=sign-get&key=...)
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const action = searchParams.get('action')
+  const client = r2Client()
+
+  if (action === 'sign-get') {
+    const key = searchParams.get('key')
+    if (!key) return NextResponse.json({ error: 'key required' }, { status: 400 })
+    try {
+      const cmd = new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
+      const signedUrl = await getSignedUrl(client, cmd, { expiresIn: 3600 })
+      return NextResponse.json({ signedUrl })
+    } catch (err) {
+      return NextResponse.json({ error: String(err) }, { status: 500 })
+    }
+  }
+
+  return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }
 
 export async function POST(req: NextRequest) {
@@ -110,6 +132,16 @@ export async function POST(req: NextRequest) {
       })
       await client.send(cmd)
       return NextResponse.json({ ok: true })
+    }
+
+    // ── SIGN GET (presigned playback URL) ────────────────────────────────────
+    if (action === 'sign-get') {
+      const { searchParams: sp } = new URL(req.url)
+      const key = sp.get('key') || (await req.json().catch(() => ({}))).key
+      if (!key) return NextResponse.json({ error: 'key required' }, { status: 400 })
+      const cmd = new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
+      const signedUrl = await getSignedUrl(client, cmd, { expiresIn: 3600 })
+      return NextResponse.json({ signedUrl })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
