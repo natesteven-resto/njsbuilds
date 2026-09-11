@@ -8,7 +8,7 @@ import {
   Scissors, Bookmark, Star, MessageSquare,
   Users, BarChart2, Pencil, X, Check,
   Plus, Trash2, Loader2, ChevronDown, ChevronUp, Upload,
-  ZoomIn, AlertCircle, CheckCircle2,
+  ZoomIn, AlertCircle, CheckCircle2, BarChart,
 } from 'lucide-react'
 import type { Game, Clip, Player, ClipCategory, ClipComment } from '@/types/filmroom'
 import { CATEGORY_LABELS, CATEGORY_COLORS, TEST_TEAM_ID } from '@/types/filmroom'
@@ -24,10 +24,390 @@ function msToTimecode(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}.${String(frames).padStart(2, '0')}`
 }
 
+function msToDisplay(ms: number): string {
+  const totalSec = Math.floor(ms / 1000)
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 function formatDuration(startMs: number, endMs: number): string {
   const dur = endMs - startMs
   const s = Math.floor(dur / 1000)
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
+}
+
+// ─── Stat Entry Types ─────────────────────────────────────────────────────────
+
+const STAT_TYPES = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TO', '2M', '3M', 'FT'] as const
+type StatType = typeof STAT_TYPES[number]
+
+interface StatEntry {
+  id: string
+  player_id: string
+  player_name: string
+  player_number: string
+  stat_type: StatType
+  video_time_ms: number
+  game_id: string
+  created_at: string
+}
+
+// Raw entry from DB (includes nested players object)
+interface RawStatEntry {
+  id: string
+  player_id: string
+  stat_type: StatType
+  video_time_ms: number
+  game_id: string
+  created_at: string
+  players: { id: string; name: string; number: number | null } | null
+}
+
+function rawToEntry(raw: RawStatEntry): StatEntry {
+  return {
+    id: raw.id,
+    player_id: raw.player_id,
+    player_name: raw.players?.name ?? 'Unknown',
+    player_number: raw.players?.number != null ? String(raw.players.number) : '?',
+    stat_type: raw.stat_type,
+    video_time_ms: raw.video_time_ms,
+    game_id: raw.game_id,
+    created_at: raw.created_at,
+  }
+}
+
+// ─── Stat Entry Panel ─────────────────────────────────────────────────────────
+
+function StatEntryPanel({
+  gameId,
+  players,
+  currentMs,
+  sessionEntries,
+  onLog,
+  onUndo,
+  onClose,
+}: {
+  gameId: string
+  players: Player[]
+  currentMs: number
+  sessionEntries: StatEntry[]
+  onLog: (entry: StatEntry) => void
+  onUndo: () => void
+  onClose: () => void
+}) {
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
+  const [logging, setLogging] = useState(false)
+
+  const handleStatTap = async (statType: StatType) => {
+    if (!selectedPlayer || logging) return
+    setLogging(true)
+    try {
+      const res = await fetch('/api/filmroom/stat-entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          game_id: gameId,
+          player_id: selectedPlayer.id,
+          stat_type: statType,
+          video_time_ms: currentMs,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      const raw: RawStatEntry = await res.json()
+      onLog(rawToEntry(raw))
+    } catch {
+      // silently ignore — entry was not saved
+    } finally {
+      setLogging(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,0.72)' }}
+    >
+      {/* Backdrop tap closes */}
+      <div className="absolute inset-0" onClick={onClose} />
+
+      <div
+        className="relative w-full max-w-2xl rounded-t-2xl flex flex-col"
+        style={{ backgroundColor: '#1a1d23', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '85vh' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="shrink-0 flex items-center justify-between px-5 pt-5 pb-3">
+          <div>
+            <p className="text-xs text-white/40 font-medium uppercase tracking-wider">Tagging at</p>
+            <p className="text-2xl font-bold text-white font-mono">{msToDisplay(currentMs)}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onUndo}
+              disabled={sessionEntries.length === 0}
+              className="px-3 py-2 rounded-xl text-xs font-medium text-white/50 hover:text-white border border-white/10 hover:border-white/20 disabled:opacity-30 transition-all"
+            >
+              Undo
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-5">
+          {/* Step 1: Player selection */}
+          <div>
+            <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2.5">
+              {selectedPlayer ? 'Player' : 'Select Player'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {players.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setSelectedPlayer(p)}
+                  className={`flex flex-col items-center px-3 py-2.5 rounded-xl border transition-all min-w-[72px] ${
+                    selectedPlayer?.id === p.id
+                      ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
+                      : 'border-white/10 bg-white/4 text-white/60 hover:bg-white/8 hover:text-white'
+                  }`}
+                >
+                  <span className={`text-lg font-bold leading-none ${selectedPlayer?.id === p.id ? 'text-white' : 'text-white/80'}`}>
+                    {p.number ?? '?'}
+                  </span>
+                  <span className="text-[10px] mt-1 leading-none max-w-[64px] truncate text-center">
+                    {p.name.split(' ')[0]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Step 2: Stat type buttons — shown after player selected */}
+          {selectedPlayer && (
+            <div>
+              <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2.5">
+                Stat — #{selectedPlayer.number} {selectedPlayer.name}
+              </p>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                {STAT_TYPES.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => handleStatTap(s)}
+                    disabled={logging}
+                    className="flex items-center justify-center h-16 rounded-xl border border-white/12 bg-white/5 hover:bg-blue-600 hover:border-blue-500 text-white font-bold text-lg transition-all disabled:opacity-50 active:scale-95"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Running log */}
+          {sessionEntries.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-2">This session</p>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {[...sessionEntries].reverse().map((e) => (
+                  <div
+                    key={e.id}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/4 text-xs"
+                  >
+                    <span className="font-mono text-white/40 tabular-nums w-10 shrink-0">{msToDisplay(e.video_time_ms)}</span>
+                    <span className="text-white/60 flex-1">
+                      #{e.player_number} {e.player_name.split(' ')[0]}
+                    </span>
+                    <span className="font-bold text-blue-300 w-8 text-right">{e.stat_type}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Box Score Panel ──────────────────────────────────────────────────────────
+
+const BOX_COLS: Array<{ key: StatType | 'pts_calc'; label: string }> = [
+  { key: 'pts_calc', label: 'PTS' },
+  { key: 'REB', label: 'REB' },
+  { key: 'AST', label: 'AST' },
+  { key: 'STL', label: 'STL' },
+  { key: 'BLK', label: 'BLK' },
+  { key: 'TO', label: 'TO' },
+  { key: '2M', label: '2M' },
+  { key: '3M', label: '3M' },
+  { key: 'FT', label: 'FT' },
+]
+
+function calcPts(entries: StatEntry[]): number {
+  let pts = 0
+  for (const e of entries) {
+    if (e.stat_type === '2M') pts += 2
+    else if (e.stat_type === '3M') pts += 3
+    else if (e.stat_type === 'FT') pts += 1
+  }
+  return pts
+}
+
+function countStat(entries: StatEntry[], stat: StatType): number {
+  return entries.filter((e) => e.stat_type === stat).length
+}
+
+function BoxScorePanel({
+  gameId,
+  players,
+  statEntries,
+  onSeek,
+}: {
+  gameId: string
+  players: Player[]
+  statEntries: StatEntry[]
+  onSeek: (ms: number) => void
+}) {
+  const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  if (players.length === 0) {
+    return (
+      <div className="text-center py-8 text-white/30 text-sm">
+        <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+        Add players to your roster first.
+      </div>
+    )
+  }
+
+  if (statEntries.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <BarChart className="w-8 h-8 mx-auto text-white/15 mb-2" />
+        <p className="text-xs text-white/30">No stats yet.</p>
+        <p className="text-xs text-white/20 mt-1">Tap the stat button below the video to start tagging.</p>
+      </div>
+    )
+  }
+
+  const totals: Record<string, StatEntry[]> = {}
+  for (const player of players) {
+    totals[player.id] = statEntries.filter((e) => e.player_id === player.id)
+  }
+
+  const teamTotals = statEntries
+
+  return (
+    <div className="space-y-2">
+      {/* Box score table */}
+      <div className="overflow-x-auto -mx-3 px-3">
+        <table className="w-full text-xs min-w-[420px]">
+          <thead>
+            <tr className="border-b border-white/8">
+              <th className="text-left text-white/40 font-medium pb-2 pr-2 sticky left-0 bg-[#13161b]">Player</th>
+              {BOX_COLS.map((col) => (
+                <th key={col.key} className="text-center text-white/40 font-medium pb-2 px-1 min-w-[30px]">
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/4">
+            {players.map((player) => {
+              const playerEntries = totals[player.id] ?? []
+              const isExpanded = expandedPlayerId === player.id
+              return (
+                <>
+                  <tr
+                    key={player.id}
+                    onClick={() => setExpandedPlayerId(isExpanded ? null : player.id)}
+                    className="hover:bg-white/3 transition-colors cursor-pointer"
+                  >
+                    <td className="py-2 pr-2 sticky left-0 bg-transparent">
+                      <div className="flex items-center gap-1.5">
+                        {isExpanded
+                          ? <ChevronUp className="w-3 h-3 text-white/30 shrink-0" />
+                          : <ChevronDown className="w-3 h-3 text-white/20 shrink-0" />
+                        }
+                        <span className="font-medium text-white/80 truncate max-w-[90px]">
+                          #{player.number} {player.name.split(' ')[0]}
+                        </span>
+                      </div>
+                    </td>
+                    {BOX_COLS.map((col) => {
+                      const val = col.key === 'pts_calc'
+                        ? calcPts(playerEntries)
+                        : countStat(playerEntries, col.key as StatType)
+                      return (
+                        <td key={col.key} className="text-center px-1 py-2">
+                          <span className={val > 0 ? 'text-white/90 font-medium' : 'text-white/20'}>
+                            {val}
+                          </span>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                  {isExpanded && playerEntries.length > 0 && (
+                    <tr key={`${player.id}-expanded`}>
+                      <td colSpan={BOX_COLS.length + 1} className="pb-2 pt-0">
+                        <div className="ml-5 space-y-0.5">
+                          {playerEntries
+                            .slice()
+                            .sort((a, b) => a.video_time_ms - b.video_time_ms)
+                            .map((entry) => (
+                              <button
+                                key={entry.id}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onSeek(entry.video_time_ms)
+                                }}
+                                className="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-blue-500/15 hover:border-blue-500/20 border border-transparent transition-all text-left group"
+                              >
+                                <Play className="w-3 h-3 text-white/20 group-hover:text-blue-400 shrink-0 transition-colors" />
+                                <span className="font-mono text-white/40 tabular-nums text-[11px] w-10 shrink-0">
+                                  {msToDisplay(entry.video_time_ms)}
+                                </span>
+                                <span className="font-bold text-blue-300 text-[11px] w-6">{entry.stat_type}</span>
+                              </button>
+                            ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )
+            })}
+
+            {/* Team totals row */}
+            <tr className="border-t-2 border-white/12">
+              <td className="py-2 pr-2 sticky left-0 bg-transparent">
+                <span className="font-semibold text-white/60 text-[11px] uppercase tracking-wide">Team</span>
+              </td>
+              {BOX_COLS.map((col) => {
+                const val = col.key === 'pts_calc'
+                  ? calcPts(teamTotals)
+                  : countStat(teamTotals, col.key as StatType)
+                return (
+                  <td key={col.key} className="text-center px-1 py-2">
+                    <span className={`font-semibold ${val > 0 ? 'text-white/70' : 'text-white/20'}`}>{val}</span>
+                  </td>
+                )
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-[10px] text-white/20 pt-1">
+        PTS = (2M × 2) + (3M × 3) + (FT × 1). Tap a player row to expand timeline. Tap a timestamp to jump.
+      </p>
+    </div>
+  )
 }
 
 // ─── Video Upload Zone ───────────────────────────────────────────────────────
@@ -275,9 +655,6 @@ function VideoPlayer({
   onDurationChange: (ms: number) => void
   playerRef: React.RefObject<HTMLVideoElement | null>
 }) {
-  // Stream HLS playback — native HLS supported in Safari; use hls.js for Chrome/Firefox
-  // For simplicity and frame accuracy, use the HLS URL with the native <video> tag
-  // (Safari plays .m3u8 natively; Chrome falls back to the src directly)
   const src = videoId
     ? `https://videodelivery.net/${videoId}/manifest/video.m3u8`
     : videoUrl
@@ -698,108 +1075,6 @@ function ClipItem({
   )
 }
 
-// ─── Stats Panel ──────────────────────────────────────────────────────────────
-
-function StatsPanel({ gameId, players }: { gameId: string; players: Player[] }) {
-  const [stats, setStats] = useState<Record<string, Record<string, number>>>({})
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-
-  useEffect(() => {
-    fetch(`/api/filmroom/stats?game_id=${gameId}`)
-      .then(r => r.json())
-      .then((data: Array<{ player_id: string } & Record<string, number>>) => {
-        if (Array.isArray(data)) {
-          const map: Record<string, Record<string, number>> = {}
-          for (const row of data) {
-            map[row.player_id] = row
-          }
-          setStats(map)
-        }
-      })
-  }, [gameId])
-
-  const updateStat = (playerId: string, field: string, val: number) => {
-    setStats(s => ({ ...s, [playerId]: { ...(s[playerId] || {}), [field]: val } }))
-    setSaved(false)
-  }
-
-  const saveAll = async () => {
-    setSaving(true)
-    for (const playerId of players.map(p => p.id)) {
-      const row = stats[playerId]
-      if (!row) continue
-      await fetch('/api/filmroom/stats', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ game_id: gameId, player_id: playerId, ...row }),
-      })
-    }
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  const statFields = [
-    ['pts', 'PTS'], ['reb', 'REB'], ['ast', 'AST'],
-    ['stl', 'STL'], ['blk', 'BLK'], ['turnovers', 'TO'],
-    ['fg2m', '2M'], ['fg2a', '2A'], ['fg3m', '3M'], ['fg3a', '3A'],
-    ['ftm', 'FTM'], ['fta', 'FTA'],
-  ]
-
-  if (players.length === 0) {
-    return (
-      <div className="text-center py-8 text-white/30 text-sm">
-        <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-        Add players to your roster first.
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-white/8">
-              <th className="text-left text-white/40 font-medium pb-2 pr-2 sticky left-0 bg-transparent">Player</th>
-              {statFields.map(([, label]) => (
-                <th key={label} className="text-center text-white/40 font-medium pb-2 px-1 min-w-[36px]">{label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/4">
-            {players.map(player => (
-              <tr key={player.id} className="hover:bg-white/2 transition-colors">
-                <td className="py-1.5 pr-2 sticky left-0 bg-transparent">
-                  <span className="font-medium text-white/80">#{player.number} {player.name}</span>
-                </td>
-                {statFields.map(([field]) => (
-                  <td key={field} className="text-center px-0.5">
-                    <input
-                      type="number" min="0"
-                      value={stats[player.id]?.[field] ?? ''}
-                      onChange={e => updateStat(player.id, field, parseInt(e.target.value) || 0)}
-                      className="w-9 text-center bg-black/20 border border-white/8 rounded px-0 py-0.5 text-xs focus:outline-none focus:border-blue-500/50 text-white/80"
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex justify-end">
-        <button onClick={saveAll} disabled={saving}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-medium transition-all ${saved ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}>
-          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : saved ? <Check className="w-3 h-3" /> : null}
-          {saved ? 'Saved!' : 'Save Stats'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // ─── Video URL Modal ──────────────────────────────────────────────────────────
 
 function VideoUrlModal({ gameId, current, onClose, onSave }: {
@@ -869,16 +1144,25 @@ export default function GameFilmRoom() {
   const [drawingActive, setDrawingActive] = useState(false)
   const [drawingData, setDrawingData] = useState<DrawingData | null>(null)
 
+  // Stat entry state
+  const [showStatPanel, setShowStatPanel] = useState(false)
+  const [statEntries, setStatEntries] = useState<StatEntry[]>([])
+  const [sessionStatEntries, setSessionStatEntries] = useState<StatEntry[]>([])
+
   // Load data
   useEffect(() => {
     Promise.all([
       fetch(`/api/filmroom/games/${gameId}`).then(r => r.json()),
       fetch(`/api/filmroom/clips?game_id=${gameId}`).then(r => r.json()),
       fetch(`/api/filmroom/players?team_id=${TEST_TEAM_ID}`).then(r => r.json()),
-    ]).then(([g, c, p]) => {
+      fetch(`/api/filmroom/stat-entries?game_id=${gameId}`).then(r => r.json()),
+    ]).then(([g, c, p, se]) => {
       setGame(g)
       setClips(Array.isArray(c) ? c : [])
       setPlayers(Array.isArray(p) ? p : [])
+      if (Array.isArray(se)) {
+        setStatEntries(se.map((raw: RawStatEntry) => rawToEntry(raw)))
+      }
       setLoading(false)
     })
   }, [gameId])
@@ -898,6 +1182,15 @@ export default function GameFilmRoom() {
     setCurrentMs(ms)
   }, [])
 
+  const seekAndPlay = useCallback((ms: number) => {
+    const v = videoRef.current
+    if (!v) return
+    v.currentTime = ms / 1000
+    setCurrentMs(ms)
+    v.play()
+    setIsPlaying(true)
+  }, [])
+
   const skip = useCallback((deltaMs: number) => {
     const v = videoRef.current
     if (!v) return
@@ -910,6 +1203,37 @@ export default function GameFilmRoom() {
     if (!v || v.paused === false) { v?.pause(); setIsPlaying(false) }
     skip(dir * FRAME_MS)
   }, [skip])
+
+  // Stat panel: pause video when opening
+  const openStatPanel = useCallback(() => {
+    const v = videoRef.current
+    if (v && !v.paused) { v.pause(); setIsPlaying(false) }
+    setShowStatPanel(true)
+  }, [])
+
+  // Close stat panel: resume video if it was playing
+  const closeStatPanel = useCallback(() => {
+    setShowStatPanel(false)
+  }, [])
+
+  // Log a stat entry
+  const handleLogEntry = useCallback((entry: StatEntry) => {
+    setStatEntries(prev => [...prev, entry])
+    setSessionStatEntries(prev => [...prev, entry])
+  }, [])
+
+  // Undo last session entry
+  const handleUndo = useCallback(async () => {
+    const last = sessionStatEntries[sessionStatEntries.length - 1]
+    if (!last) return
+    try {
+      await fetch(`/api/filmroom/stat-entries?id=${last.id}`, { method: 'DELETE' })
+      setStatEntries(prev => prev.filter(e => e.id !== last.id))
+      setSessionStatEntries(prev => prev.slice(0, -1))
+    } catch {
+      // ignore
+    }
+  }, [sessionStatEntries])
 
   // Jump to clip
   const jumpToClip = useCallback((startMs: number) => {
@@ -929,6 +1253,7 @@ export default function GameFilmRoom() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (showStatPanel) return
       switch (e.key) {
         case ' ': e.preventDefault(); playPause(); break
         case 'ArrowLeft': e.preventDefault(); frameStep(-1); break
@@ -944,7 +1269,7 @@ export default function GameFilmRoom() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [playPause, frameStep, skip, currentMs, markIn, markOut])
+  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel])
 
   if (loading) return (
     <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center">
@@ -960,6 +1285,7 @@ export default function GameFilmRoom() {
 
   const highlights = clips.filter(c => c.is_highlight)
   const canSave = markIn !== null && markOut !== null && markOut > markIn
+  const videoLoaded = !!game.video_url
 
   return (
     <div className="min-h-screen bg-[#0d0f12] flex flex-col">
@@ -1001,14 +1327,12 @@ export default function GameFilmRoom() {
         {/* Left: Video + transport */}
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
           <div className="p-3 sm:p-4 space-y-0">
-            {/* Video */}
             {/* Upload zone — shown when no video + not mid-upload */}
             {!game.video_url && !uploadDone && (
               <div className="rounded-xl overflow-hidden border border-white/8 mb-0">
                 <VideoUploadZone
                   gameId={gameId}
                   onComplete={async (url, videoId) => {
-                    // Persist video URL + video ID back to game record
                     await fetch(`/api/filmroom/games/${gameId}`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
@@ -1100,6 +1424,24 @@ export default function GameFilmRoom() {
                 )}
               </div>
             )}
+
+            {/* Floating Stat Button — only when video is loaded */}
+            {videoLoaded && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={openStatPanel}
+                  className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-semibold text-sm transition-all shadow-xl shadow-blue-500/20 border border-blue-500/30"
+                >
+                  <BarChart className="w-4 h-4" />
+                  Tag Stat
+                  {statEntries.length > 0 && (
+                    <span className="bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full ml-1">
+                      {statEntries.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1115,6 +1457,11 @@ export default function GameFilmRoom() {
               <button key={tab} onClick={() => setPanelTab(tab)}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium border-b-2 transition-all ${panelTab === tab ? 'border-blue-500 text-blue-300' : 'border-transparent text-white/40 hover:text-white/70'}`}>
                 <Icon className="w-3.5 h-3.5" /> {label}
+                {tab === 'stats' && statEntries.length > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">
+                    {statEntries.length > 99 ? '99' : statEntries.length}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -1154,10 +1501,15 @@ export default function GameFilmRoom() {
               </div>
             )}
 
-            {/* STATS tab */}
+            {/* STATS tab — read-only box score */}
             {panelTab === 'stats' && (
               <div className="p-3">
-                <StatsPanel gameId={gameId} players={players} />
+                <BoxScorePanel
+                  gameId={gameId}
+                  players={players}
+                  statEntries={statEntries}
+                  onSeek={seekAndPlay}
+                />
               </div>
             )}
 
@@ -1197,6 +1549,19 @@ export default function GameFilmRoom() {
           current={game.video_url}
           onClose={() => setShowVideoUrl(false)}
           onSave={(url) => setGame(g => g ? { ...g, video_url: url } : g)}
+        />
+      )}
+
+      {/* Stat Entry Panel */}
+      {showStatPanel && (
+        <StatEntryPanel
+          gameId={gameId}
+          players={players}
+          currentMs={currentMs}
+          sessionEntries={sessionStatEntries}
+          onLog={handleLogEntry}
+          onUndo={handleUndo}
+          onClose={closeStatPanel}
         />
       )}
     </div>
