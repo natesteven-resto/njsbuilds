@@ -98,8 +98,13 @@ export function CinemaView({ videoUrl, videoId, gameTitle, onExit }: CinemaViewP
       <img
         src="/filmroom-room.jpg"
         alt=""
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{ zIndex: 0 }}
+        className="absolute w-full h-full object-cover"
+        style={{
+          zIndex: 0,
+          inset: 0,
+          transform: 'scale(1.18)',
+          transformOrigin: 'center 35%',
+        }}
       />
 
       {/* ── Game video composited onto the screen ──
@@ -108,10 +113,10 @@ export function CinemaView({ videoUrl, videoId, gameTitle, onExit }: CinemaViewP
       <div
         className="absolute overflow-hidden"
         style={{
-          left: '13%',
-          top: '8%',
-          width: '74%',
-          height: '49%',
+          left: '14%',
+          top: '13%',
+          width: '72%',
+          height: '36%',
           zIndex: 2,
           background: '#000',
         }}
@@ -155,7 +160,7 @@ export function CinemaView({ videoUrl, videoId, gameTitle, onExit }: CinemaViewP
       </div>
 
       {/* Jog wheel — sits over the screen area */}
-      <div className="absolute pointer-events-none" style={{ left: '13%', top: '8%', width: '74%', height: '49%', zIndex: 3 }}>
+      <div className="absolute pointer-events-none" style={{ left: '14%', top: '13%', width: '72%', height: '36%', zIndex: 3 }}>
         <div className="pointer-events-auto relative w-full h-full">
           <JogWheel
             visible={!isPlaying && durationMs > 0}
