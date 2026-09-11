@@ -242,129 +242,98 @@ function StatEntryPanel({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {/* ── Stat grid ── */}
-          <div className="px-4 pt-4 pb-2">
-            <div className="grid grid-cols-3 gap-3">
-
-              {/* MADE column */}
-              <div className="space-y-2">
-                <p className="text-[11px] font-bold text-white/40 uppercase tracking-widest text-center">Made</p>
-                {made.map(def => (
-                  <button
-                    key={def.key}
-                    onClick={() => handleStatTap(def.key)}
-                    className={`w-full h-14 rounded-2xl text-sm font-semibold transition-all active:scale-95 ${
-                      selectedStat === def.key
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                        : 'bg-white text-gray-900 hover:bg-gray-100'
-                    }`}
-                  >
-                    {def.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* MISS column */}
-              <div className="space-y-2">
-                <p className="text-[11px] font-bold text-red-400/70 uppercase tracking-widest text-center">Miss</p>
-                {miss.map(def => (
-                  <button
-                    key={def.key}
-                    onClick={() => handleStatTap(def.key)}
-                    className={`w-full h-14 rounded-2xl text-sm font-semibold transition-all active:scale-95 ${
-                      selectedStat === def.key
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                        : 'bg-red-950/60 text-red-300 hover:bg-red-900/60 border border-red-500/20'
-                    }`}
-                  >
-                    {def.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* OTHER column */}
-              <div className="space-y-2">
-                <p className="text-[11px] font-bold text-white/40 uppercase tracking-widest text-center">Other</p>
-                {other.map(def => (
-                  <button
-                    key={def.key}
-                    onClick={() => handleStatTap(def.key)}
-                    className={`w-full h-14 rounded-2xl text-sm font-semibold transition-all active:scale-95 ${
-                      selectedStat === def.key
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                        : def.redTint
-                          ? 'bg-red-950/40 text-red-300/80 hover:bg-red-900/40 border border-red-500/15'
-                          : 'bg-white/8 text-white/80 hover:bg-white/14 border border-white/8'
-                    }`}
-                  >
-                    {def.label}
-                  </button>
-                ))}
-              </div>
+        {/* ── Stat grid — NOT in scroll container, fixes iPad tap swallow ── */}
+        <div className="shrink-0 px-4 pt-4 pb-2">
+          <div className="grid grid-cols-3 gap-3">
+            {/* MADE column */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold text-white/40 uppercase tracking-widest text-center">Made</p>
+              {made.map(def => (
+                <button key={def.key} onClick={() => handleStatTap(def.key)}
+                  style={{ touchAction: 'manipulation' }}
+                  className={`w-full h-14 rounded-xl text-sm font-semibold ${
+                    selectedStat === def.key ? 'bg-blue-600 text-white' : 'bg-white text-gray-900'
+                  }`}>{def.label}</button>
+              ))}
+            </div>
+            {/* MISS column */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold text-red-400/70 uppercase tracking-widest text-center">Miss</p>
+              {miss.map(def => (
+                <button key={def.key} onClick={() => handleStatTap(def.key)}
+                  style={{ touchAction: 'manipulation' }}
+                  className={`w-full h-14 rounded-xl text-sm font-semibold border ${
+                    selectedStat === def.key ? 'bg-blue-600 text-white border-blue-500' : 'bg-red-950/60 text-red-300 border-red-500/20'
+                  }`}>{def.label}</button>
+              ))}
+            </div>
+            {/* OTHER column */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold text-white/40 uppercase tracking-widest text-center">Other</p>
+              {other.map(def => (
+                <button key={def.key} onClick={() => handleStatTap(def.key)}
+                  style={{ touchAction: 'manipulation' }}
+                  className={`w-full h-14 rounded-xl text-sm font-semibold border ${
+                    selectedStat === def.key ? 'bg-blue-600 text-white border-blue-500'
+                      : def.redTint ? 'bg-red-950/40 text-red-300/80 border-red-500/15'
+                      : 'bg-white/8 text-white/80 border-white/8'
+                  }`}>{def.label}</button>
+              ))}
             </div>
           </div>
+        </div>
 
-          {/* ── Step 2 header ── */}
-          <div className="px-5 pt-3 pb-2 border-t border-white/6 mt-2">
-            <span className="text-sm font-semibold text-white/80 tracking-wide">
-              <span className={selectedStat ? 'text-blue-400 font-bold' : 'text-white/30 font-bold'}>2</span>
-              <span className="text-white/40 mx-1.5">·</span>
+        {/* ── Step 2 + Players — also NOT scrollable ── */}
+        <div className="shrink-0 border-t border-white/8">
+          <div className="px-5 py-2">
+            <span className="text-sm font-semibold">
+              <span className={selectedStat ? 'text-blue-400' : 'text-white/30'}>2 · </span>
               <span className={selectedStat ? 'text-white/80' : 'text-white/30'}>
                 {selectedStat ? `TAP WHO — ${statLabel(selectedStat)}` : 'TAP WHO'}
               </span>
             </span>
           </div>
-
-          {/* ── Player cards ── */}
-          <div className="px-4 pb-3">
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          <div className="px-4 pb-4">
+            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(allPlayers.length, 5)}, 1fr)` }}>
               {allPlayers.map((p) => {
-                const playerEntries = sessionEntries.filter(e => e.player_id === p.id)
-                const pts = playerEntries.filter(e => e.stat_type === '2M').length * 2
-                  + playerEntries.filter(e => e.stat_type === '3M').length * 3
-                  + playerEntries.filter(e => e.stat_type === 'FTM').length
+                const pts = sessionEntries.filter(e => e.player_id === p.id && e.stat_type === '2M').length * 2
+                  + sessionEntries.filter(e => e.player_id === p.id && e.stat_type === '3M').length * 3
+                  + sessionEntries.filter(e => e.player_id === p.id && e.stat_type === 'FTM').length
                 const isOpp = p.id === OPP_ID
+                const enabled = !!selectedStat && !logging
                 return (
                   <button
                     key={p.id}
-                    onClick={() => handlePlayerTap(p)}
-                    disabled={!selectedStat || logging}
-                    className={`flex flex-col items-center justify-center px-2 py-3 rounded-2xl border transition-all active:scale-95 min-h-[88px] ${
-                      !selectedStat
-                        ? 'border-white/6 bg-white/3 opacity-50 cursor-not-allowed'
-                        : isOpp
-                          ? 'border-white/15 bg-white/6 hover:bg-white/12'
-                          : 'border-white/10 bg-white/5 hover:bg-blue-600/20 hover:border-blue-500/40'
+                    onPointerDown={(e) => { e.preventDefault(); if (enabled) handlePlayerTap(p) }}
+                    style={{ touchAction: 'manipulation', opacity: enabled ? 1 : 0.4 }}
+                    className={`flex flex-col items-center justify-center py-3 rounded-xl border min-h-[80px] ${
+                      enabled
+                        ? isOpp ? 'border-white/15 bg-white/6' : 'border-white/10 bg-white/5'
+                        : 'border-white/6 bg-white/3 cursor-not-allowed'
                     }`}
                   >
-                    <span className={`text-3xl font-black leading-none ${
-                      isOpp ? 'text-white/50 text-xl font-bold' : 'text-white'
-                    }`}>
+                    <span className={`font-black leading-none ${isOpp ? 'text-base text-white/50' : 'text-3xl text-white'}`}>
                       {isOpp ? 'OPP' : (p.number ?? '?')}
                     </span>
-                    <span className="text-[11px] mt-1 text-white/50 font-medium leading-tight text-center max-w-[70px] truncate">
+                    <span className="text-[11px] mt-1 text-white/50 text-center px-1 truncate w-full">
                       {isOpp ? 'Opponent' : p.name.split(' ')[0]}
                     </span>
-                    <span className="text-[10px] mt-0.5 text-white/30">
-                      {pts} pts
-                    </span>
+                    <span className="text-[10px] text-white/30">{pts} pts</span>
                   </button>
                 )
               })}
             </div>
           </div>
+        </div>
 
-          {/* ── Running log ── */}
+        {/* ── Running log — scrollable only this section ── */}
+        <div className="flex-1 overflow-y-auto border-t border-white/6">
           {sessionEntries.length > 0 && (
-            <div className="px-4 pb-3 border-t border-white/6 pt-3">
+            <div className="px-4 py-3">
               <p className="text-[11px] font-semibold text-white/30 uppercase tracking-wider mb-1.5">Recent</p>
-              <div className="space-y-1 max-h-28 overflow-y-auto">
-                {[...sessionEntries].reverse().map((e) => (
-                  <div
-                    key={e.id}
-                    className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white/3 text-xs"
-                  >
+              <div className="space-y-1">
+                {[...sessionEntries].reverse().slice(0, 8).map((e) => (
+                  <div key={e.id} className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white/3 text-xs">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
                     <span className="text-white/60 flex-1 truncate">
                       {e.player_number !== 'OPP' ? `#${e.player_number} ` : ''}{e.player_name.split(' ')[0]}
