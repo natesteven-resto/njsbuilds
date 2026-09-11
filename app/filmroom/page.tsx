@@ -117,7 +117,7 @@ function GameCard({ game, onDelete }: { game: Game; onDelete: (id: string) => vo
             e.stopPropagation()
             onDelete(game.id)
           }}
-          className="absolute top-1.5 right-1.5 z-30 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded bg-black/70 hover:bg-red-600/90 text-white/50 hover:text-white"
+          className="absolute top-1.5 right-1.5 z-30 p-1 rounded bg-black/70 hover:bg-red-600/90 text-white/40 hover:text-white transition-colors"
         >
           <X className="w-3 h-3" />
         </button>
