@@ -246,47 +246,45 @@ function StatEntryPanel({
         <div className="shrink-0 px-4 pt-3 pb-2">
           <div className="grid grid-cols-3 gap-2 items-start">
 
-            {/* MADE + RECENT column */}
-            <div className="flex flex-col gap-1.5">
-              <p className="text-[10px] font-semibold text-white/35 uppercase tracking-widest text-center">Made</p>
-              {made.map(def => (
-                <button key={def.key} onClick={() => handleStatTap(def.key)}
-                  className={`w-full h-10 rounded-xl text-xs font-semibold transition-all border ${
-                    selectedStat === def.key
-                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40 border-blue-400/50'
-                      : 'border-white/15 text-white/85'
-                  }`}
-                  style={{ touchAction: 'manipulation', background: selectedStat === def.key ? undefined : 'rgba(255,255,255,0.09)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
-                >{def.label}</button>
-              ))}
-              {/* Recent entries fill remaining space */}
+            {/* MADE + MISS span 2 cols, with Recent below */}
+            <div className="col-span-2 grid grid-cols-2 gap-2">
+              {/* MADE header + buttons */}
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[10px] font-semibold text-white/35 uppercase tracking-widest text-center">Made</p>
+                {made.map(def => (
+                  <button key={def.key} onClick={() => handleStatTap(def.key)}
+                    className={`w-full h-10 rounded-xl text-xs font-semibold transition-all border ${
+                      selectedStat === def.key ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40 border-blue-400/50' : 'border-white/15 text-white/85'
+                    }`}
+                    style={{ touchAction: 'manipulation', background: selectedStat === def.key ? undefined : 'rgba(255,255,255,0.09)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
+                  >{def.label}</button>
+                ))}
+              </div>
+              {/* MISS header + buttons */}
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[10px] font-semibold text-red-400/60 uppercase tracking-widest text-center">Miss</p>
+                {miss.map(def => (
+                  <button key={def.key} onClick={() => handleStatTap(def.key)}
+                    className={`w-full h-10 rounded-xl text-xs font-semibold transition-all border ${
+                      selectedStat === def.key ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40 border-blue-400/50' : 'border-red-500/20 text-red-300'
+                    }`}
+                    style={{ touchAction: 'manipulation', background: selectedStat === def.key ? undefined : 'rgba(220,38,38,0.11)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
+                  >{def.label}</button>
+                ))}
+              </div>
+              {/* Recent — spans full 2-col width below the buttons */}
               {sessionEntries.length > 0 && (
-                <div className="mt-1 space-y-1">
-                  <p className="text-[10px] font-semibold text-white/20 uppercase tracking-widest">Recent</p>
+                <div className="col-span-2 mt-0.5 space-y-1">
+                  <p className="text-[10px] font-semibold text-white/20 uppercase tracking-widest px-1">Recent</p>
                   {[...sessionEntries].reverse().slice(0, 8).map(e => (
-                    <div key={e.id} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px]" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+                    <div key={e.id} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                      <span className="text-white/45 shrink-0">{e.player_number !== 'OPP' ? `#${e.player_number}` : 'OPP'}</span>
-                      <span className="text-white/75 font-medium truncate">{STAT_DEFS.find(d => d.key === e.stat_type)?.label ?? e.stat_type}</span>
+                      <span className="text-white/40 shrink-0 font-medium">{e.player_number !== 'OPP' ? `#${e.player_number}` : 'OPP'}</span>
+                      <span className="text-white/75 font-semibold truncate">{STAT_DEFS.find(d => d.key === e.stat_type)?.label ?? e.stat_type}</span>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
-
-            {/* MISS column */}
-            <div className="flex flex-col gap-1.5">
-              <p className="text-[10px] font-semibold text-red-400/60 uppercase tracking-widest text-center">Miss</p>
-              {miss.map(def => (
-                <button key={def.key} onClick={() => handleStatTap(def.key)}
-                  className={`w-full h-10 rounded-xl text-xs font-semibold transition-all border ${
-                    selectedStat === def.key
-                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40 border-blue-400/50'
-                      : 'border-red-500/20 text-red-300'
-                  }`}
-                  style={{ touchAction: 'manipulation', background: selectedStat === def.key ? undefined : 'rgba(220,38,38,0.11)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
-                >{def.label}</button>
-              ))}
             </div>
 
             {/* OTHER column */}
