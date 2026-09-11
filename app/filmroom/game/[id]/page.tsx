@@ -1468,6 +1468,10 @@ export default function GameFilmRoom() {
   // Close stat panel: resume video if it was playing
   const closeStatPanel = useCallback(() => {
     setShowStatPanel(false)
+    // Auto-resume playback when Done is tapped
+    const video = videoRef.current
+    if (video && video.src) video.play().catch(() => {})
+    setIsPlaying(true)
   }, [])
 
   // Log a stat entry
