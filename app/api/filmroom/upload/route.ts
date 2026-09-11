@@ -31,6 +31,10 @@ function r2Client() {
       secretAccessKey: R2_SECRET_KEY,
     },
     forcePathStyle: false,
+    // Disable automatic checksum injection — AWS SDK v3 adds x-amz-checksum-crc32
+    // to presigned URLs which R2 validates against the actual body and rejects (400)
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   })
 }
 
