@@ -128,7 +128,7 @@ function VideoUploadZone({
       <input
         ref={inputRef}
         type="file"
-        accept="video/*"
+        accept=".mp4,.mov,.m4v,.avi,.mkv,video/mp4,video/quicktime,video/x-m4v"
         onChange={handleFile}
         style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 1, height: 1 }}
       />
@@ -150,7 +150,10 @@ function VideoUploadZone({
           >
             Choose Video
           </button>
-          <p className="text-xs text-white/20">or drag and drop here</p>
+          <p className="text-xs text-white/25 text-center max-w-xs">
+            On iPad: tap Choose Video → use <strong className="text-white/40">Files app</strong> (not Photos).
+            Save your video to iCloud Drive first if needed.
+          </p>
         </>
       )}
 
