@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Film, Plus, Users, Trophy, ChevronRight, Calendar, MapPin, Video, Upload, X, Loader2, Star } from 'lucide-react'
+import { Film, Plus, Users, Trophy, ChevronRight, Calendar, MapPin, Video, X, Loader2, Star } from 'lucide-react'
 import type { Game } from '@/types/filmroom'
 import { TEST_TEAM_ID } from '@/types/filmroom'
 
@@ -16,31 +16,62 @@ function GameCard({ game, onDelete }: { game: Game; onDelete: (id: string) => vo
 
   return (
     <Link href={`/filmroom/game/${game.id}`} className="group block">
-      <div className="relative rounded-2xl border border-white/8 bg-white/4 hover:bg-white/6 hover:border-white/15 transition-all duration-200 overflow-hidden">
-        {/* Thumbnail or placeholder */}
-        <div className="aspect-video bg-[#1a1d23] relative overflow-hidden">
+      <div className="relative rounded-lg border border-white/10 bg-[#111316] hover:border-white/20 hover:bg-[#14171c] transition-all duration-150 overflow-hidden">
+        {/* Film strip thumbnail */}
+        <div className="aspect-video bg-[#0a0b0d] relative overflow-hidden">
+          {/* Scanline texture */}
+          <div
+            className="absolute inset-0 pointer-events-none z-10"
+            style={{
+              backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 4px)',
+            }}
+          />
           {game.thumbnail_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={game.thumbnail_url} alt={game.opponent} className="w-full h-full object-cover" />
           ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-              <div className="w-16 h-16 rounded-full bg-white/6 flex items-center justify-center">
-                <Film className="w-8 h-8 text-white/30" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5">
+              {/* Film frame placeholder */}
+              <div className="flex flex-col items-center gap-2">
+                <div
+                  className="w-14 h-10 border border-white/10 rounded flex items-center justify-center relative"
+                  style={{ boxShadow: 'inset 0 0 12px rgba(0,0,0,0.6)' }}
+                >
+                  {/* Film perforation dots */}
+                  <div className="absolute -left-0 top-0 bottom-0 w-2.5 flex flex-col justify-around items-center py-1">
+                    {[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-sm bg-white/8" />)}
+                  </div>
+                  <div className="absolute -right-0 top-0 bottom-0 w-2.5 flex flex-col justify-around items-center py-1">
+                    {[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-sm bg-white/8" />)}
+                  </div>
+                  <Film className="w-4 h-4 text-white/15" />
+                </div>
+                {hasVideo ? (
+                  <span className="text-[10px] font-medium text-emerald-400 tracking-wide uppercase flex items-center gap-1">
+                    <Video className="w-2.5 h-2.5" /> Ready
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-white/20 tracking-wide uppercase">No Film</span>
+                )}
               </div>
-              {hasVideo ? (
-                <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-                  <Video className="w-3 h-3" /> Video ready
-                </span>
-              ) : (
-                <span className="text-xs text-white/30">No video uploaded</span>
-              )}
             </div>
           )}
-          {/* Hover play overlay */}
+
+          {/* Bottom gradient */}
+          <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/60 to-transparent z-10" />
+
+          {/* Video badge */}
+          {hasVideo && !game.thumbnail_url && (
+            <div className="absolute top-2 left-2 z-20 px-1.5 py-0.5 rounded bg-[#2563EB]/90 text-[10px] font-semibold tracking-wide uppercase text-white">
+              Film
+            </div>
+          )}
+
+          {/* Hover play */}
           {hasVideo && (
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-              <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center">
-                <svg viewBox="0 0 24 24" fill="black" className="w-6 h-6 ml-1">
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 z-20">
+              <div className="w-11 h-11 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                <svg viewBox="0 0 24 24" fill="black" className="w-5 h-5 ml-0.5">
                   <path d="M8 5v14l11-7z" />
                 </svg>
               </div>
@@ -48,30 +79,34 @@ function GameCard({ game, onDelete }: { game: Game; onDelete: (id: string) => vo
           )}
         </div>
 
-        <div className="p-4">
+        {/* Card body */}
+        <div className="px-3 py-2.5">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-white truncate group-hover:text-blue-300 transition-colors">
+              <h3 className="font-semibold text-[13px] text-white truncate leading-tight group-hover:text-[#2563EB] transition-colors">
                 vs {game.opponent}
               </h3>
-              <div className="mt-1 flex items-center gap-3 text-xs text-white/50">
+              <div className="mt-1 flex items-center gap-2.5 text-[11px] text-white/40">
                 <span className="flex items-center gap-1">
-                  <Calendar className="w-3 h-3" />
+                  <Calendar className="w-2.5 h-2.5" />
                   {formatDate(game.game_date)}
                 </span>
                 {game.location && (
-                  <span className="flex items-center gap-1 truncate">
-                    <MapPin className="w-3 h-3" />
-                    {game.location}
-                  </span>
+                  <>
+                    <span className="text-white/15">·</span>
+                    <span className="flex items-center gap-1 truncate">
+                      <MapPin className="w-2.5 h-2.5" />
+                      {game.location}
+                    </span>
+                  </>
                 )}
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/60 shrink-0 mt-1 transition-colors" />
+            <ChevronRight className="w-3.5 h-3.5 text-white/20 group-hover:text-white/50 shrink-0 mt-0.5 transition-colors" />
           </div>
 
           {game.notes && (
-            <p className="mt-2 text-xs text-white/40 line-clamp-2">{game.notes}</p>
+            <p className="mt-1.5 text-[11px] text-white/30 line-clamp-1 border-t border-white/6 pt-1.5">{game.notes}</p>
           )}
         </div>
 
@@ -82,9 +117,9 @@ function GameCard({ game, onDelete }: { game: Game; onDelete: (id: string) => vo
             e.stopPropagation()
             onDelete(game.id)
           }}
-          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg bg-black/60 hover:bg-red-500/80 text-white/60 hover:text-white"
+          className="absolute top-1.5 right-1.5 z-30 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded bg-black/70 hover:bg-red-600/90 text-white/50 hover:text-white"
         >
-          <X className="w-3.5 h-3.5" />
+          <X className="w-3 h-3" />
         </button>
       </div>
     </Link>
@@ -118,67 +153,72 @@ function AddGameModal({ onClose, onAdd }: { onClose: () => void; onAdd: (game: G
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-[#111316] border border-white/12 rounded-lg w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold">Add Game</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-white/60 hover:text-white">
+          <div>
+            <h2 className="text-base font-semibold tracking-tight">Add Game</h2>
+            <p className="text-xs text-white/40 mt-0.5">New entry to your film library</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-white/8 text-white/40 hover:text-white transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>
-            <label className="block text-xs text-white/50 mb-1.5">Opponent *</label>
+            <label className="block text-[11px] font-medium text-white/40 mb-1.5 uppercase tracking-wider">Opponent *</label>
             <input
               type="text" required placeholder="Lincoln Eagles"
               value={form.opponent} onChange={e => setForm(f => ({ ...f, opponent: e.target.value }))}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500/60 placeholder-white/20"
+              className="w-full bg-[#0d0f12] border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#2563EB]/60 placeholder-white/20 transition-colors"
             />
           </div>
           <div>
-            <label className="block text-xs text-white/50 mb-1.5">Game Date *</label>
+            <label className="block text-[11px] font-medium text-white/40 mb-1.5 uppercase tracking-wider">Game Date *</label>
             <input
               type="date" required
               value={form.game_date} onChange={e => setForm(f => ({ ...f, game_date: e.target.value }))}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500/60"
+              className="w-full bg-[#0d0f12] border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#2563EB]/60 transition-colors"
             />
           </div>
           <div>
-            <label className="block text-xs text-white/50 mb-1.5">Location</label>
+            <label className="block text-[11px] font-medium text-white/40 mb-1.5 uppercase tracking-wider">Location</label>
             <input
               type="text" placeholder="Home / Away / Arena name"
               value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500/60 placeholder-white/20"
+              className="w-full bg-[#0d0f12] border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#2563EB]/60 placeholder-white/20 transition-colors"
             />
           </div>
           <div>
-            <label className="block text-xs text-white/50 mb-1.5">Video URL <span className="text-white/30">(optional — add later in film room)</span></label>
+            <label className="block text-[11px] font-medium text-white/40 mb-1.5 uppercase tracking-wider">
+              Video URL <span className="text-white/25 normal-case">(optional — add later)</span>
+            </label>
             <input
               type="url" placeholder="https://..."
               value={form.video_url} onChange={e => setForm(f => ({ ...f, video_url: e.target.value }))}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500/60 placeholder-white/20"
+              className="w-full bg-[#0d0f12] border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#2563EB]/60 placeholder-white/20 transition-colors"
             />
           </div>
           <div>
-            <label className="block text-xs text-white/50 mb-1.5">Notes</label>
+            <label className="block text-[11px] font-medium text-white/40 mb-1.5 uppercase tracking-wider">Notes</label>
             <textarea
               placeholder="Quick notes about the game..."
               value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               rows={2}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500/60 placeholder-white/20 resize-none"
+              className="w-full bg-[#0d0f12] border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#2563EB]/60 placeholder-white/20 resize-none transition-colors"
             />
           </div>
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-xs text-red-400 bg-red-500/8 border border-red-500/20 rounded px-2.5 py-1.5">{error}</p>}
 
-          <div className="flex gap-3 pt-1">
+          <div className="flex gap-2.5 pt-1">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm text-white/60 hover:bg-white/5 transition-colors">
+              className="flex-1 py-2.5 rounded-lg border border-white/10 text-sm text-white/50 hover:bg-white/5 hover:text-white transition-colors">
               Cancel
             </button>
             <button type="submit" disabled={loading}
-              className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+              className="flex-1 py-2.5 rounded-lg bg-[#2563EB] hover:bg-[#1d4ed8] text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
               {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Add Game
             </button>
@@ -214,109 +254,142 @@ export default function FilmRoomHome() {
     return true
   })
 
+  const statsRow = [
+    { label: 'Games', value: games.length, icon: Trophy },
+    { label: 'With Video', value: games.filter(g => g.video_url).length, icon: Video },
+    { label: 'Highlights', value: 0, icon: Star },
+    { label: 'Clips', value: 0, icon: Film },
+  ]
+
   return (
     <div className="min-h-screen bg-[#0d0f12]">
+      {/* Top accent line */}
+      <div className="h-[2px] w-full bg-[#2563EB]" />
+
       {/* Header */}
-      <header className="border-b border-white/8 bg-[#0d0f12]/95 sticky top-0 z-40 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center">
-              <Film className="w-4 h-4" />
+      <header className="border-b border-white/8 bg-[#0d0f12]/98 sticky top-0 z-40 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          {/* Main header row */}
+          <div className="h-12 flex items-center justify-between gap-4">
+            {/* Left: breadcrumb */}
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-6 h-6 rounded bg-[#2563EB] flex items-center justify-center shrink-0">
+                <Film className="w-3.5 h-3.5 text-white" />
+              </div>
+              <span className="text-sm font-semibold text-white tracking-tight">Film Room</span>
+              <ChevronRight className="w-3.5 h-3.5 text-white/25 shrink-0" />
+              {/* Team badge */}
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-white/10 bg-white/4">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                <span className="text-xs font-medium text-white/80 whitespace-nowrap">Varsity Boys</span>
+                <span className="text-white/25 text-xs">·</span>
+                <span className="text-xs text-white/50">2025–26</span>
+              </div>
             </div>
-            <span className="font-semibold text-sm">Film Room</span>
-            <span className="text-white/20 text-sm">/</span>
-            <span className="text-white/50 text-sm">Varsity Boys · 2025–26</span>
+
+            {/* Right: actions */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Link href="/filmroom/roster"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/8 text-xs text-white/50 hover:text-white hover:border-white/20 hover:bg-white/5 transition-all">
+                <Users className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Roster</span>
+              </Link>
+              <button onClick={() => setShowAdd(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#2563EB] hover:bg-[#1d4ed8] text-xs font-semibold text-white transition-colors">
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Game</span>
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Link href="/filmroom/roster"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-white/60 hover:text-white hover:bg-white/6 transition-all">
-              <Users className="w-3.5 h-3.5" /> Roster
-            </Link>
-            <button onClick={() => setShowAdd(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-medium transition-colors">
-              <Plus className="w-3.5 h-3.5" /> Add Game
-            </button>
+
+          {/* Stats ticker bar */}
+          <div className="flex items-stretch border-t border-white/6 divide-x divide-white/6">
+            {statsRow.map(({ label, value, icon: Icon }) => (
+              <div key={label} className="flex items-center gap-2.5 px-4 py-2 first:pl-0">
+                <Icon className="w-3 h-3 text-white/25 shrink-0" />
+                <span className="text-lg font-bold text-white leading-none tabular-nums">{value}</span>
+                <span className="text-[11px] text-white/35 uppercase tracking-wide leading-none">{label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        {/* Hero stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-          {[
-            { label: 'Games', value: games.length, icon: Trophy, color: 'text-yellow-400' },
-            { label: 'With Video', value: games.filter(g => g.video_url).length, icon: Video, color: 'text-blue-400' },
-            { label: 'Highlights', value: 0, icon: Star, color: 'text-orange-400' },
-            { label: 'Clips', value: 0, icon: Film, color: 'text-purple-400' },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="rounded-2xl border border-white/8 bg-white/3 px-4 py-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-white/40">{label}</span>
-                <Icon className={`w-3.5 h-3.5 ${color}`} />
-              </div>
-              <span className="text-2xl font-bold">{value}</span>
-            </div>
-          ))}
-        </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        {/* Section header + filter */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold text-white/80 uppercase tracking-widest">Games</span>
+            <span className="text-[11px] text-white/30 tabular-nums">{filtered.length}</span>
+          </div>
 
-        {/* Filters + section header */}
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="font-semibold">Games</h2>
-          <div className="flex gap-1 bg-white/4 border border-white/8 rounded-xl p-0.5">
+          {/* Filter pills */}
+          <div className="flex items-center gap-1">
             {(['all', 'video', 'no-video'] as const).map(f => (
-              <button key={f} onClick={() => setFilter(f)}
-                className={`px-3 py-1 text-xs rounded-lg transition-all ${filter === f ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'}`}>
-                {f === 'all' ? 'All' : f === 'video' ? 'Has Video' : 'No Video'}
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded transition-all ${
+                  filter === f
+                    ? 'bg-[#2563EB] text-white'
+                    : 'text-white/40 hover:text-white/70 border border-white/8 hover:border-white/15'
+                }`}
+              >
+                {f === 'all' ? 'All' : f === 'video' ? 'Has Film' : 'No Film'}
               </button>
             ))}
           </div>
         </div>
 
+        {/* Divider */}
+        <div className="border-t border-white/8 mb-5" />
+
         {/* Game grid */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-6 h-6 animate-spin text-white/30" />
+            <Loader2 className="w-5 h-5 animate-spin text-white/25" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-20 h-20 rounded-2xl bg-white/4 flex items-center justify-center mb-4">
-              <Film className="w-10 h-10 text-white/20" />
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div
+              className="w-16 h-12 border border-white/10 rounded flex items-center justify-center mb-5 relative"
+              style={{ boxShadow: 'inset 0 0 20px rgba(0,0,0,0.6)' }}
+            >
+              <div className="absolute -left-0 top-0 bottom-0 w-2.5 flex flex-col justify-around items-center py-1">
+                {[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-sm bg-white/8" />)}
+              </div>
+              <div className="absolute -right-0 top-0 bottom-0 w-2.5 flex flex-col justify-around items-center py-1">
+                {[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-sm bg-white/8" />)}
+              </div>
+              <Film className="w-5 h-5 text-white/15" />
             </div>
-            <h3 className="font-semibold text-white/60 mb-2">No games yet</h3>
-            <p className="text-sm text-white/30 mb-6 max-w-xs">
+            <h3 className="text-sm font-semibold text-white/50 mb-1">No games in library</h3>
+            <p className="text-xs text-white/25 mb-5 max-w-xs">
               Add your first game to start building your film library.
             </p>
             <button onClick={() => setShowAdd(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-medium transition-colors">
-              <Plus className="w-4 h-4" /> Add First Game
+              className="flex items-center gap-2 px-4 py-2 bg-[#2563EB] hover:bg-[#1d4ed8] rounded text-sm font-semibold transition-colors">
+              <Plus className="w-3.5 h-3.5" /> Add First Game
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {filtered.map(game => (
               <GameCard key={game.id} game={game} onDelete={deleteGame} />
             ))}
-            {/* Add card */}
-            <button onClick={() => setShowAdd(true)}
-              className="rounded-2xl border-2 border-dashed border-white/10 hover:border-white/20 bg-transparent hover:bg-white/2 transition-all flex flex-col items-center justify-center gap-3 aspect-[4/3] min-h-[160px]">
-              <div className="w-10 h-10 rounded-full bg-white/6 flex items-center justify-center">
-                <Plus className="w-5 h-5 text-white/40" />
-              </div>
-              <span className="text-xs text-white/30">Add Game</span>
-            </button>
-          </div>
-        )}
 
-        {/* Upload info */}
-        {games.length > 0 && (
-          <div className="mt-8 rounded-2xl border border-blue-500/15 bg-blue-500/5 p-4 flex items-start gap-3">
-            <Upload className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm text-blue-300 font-medium">To upload game film</p>
-              <p className="text-xs text-blue-400/60 mt-0.5">
-                Click any game → drag-and-drop your video file in the film room. Cloudflare R2 storage is active. HLS playback via Cloudflare Stream available once a Stream API token is added.
-              </p>
-            </div>
+            {/* Add game card */}
+            <button
+              onClick={() => setShowAdd(true)}
+              className="group rounded-lg border border-white/8 border-dashed hover:border-[#2563EB]/50 bg-transparent hover:bg-[#2563EB]/4 transition-all flex flex-col items-center justify-center gap-2 aspect-video min-h-[120px]"
+            >
+              <div className="w-8 h-8 rounded border border-white/10 group-hover:border-[#2563EB]/40 flex items-center justify-center transition-colors">
+                <Plus className="w-4 h-4 text-white/25 group-hover:text-[#2563EB]/70 transition-colors" />
+              </div>
+              <span className="text-[11px] text-white/25 group-hover:text-white/50 font-medium uppercase tracking-wider transition-colors">
+                Add Game
+              </span>
+            </button>
           </div>
         )}
       </main>
