@@ -415,7 +415,7 @@ function BoxScorePanel({
 type UploadState =
   | { phase: 'idle' }
   | { phase: 'signing' }
-  | { phase: 'uploading'; progress: number; method: 'stream' | 'r2' }
+  | { phase: 'uploading'; progress: number; method: 'stream' | 'r2'; partInfo?: string }
   | { phase: 'processing'; videoId?: string }
   | { phase: 'done'; url: string; videoId?: string }
   | { phase: 'error'; message: string }
@@ -461,12 +461,14 @@ function VideoUploadZone({
         onComplete(hlsUrl, sign.videoId)
         setState({ phase: 'done', url: hlsUrl, videoId: sign.videoId })
       } else {
-        // R2 presigned PUT
-        await xhrUpload(file, sign.uploadUrl, (p) =>
-          setState({ phase: 'uploading', progress: p, method: 'r2' })
+        // R2 multipart upload (handles any file size, no single-PUT 5GB limit)
+        const playbackUrl = await r2MultipartUpload(
+          file,
+          gameId,
+          (p, partInfo) => setState({ phase: 'uploading', progress: p, method: 'r2', partInfo })
         )
-        onComplete(sign.playbackUrl)
-        setState({ phase: 'done', url: sign.playbackUrl })
+        onComplete(playbackUrl)
+        setState({ phase: 'done', url: playbackUrl })
       }
     } catch (err) {
       setState({ phase: 'error', message: err instanceof Error ? err.message : String(err) })
@@ -551,6 +553,9 @@ function VideoUploadZone({
           </div>
           <p className="text-sm text-white/70 mb-3">
             Uploading via {state.method === 'stream' ? 'Cloudflare Stream' : 'R2'}… {state.progress}%
+          {state.phase === 'uploading' && state.partInfo && (
+            <span className="text-xs text-white/30 block mt-0.5">{state.partInfo}</span>
+          )}
           </p>
           <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
             <div
@@ -585,19 +590,90 @@ function VideoUploadZone({
   )
 }
 
-// Simple XHR upload with progress for R2 presigned PUTs
-function xhrUpload(file: File, url: string, onProgress: (p: number) => void): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('PUT', url)
-    xhr.setRequestHeader('Content-Type', file.type || 'video/mp4')
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
-    }
-    xhr.onload = () => xhr.status < 300 ? resolve() : reject(new Error(`R2 PUT ${xhr.status}`))
-    xhr.onerror = () => reject(new Error('Network error during upload'))
-    xhr.send(file)
+// R2 multipart upload — handles files of any size
+// R2 single PUT limit = 5 GB; multipart supports up to 5 TB
+// Part size: 100 MB (R2 min per part is 5 MB except last part)
+async function r2MultipartUpload(
+  file: File,
+  gameId: string,
+  onProgress: (percent: number, partInfo: string) => void
+): Promise<string> {
+  const CHUNK_SIZE = 100 * 1024 * 1024 // 100 MB per part
+  const totalParts = Math.ceil(file.size / CHUNK_SIZE)
+
+  // 1. Create multipart upload — server picks the key
+  const createRes = await fetch('/api/filmroom/upload/multipart?action=create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename: file.name, contentType: file.type || 'video/mp4', gameId }),
   })
+  if (!createRes.ok) throw new Error(`Multipart create failed: ${createRes.status}`)
+  const { uploadId, key: confirmedKey, playbackUrl } = await createRes.json()
+
+  const parts: { ETag: string; PartNumber: number }[] = []
+  let bytesUploaded = 0
+
+  try {
+    for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+      const start = (partNumber - 1) * CHUNK_SIZE
+      const end = Math.min(start + CHUNK_SIZE, file.size)
+      const chunk = file.slice(start, end)
+
+      // 2. Get signed URL for this part
+      const partRes = await fetch('/api/filmroom/upload/multipart?action=part', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadId, key: confirmedKey, partNumber }),
+      })
+      if (!partRes.ok) throw new Error(`Part sign failed: ${partRes.status}`)
+      const { signedUrl } = await partRes.json()
+
+      // 3. Upload the chunk via XHR for progress tracking
+      const etag = await new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('PUT', signedUrl)
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const totalDone = bytesUploaded + e.loaded
+            const pct = Math.round((totalDone / file.size) * 100)
+            onProgress(pct, `Part ${partNumber} of ${totalParts}`)
+          }
+        }
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const etag = xhr.getResponseHeader('ETag') ?? xhr.getResponseHeader('etag') ?? `"part-${partNumber}"`
+            resolve(etag)
+          } else {
+            reject(new Error(`R2 PUT ${xhr.status} on part ${partNumber}`))
+          }
+        }
+        xhr.onerror = () => reject(new Error(`Network error on part ${partNumber}`))
+        xhr.send(chunk)
+      })
+
+      parts.push({ ETag: etag, PartNumber: partNumber })
+      bytesUploaded += chunk.size
+      onProgress(Math.round((bytesUploaded / file.size) * 100), `Part ${partNumber} of ${totalParts} done`)
+    }
+
+    // 4. Complete the multipart upload
+    const completeRes = await fetch('/api/filmroom/upload/multipart?action=complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uploadId, key: confirmedKey, parts }),
+    })
+    if (!completeRes.ok) throw new Error(`Multipart complete failed: ${completeRes.status}`)
+
+    return playbackUrl
+  } catch (err) {
+    // Abort on any failure to clean up the incomplete upload on R2
+    fetch('/api/filmroom/upload/multipart?action=abort', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uploadId, key: confirmedKey }),
+    }).catch(() => {})
+    throw err
+  }
 }
 
 // Minimal TUS client for Cloudflare Stream
