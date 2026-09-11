@@ -1724,7 +1724,7 @@ export default function GameFilmRoom() {
               onMarkIn={() => setMarkIn(currentMs)}
               onMarkOut={() => setMarkOut(currentMs)}
               isFullscreen={isFullscreen}
-              onStatTap={!isFullscreen && videoLoaded ? openStatPanel : undefined}
+              onStatTap={videoLoaded ? openStatPanel : undefined}
             />}
             {/* Upload success banner — hidden in fullscreen */}
             {!isFullscreen && uploadDone && (
