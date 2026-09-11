@@ -8,7 +8,7 @@ import {
   Scissors, Bookmark, Star, MessageSquare,
   Users, BarChart2, Pencil, X, Check,
   Plus, Trash2, Loader2, ChevronDown, ChevronUp, Upload,
-  ZoomIn, AlertCircle, CheckCircle2, BarChart,
+  ZoomIn, AlertCircle, CheckCircle2, BarChart, Maximize2, Minimize2,
 } from 'lucide-react'
 import type { Game, Clip, Player, ClipCategory, ClipComment } from '@/types/filmroom'
 import { CATEGORY_LABELS, CATEGORY_COLORS, TEST_TEAM_ID } from '@/types/filmroom'
@@ -738,12 +738,14 @@ function VideoPlayer({
   onTimeUpdate,
   onDurationChange,
   playerRef,
+  isFullscreen,
 }: {
   videoUrl: string | null
   videoId: string | null
   onTimeUpdate: (ms: number) => void
   onDurationChange: (ms: number) => void
   playerRef: React.RefObject<HTMLVideoElement | null>
+  isFullscreen?: boolean
 }) {
   const [resolvedSrc, setResolvedSrc] = useState<string | null>(null)
 
@@ -771,7 +773,13 @@ function VideoPlayer({
     <video
       ref={playerRef}
       src={resolvedSrc}
-      className="w-full aspect-video bg-black rounded-xl"
+      // In fullscreen: fill the flex container height; in normal layout: use aspect-video
+      // but cap height so transport bar stays on screen without scrolling
+      className={isFullscreen
+        ? 'w-full h-full object-contain bg-black'
+        : 'w-full bg-black' // no aspect-video — height driven by max-h on parent
+      }
+      style={isFullscreen ? undefined : { maxHeight: 'calc(100vh - 48px - 130px)', aspectRatio: '16/9' }}
       onTimeUpdate={(e) => onTimeUpdate(Math.round(e.currentTarget.currentTime * 1000))}
       onDurationChange={(e) => onDurationChange(Math.round(e.currentTarget.duration * 1000))}
       onLoadedMetadata={(e) => onDurationChange(Math.round(e.currentTarget.duration * 1000))}
@@ -788,6 +796,7 @@ function TransportBar({
   isPlaying, currentMs, durationMs,
   onPlayPause, onSeek, onSkip, onFrameStep,
   markIn, markOut, onMarkIn, onMarkOut,
+  isFullscreen,
 }: {
   isPlaying: boolean
   currentMs: number
@@ -800,13 +809,14 @@ function TransportBar({
   markOut: number | null
   onMarkIn: () => void
   onMarkOut: () => void
+  isFullscreen?: boolean
 }) {
   const pct = durationMs > 0 ? (currentMs / durationMs) * 100 : 0
   const inPct = (markIn != null && durationMs > 0) ? (markIn / durationMs) * 100 : null
   const outPct = (markOut != null && durationMs > 0) ? (markOut / durationMs) * 100 : null
 
   return (
-    <div className="space-y-3 px-4 py-3 bg-[#13161b] rounded-b-xl border border-t-0 border-white/8">
+    <div className={`space-y-3 px-4 py-3 bg-[#13161b] border-t border-white/8 ${isFullscreen ? '' : 'rounded-b-xl border border-t-0 border-white/8'}`}>
       {/* Scrubber */}
       <div className="relative group">
         <div className="relative h-1.5 bg-white/10 rounded-full cursor-pointer"
@@ -1247,6 +1257,7 @@ export default function GameFilmRoom() {
   const [activeClipId, setActiveClipId] = useState<string | null>(null)
   const [panelTab, setPanelTab] = useState<PanelTab>('clips')
   const [uploadDone, setUploadDone] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [drawingActive, setDrawingActive] = useState(false)
   const [drawingData, setDrawingData] = useState<DrawingData | null>(null)
 
@@ -1371,11 +1382,13 @@ export default function GameFilmRoom() {
         case 's': case 'S':
           if (markIn !== null && markOut !== null && markOut > markIn) setShowSaveClip(true)
           break
+        case 'f': case 'F': setIsFullscreen(f => !f); break
+        case 'Escape': setIsFullscreen(false); break
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel])
+  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel, setIsFullscreen])
 
   if (loading) return (
     <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center">
@@ -1431,8 +1444,8 @@ export default function GameFilmRoom() {
       {/* Main layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Video + transport */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-          <div className="p-3 sm:p-4 space-y-0">
+        <div className={`flex-1 flex flex-col min-w-0 overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 bg-black' : ''}`}>
+          <div className={`flex flex-col h-full ${isFullscreen ? 'p-0' : 'p-3 sm:p-4'}`}>
             {/* Upload zone — shown when no video + not mid-upload */}
             {!game.video_url && !uploadDone && (
               <div className="rounded-xl overflow-hidden border border-white/8 mb-0">
@@ -1453,19 +1466,28 @@ export default function GameFilmRoom() {
 
             {/* Video player — shown when video_url is set */}
             {game.video_url && (
-              <div className="rounded-t-xl overflow-hidden border border-b-0 border-white/8 bg-black relative">
+              <div className={`relative bg-black ${isFullscreen ? 'flex-1 min-h-0' : 'rounded-t-xl overflow-hidden border border-b-0 border-white/8'}`}>
                 <VideoPlayer
                   videoUrl={game.video_url}
                   videoId={game.video_id}
                   onTimeUpdate={setCurrentMs}
                   onDurationChange={setDurationMs}
                   playerRef={videoRef}
+                  isFullscreen={isFullscreen}
                 />
                 <DrawingOverlay
                   active={drawingActive}
                   onDataChange={setDrawingData}
                   initialData={null}
                 />
+                {/* Fullscreen toggle button — always visible on the video */}
+                <button
+                  onClick={() => setIsFullscreen(f => !f)}
+                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 hover:bg-black/80 text-white/70 hover:text-white transition-all z-10"
+                  title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen (F)'}
+                >
+                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
               </div>
             )}
             {/* Transport — only active with video */}
@@ -1481,18 +1503,18 @@ export default function GameFilmRoom() {
               markOut={markOut}
               onMarkIn={() => setMarkIn(currentMs)}
               onMarkOut={() => setMarkOut(currentMs)}
+              isFullscreen={isFullscreen}
             />}
-
-            {/* Upload success banner */}
-            {uploadDone && (
+            {/* Upload success banner — hidden in fullscreen */}
+            {!isFullscreen && uploadDone && (
               <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 <p className="text-xs text-emerald-300">Video uploaded and ready — use the controls above to start marking clips.</p>
               </div>
             )}
 
-            {/* Save clip CTA */}
-            {canSave && (
+            {/* Save clip CTA — hidden in fullscreen (use keyboard shortcuts instead) */}
+            {!isFullscreen && canSave && (
               <div className="mt-3 flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-500/10 border border-blue-500/25">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-blue-300">Clip marked</p>
@@ -1511,8 +1533,8 @@ export default function GameFilmRoom() {
               </div>
             )}
 
-            {/* Drawing toggle */}
-            {game.video_url && (
+            {/* Drawing toggle — hidden in fullscreen */}
+            {!isFullscreen && game.video_url && (
               <div className="mt-3 flex items-center gap-2">
                 <button
                   onClick={() => setDrawingActive(a => !a)}
@@ -1531,8 +1553,8 @@ export default function GameFilmRoom() {
               </div>
             )}
 
-            {/* Floating Stat Button — only when video is loaded */}
-            {videoLoaded && (
+            {/* Floating Stat Button — hidden in fullscreen */}
+            {!isFullscreen && videoLoaded && (
               <div className="mt-4 flex justify-center">
                 <button
                   onClick={openStatPanel}
