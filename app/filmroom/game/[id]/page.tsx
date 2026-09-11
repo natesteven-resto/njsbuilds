@@ -101,30 +101,56 @@ function VideoUploadZone({
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) upload(file)
+    if (file) {
+      upload(file)
+      // Reset input so same file can be re-selected if needed
+      e.target.value = ''
+    }
+  }
+
+  const triggerPicker = () => {
+    // Re-create the input click in a genuine user gesture context
+    const input = inputRef.current
+    if (!input) return
+    input.value = ''
+    input.click()
   }
 
   if (state.phase === 'done') return null // Player takes over
 
   return (
-    <label
-      htmlFor="filmroom-video-upload"
+    <div
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
-      className="w-full aspect-video bg-[#0e1015] rounded-xl border-2 border-dashed border-white/10 hover:border-white/20 transition-colors flex flex-col items-center justify-center gap-4 cursor-pointer group"
-      style={{ pointerEvents: state.phase === 'idle' ? 'auto' : 'none' }}
+      className="w-full aspect-video bg-[#0e1015] rounded-xl border-2 border-dashed border-white/10 hover:border-white/20 transition-colors flex flex-col items-center justify-center gap-4 group"
     >
-      <input ref={inputRef} id="filmroom-video-upload" type="file" accept="video/*" className="sr-only" onChange={handleFile} />
+      {/* Input must NOT be display:none or visibility:hidden on Safari — use opacity:0 + position:absolute instead */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*"
+        onChange={handleFile}
+        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 1, height: 1 }}
+      />
 
       {state.phase === 'idle' && (
         <>
-          <div className="w-16 h-16 rounded-2xl bg-white/4 group-hover:bg-white/6 flex items-center justify-center transition-colors">
+          <div className="w-16 h-16 rounded-2xl bg-white/4 flex items-center justify-center">
             <Upload className="w-7 h-7 text-white/30" />
           </div>
           <div className="text-center">
-            <p className="text-sm text-white/50 font-medium">Drop game film here</p>
-            <p className="text-xs text-white/25 mt-1">or click to browse · MP4, MOV, MKV</p>
+            <p className="text-sm text-white/50 font-medium">Select game film</p>
+            <p className="text-xs text-white/25 mt-1">MP4, MOV, MKV · any size</p>
           </div>
+          {/* Explicit button — required for Safari/iPadOS to fire onChange reliably */}
+          <button
+            type="button"
+            onClick={triggerPicker}
+            className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-semibold text-white transition-colors shadow-lg"
+          >
+            Choose Video
+          </button>
+          <p className="text-xs text-white/20">or drag and drop here</p>
         </>
       )}
 
@@ -172,7 +198,7 @@ function VideoUploadZone({
           </button>
         </div>
       )}
-    </label>
+    </div>
   )
 }
 
