@@ -1755,24 +1755,18 @@ export default function GameFilmRoom() {
                   }`}
                 >
                   <Pencil className="w-3.5 h-3.5" />
-                  {drawingActive ? 'Drawing On — click tools on video' : 'Draw on video'}
+                  {drawingActive ? 'Drawing On' : 'Draw on video'}
                 </button>
-                {drawingActive && (
-                  <p className="text-xs text-white/30">Arrows, circles, freehand, text. Drawing saves with your clip.</p>
+                {!isFullscreen && videoLoaded && (
+                  <button
+                    onClick={openStatPanel}
+                    style={{ touchAction: 'manipulation' }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-semibold text-xs transition-all shadow-lg shadow-blue-500/20 border border-blue-500/30 ml-auto"
+                  >
+                    <BarChart className="w-3.5 h-3.5" />
+                    Tag Stat
+                  </button>
                 )}
-              </div>
-            )}
-
-            {/* Floating Stat Button — hidden in fullscreen */}
-            {!isFullscreen && videoLoaded && (
-              <div className="mt-4 flex justify-center">
-                <button
-                  onClick={openStatPanel}
-                  className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-semibold text-sm transition-all shadow-xl shadow-blue-500/20 border border-blue-500/30"
-                >
-                  <BarChart className="w-4 h-4" />
-                  Tag Stat
-                </button>
               </div>
             )}
           </div>
