@@ -255,10 +255,10 @@ export default function FilmRoomHome() {
   })
 
   const statsRow = [
-    { label: 'Games', value: games.length, icon: Trophy },
-    { label: 'With Video', value: games.filter(g => g.video_url).length, icon: Video },
-    { label: 'Highlights', value: 0, icon: Star },
-    { label: 'Clips', value: 0, icon: Film },
+    { label: 'Games', value: games.length },
+    { label: 'With Video', value: games.filter(g => g.video_url).length },
+    { label: 'Highlights', value: 0 },
+    { label: 'Clips', value: 0 },
   ]
 
   return (
@@ -304,9 +304,8 @@ export default function FilmRoomHome() {
 
           {/* Stats ticker bar */}
           <div className="flex items-stretch border-t border-white/6 divide-x divide-white/6">
-            {statsRow.map(({ label, value, icon: Icon }) => (
+            {statsRow.map(({ label, value }) => (
               <div key={label} className="flex items-center gap-2.5 px-4 py-2 first:pl-0">
-                <Icon className="w-3 h-3 text-white/25 shrink-0" />
                 <span className="text-lg font-bold text-white leading-none tabular-nums">{value}</span>
                 <span className="text-[11px] text-white/35 uppercase tracking-wide leading-none">{label}</span>
               </div>
