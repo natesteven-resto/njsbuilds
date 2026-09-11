@@ -1643,7 +1643,8 @@ export default function GameFilmRoom() {
   const videoLoaded = !!game.video_url
 
   return (
-    <div className="min-h-screen bg-[#0d0f12] flex flex-col">
+    <div className="min-h-screen bg-[#0d0f12] flex flex-col" style={{ animation: 'fadeIn 0.6s ease-out' }}>
+      <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
       {/* Top bar */}
       <header className="shrink-0 border-b border-white/8 bg-[#0d0f12]/95 backdrop-blur-xl sticky top-0 z-40">
         <div className="px-3 sm:px-4 h-12 flex items-center gap-3">
