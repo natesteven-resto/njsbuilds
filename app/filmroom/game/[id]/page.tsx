@@ -208,7 +208,7 @@ function StatEntryPanel({
 
       <div
         className="relative w-full max-w-3xl rounded-t-2xl flex flex-col"
-        style={{ backgroundColor: '#15181f', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '90vh' }}
+        style={{ backgroundColor: '#15181f', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '85vh' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ── */}
@@ -243,37 +243,37 @@ function StatEntryPanel({
         </div>
 
         {/* ── Stat grid — NOT in scroll container, fixes iPad tap swallow ── */}
-        <div className="shrink-0 px-4 pt-4 pb-2">
-          <div className="grid grid-cols-3 gap-3">
+        <div className="shrink-0 px-4 pt-3 pb-1">
+          <div className="grid grid-cols-3 gap-2">
             {/* MADE column */}
-            <div className="space-y-2">
-              <p className="text-[11px] font-bold text-white/40 uppercase tracking-widest text-center">Made</p>
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Made</p>
               {made.map(def => (
                 <button key={def.key} onClick={() => handleStatTap(def.key)}
                   style={{ touchAction: 'manipulation' }}
-                  className={`w-full h-14 rounded-xl text-sm font-semibold ${
+                  className={`w-full h-9 rounded-lg text-xs font-semibold ${
                     selectedStat === def.key ? 'bg-blue-600 text-white' : 'bg-white text-gray-900'
                   }`}>{def.label}</button>
               ))}
             </div>
             {/* MISS column */}
-            <div className="space-y-2">
-              <p className="text-[11px] font-bold text-red-400/70 uppercase tracking-widest text-center">Miss</p>
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-bold text-red-400/70 uppercase tracking-widest text-center">Miss</p>
               {miss.map(def => (
                 <button key={def.key} onClick={() => handleStatTap(def.key)}
                   style={{ touchAction: 'manipulation' }}
-                  className={`w-full h-14 rounded-xl text-sm font-semibold border ${
+                  className={`w-full h-9 rounded-lg text-xs font-semibold border ${
                     selectedStat === def.key ? 'bg-blue-600 text-white border-blue-500' : 'bg-red-950/60 text-red-300 border-red-500/20'
                   }`}>{def.label}</button>
               ))}
             </div>
             {/* OTHER column */}
-            <div className="space-y-2">
-              <p className="text-[11px] font-bold text-white/40 uppercase tracking-widest text-center">Other</p>
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Other</p>
               {other.map(def => (
                 <button key={def.key} onClick={() => handleStatTap(def.key)}
                   style={{ touchAction: 'manipulation' }}
-                  className={`w-full h-14 rounded-xl text-sm font-semibold border ${
+                  className={`w-full h-9 rounded-lg text-xs font-semibold border ${
                     selectedStat === def.key ? 'bg-blue-600 text-white border-blue-500'
                       : def.redTint ? 'bg-red-950/40 text-red-300/80 border-red-500/15'
                       : 'bg-white/8 text-white/80 border-white/8'
@@ -306,7 +306,7 @@ function StatEntryPanel({
                     key={p.id}
                     onPointerDown={(e) => { e.preventDefault(); if (enabled) handlePlayerTap(p) }}
                     style={{ touchAction: 'manipulation', opacity: enabled ? 1 : 0.4 }}
-                    className={`flex flex-col items-center justify-center py-3 rounded-xl border min-h-[80px] ${
+                    className={`flex flex-col items-center justify-center py-3 rounded-xl border min-h-[70px] ${
                       enabled
                         ? isOpp ? 'border-white/15 bg-white/6' : 'border-white/10 bg-white/5'
                         : 'border-white/6 bg-white/3 cursor-not-allowed'
@@ -397,10 +397,6 @@ const BOX_COLS: Array<{ key: StatType | 'pts_calc' | 'reb_calc'; label: string }
   { key: 'STL',       label: 'STL' },
   { key: 'BLK',       label: 'BLK' },
   { key: 'TO',        label: 'TO' },
-  { key: 'FOUL',      label: 'F' },
-  { key: '2M',        label: '2M' },
-  { key: '3M',        label: '3M' },
-  { key: 'FTM',       label: 'FT' },
 ]
 
 function calcPts(entries: StatEntry[]): number {
