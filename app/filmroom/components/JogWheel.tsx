@@ -17,7 +17,7 @@ export function JogWheel({ visible, currentMs, onScrub, onTap }: JogWheelProps) 
   const [rotation, setRotation] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const lastX = useRef<number | null>(null)
-  const accum = useRef(0)   // accumulated ms for frame stepping
+  const totalDragPx = useRef(0)  // track total drag to distinguish tap vs scrub
   const wheelRef = useRef<HTMLDivElement>(null)
 
   function msToTimecode(ms: number) {
@@ -33,7 +33,7 @@ export function JogWheel({ visible, currentMs, onScrub, onTap }: JogWheelProps) 
     e.stopPropagation()
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
     lastX.current = e.clientX
-    accum.current = 0
+    totalDragPx.current = 0
     setIsDragging(true)
   }, [])
 
@@ -43,24 +43,26 @@ export function JogWheel({ visible, currentMs, onScrub, onTap }: JogWheelProps) 
 
     const dx = e.clientX - lastX.current
     lastX.current = e.clientX
+    totalDragPx.current += Math.abs(dx)
 
-    // Rotate the wheel visually
+    // Rotate the wheel visually — unlimited, no clamping
     const degsPerPx = 1.2
-    const deltaDeg = dx * degsPerPx
-    setRotation(r => r + deltaDeg)
+    setRotation(r => r + dx * degsPerPx)
 
-    // Scrub the video — velocity sensitive
+    // Scrub the video
     const deltaMs = dx * MS_PER_DEG
     onScrub(deltaMs)
   }, [isDragging, onScrub])
 
-  const onPointerUp = useCallback((e: React.PointerEvent) => {
+  const onPointerUp = useCallback(() => {
     if (!isDragging) return
-    const totalDx = Math.abs((e.clientX) - (lastX.current ?? e.clientX))
+    const wasTap = totalDragPx.current < 6
     setIsDragging(false)
     lastX.current = null
-    // If it was essentially a tap (no drag), treat as play
-    if (totalDx < 4) onTap()
+    totalDragPx.current = 0
+    // Only play if it was a genuine tap with no meaningful drag
+    if (wasTap) onTap()
+    // Otherwise: stay paused at current frame, wheel stays visible
   }, [isDragging, onTap])
 
   // Tick mark angles

@@ -1681,8 +1681,9 @@ export default function GameFilmRoom() {
                   currentMs={currentMs}
                   onScrub={(deltaMs) => {
                     const v = videoRef.current
-                    if (!v) return
-                    const next = Math.max(0, Math.min(durationMs / 1000, v.currentTime + deltaMs / 1000))
+                    if (!v || !v.duration) return
+                    // Clamp to valid range but allow unlimited rotation direction
+                    const next = Math.max(0, Math.min(v.duration, v.currentTime + deltaMs / 1000))
                     v.currentTime = next
                     setCurrentMs(Math.round(next * 1000))
                   }}
