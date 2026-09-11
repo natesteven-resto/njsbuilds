@@ -1740,11 +1740,6 @@ export default function GameFilmRoom() {
                 >
                   <BarChart className="w-4 h-4" />
                   Tag Stat
-                  {statEntries.length > 0 && (
-                    <span className="bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full ml-1">
-                      {statEntries.length}
-                    </span>
-                  )}
                 </button>
               </div>
             )}
@@ -1763,11 +1758,7 @@ export default function GameFilmRoom() {
               <button key={tab} onClick={() => setPanelTab(tab)}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium border-b-2 transition-all ${panelTab === tab ? 'border-blue-500 text-blue-300' : 'border-transparent text-white/40 hover:text-white/70'}`}>
                 <Icon className="w-3.5 h-3.5" /> {label}
-                {tab === 'stats' && statEntries.length > 0 && (
-                  <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">
-                    {statEntries.length > 99 ? '99' : statEntries.length}
-                  </span>
-                )}
+
               </button>
             ))}
           </div>
