@@ -359,14 +359,7 @@ function StatEntryPanel({
 
 // ─── Box Score Panel ──────────────────────────────────────────────────────────
 
-const BOX_COLS: Array<{ key: StatType | 'pts_calc' | 'reb_calc'; label: string }> = [
-  { key: 'pts_calc',  label: 'PTS' },
-  { key: 'reb_calc',  label: 'REB' },
-  { key: 'AST',       label: 'AST' },
-  { key: 'STL',       label: 'STL' },
-  { key: 'BLK',       label: 'BLK' },
-  { key: 'TO',        label: 'TO' },
-]
+// ── Box score calculation helpers ──────────────────────────────────────────
 
 function calcPts(entries: StatEntry[]): number {
   let pts = 0
@@ -378,12 +371,75 @@ function calcPts(entries: StatEntry[]): number {
   return pts
 }
 
-function calcReb(entries: StatEntry[]): number {
-  return entries.filter(e => e.stat_type === 'OREB' || e.stat_type === 'DREB').length
-}
-
 function countStat(entries: StatEntry[], stat: StatType): number {
   return entries.filter((e) => e.stat_type === stat).length
+}
+
+function pct(made: number, att: number): string {
+  if (att === 0) return '-'
+  return Math.round((made / att) * 100) + '%'
+}
+
+interface BoxRow {
+  fg: string; fgPct: string
+  threePt: string; threePct: string
+  ft: string; ftPct: string
+  oreb: number; dreb: number
+  def: number; foul: number
+  stl: number; to: number
+  blk: number; ast: number
+  pts: number
+}
+
+function calcBoxRow(entries: StatEntry[]): BoxRow {
+  const twoM  = countStat(entries, '2M')
+  const twoX  = countStat(entries, '2X')
+  const threeM = countStat(entries, '3M')
+  const threeX = countStat(entries, '3X')
+  const ftm   = countStat(entries, 'FTM')
+  const ftx   = countStat(entries, 'FTX')
+  return {
+    fg:      `${twoM}-${twoM + twoX}`,
+    fgPct:   pct(twoM, twoM + twoX),
+    threePt: `${threeM}-${threeM + threeX}`,
+    threePct: pct(threeM, threeM + threeX),
+    ft:      `${ftm}-${ftm + ftx}`,
+    ftPct:   pct(ftm, ftm + ftx),
+    oreb:    countStat(entries, 'OREB'),
+    dreb:    countStat(entries, 'DREB'),
+    def:     countStat(entries, 'DEF'),
+    foul:    countStat(entries, 'FOUL'),
+    stl:     countStat(entries, 'STL'),
+    to:      countStat(entries, 'TO'),
+    blk:     countStat(entries, 'BLK'),
+    ast:     countStat(entries, 'AST'),
+    pts:     calcPts(entries),
+  }
+}
+
+const BOX_HEADERS = [
+  'fg', 'fg%', '3pt', '3pt%', 'ft', 'ft%',
+  'oreb', 'dreb', 'def', 'foul', 'stl', 'to', 'blk', 'ast', 'pts',
+] as const
+
+function renderBoxRow(row: BoxRow, highlight = false) {
+  const cells = [
+    row.fg, row.fgPct, row.threePt, row.threePct, row.ft, row.ftPct,
+    row.oreb, row.dreb, row.def, row.foul, row.stl, row.to, row.blk, row.ast, row.pts,
+  ]
+  return cells.map((v, i) => {
+    const isZero = v === 0 || v === '-' || v === '0-0' || v === '0%'
+    const isPts  = i === cells.length - 1
+    return (
+      <td key={i} className="text-center px-1.5 py-2">
+        <span className={`${
+          isPts ? 'font-bold text-sm' : 'text-xs'
+        } ${
+          isZero ? 'text-white/20' : highlight ? 'text-white' : 'text-white/85'
+        }`}>{String(v)}</span>
+      </td>
+    )
+  })
 }
 
 function BoxScorePanel({
@@ -434,14 +490,12 @@ function BoxScorePanel({
     <div className="space-y-2">
       {/* Box score table */}
       <div className="overflow-x-auto -mx-3 px-3">
-        <table className="w-full text-xs min-w-[420px]">
+        <table className="text-xs" style={{ minWidth: 680 }}>
           <thead>
             <tr className="border-b border-white/8">
-              <th className="text-left text-white/40 font-medium pb-2 pr-2 sticky left-0 bg-[#13161b]">Player</th>
-              {BOX_COLS.map((col) => (
-                <th key={col.key} className="text-center text-white/40 font-medium pb-2 px-1 min-w-[30px]">
-                  {col.label}
-                </th>
+              <th className="text-left text-white/40 font-medium pb-2 pr-3 sticky left-0 bg-[#13161b] min-w-[90px]">Player</th>
+              {BOX_HEADERS.map(h => (
+                <th key={h} className="text-center text-white/35 font-medium pb-2 px-1.5 min-w-[36px] whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -449,6 +503,7 @@ function BoxScorePanel({
             {players.map((player) => {
               const playerEntries = totals[player.id] ?? []
               const isExpanded = expandedPlayerId === player.id
+              const box = calcBoxRow(playerEntries)
               return (
                 <>
                   <tr
@@ -456,62 +511,33 @@ function BoxScorePanel({
                     onClick={() => setExpandedPlayerId(isExpanded ? null : player.id)}
                     className="hover:bg-white/3 transition-colors cursor-pointer"
                   >
-                    <td className="py-2 pr-2 sticky left-0 bg-transparent">
-                      <div className="flex items-center gap-1.5">
-                        {isExpanded
-                          ? <ChevronUp className="w-3 h-3 text-white/30 shrink-0" />
-                          : <ChevronDown className="w-3 h-3 text-white/20 shrink-0" />
-                        }
-                        <span className="font-medium text-white/80 truncate max-w-[90px]">
-                          #{player.number} {player.name.split(' ')[0]}
-                        </span>
+                    <td className="py-2 pr-3 sticky left-0 bg-transparent">
+                      <div className="flex items-center gap-1">
+                        {isExpanded ? <ChevronUp className="w-3 h-3 text-white/30 shrink-0" /> : <ChevronDown className="w-3 h-3 text-white/20 shrink-0" />}
+                        <span className="font-medium text-white/80 truncate">#{player.number} {player.name.split(' ')[0]}</span>
                       </div>
                     </td>
-                    {BOX_COLS.map((col) => {
-                      const val = col.key === 'pts_calc'
-                        ? calcPts(playerEntries)
-                        : col.key === 'reb_calc'
-                          ? calcReb(playerEntries)
-                          : countStat(playerEntries, col.key as StatType)
-                      return (
-                        <td key={col.key} className="text-center px-1 py-2">
-                          <span className={val > 0 ? 'text-white/90 font-medium' : 'text-white/20'}>
-                            {val}
-                          </span>
-                        </td>
-                      )
-                    })}
+                    {renderBoxRow(box)}
                   </tr>
                   {isExpanded && playerEntries.length > 0 && (
-                    <tr key={`${player.id}-expanded`}>
-                      <td colSpan={BOX_COLS.length + 1} className="pb-2 pt-0">
-                        <div className="ml-5 space-y-0.5">
-                          {playerEntries
-                            .slice()
-                            .sort((a, b) => a.video_time_ms - b.video_time_ms)
-                            .map((entry) => (
-                              <button
-                                key={entry.id}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onSeek(entry.video_time_ms)
-                                }}
-                                className="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-blue-500/15 hover:border-blue-500/20 border border-transparent transition-all text-left group"
-                              >
-                                <Play className="w-3 h-3 text-white/20 group-hover:text-blue-400 shrink-0 transition-colors" />
-                                <span className="font-mono text-white/40 tabular-nums text-[11px] w-10 shrink-0">
-                                  {msToDisplay(entry.video_time_ms)}
-                                </span>
-                                <span className="font-bold text-blue-300 text-[11px] flex-1">{STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type}</span>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onDeleteEntry(entry.id) }}
-                                  style={{ touchAction: 'manipulation' }}
-                                  className="p-1 rounded text-white/20 hover:text-red-400 transition-all shrink-0"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
+                    <tr key={`${player.id}-exp`}>
+                      <td colSpan={BOX_HEADERS.length + 1} className="pb-2 pt-0">
+                        <div className="ml-4 space-y-0.5">
+                          {playerEntries.slice().sort((a, b) => a.video_time_ms - b.video_time_ms).map((entry) => (
+                            <button key={entry.id}
+                              onClick={(e) => { e.stopPropagation(); onSeek(entry.video_time_ms) }}
+                              className="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-blue-500/15 border border-transparent text-left group"
+                            >
+                              <Play className="w-3 h-3 text-white/20 group-hover:text-blue-400 shrink-0" />
+                              <span className="font-mono text-white/40 tabular-nums text-[11px] w-10 shrink-0">{msToDisplay(entry.video_time_ms)}</span>
+                              <span className="font-bold text-blue-300 text-[11px] flex-1">{STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type}</span>
+                              <button onClick={(e) => { e.stopPropagation(); onDeleteEntry(entry.id) }}
+                                style={{ touchAction: 'manipulation' }}
+                                className="p-1 rounded text-white/20 hover:text-red-400 shrink-0">
+                                <X className="w-3 h-3" />
                               </button>
-                            ))}
+                            </button>
+                          ))}
                         </div>
                       </td>
                     </tr>
@@ -522,44 +548,23 @@ function BoxScorePanel({
 
             {/* Team totals row */}
             <tr className="border-t-2 border-white/12">
-              <td className="py-2 pr-2 sticky left-0 bg-transparent">
+              <td className="py-2 pr-3 sticky left-0 bg-transparent">
                 <span className="font-semibold text-white/60 text-[11px] uppercase tracking-wide">Team</span>
               </td>
-              {BOX_COLS.map((col) => {
-                const val = col.key === 'pts_calc'
-                  ? calcPts(teamTotals)
-                  : col.key === 'reb_calc'
-                    ? calcReb(teamTotals)
-                    : countStat(teamTotals, col.key as StatType)
-                return (
-                  <td key={col.key} className="text-center px-1 py-2">
-                    <span className={`font-semibold ${val > 0 ? 'text-white/70' : 'text-white/20'}`}>{val}</span>
-                  </td>
-                )
-              })}
+              {renderBoxRow(calcBoxRow(teamTotals))}
             </tr>
 
             {/* Opponent totals row */}
             {(() => {
-              const oppEntries = statEntries.filter(e => e.player_id === null || e.player_id === '__opp__')
+              const oppEntries = statEntries.filter(e => e.player_id === null || (e as StatEntry & { player_id: string | null }).player_id === '__opp__')
               if (oppEntries.length === 0) return null
+              const oppBox = calcBoxRow(oppEntries)
               return (
-                <tr className="border-t border-white/8 bg-red-950/10">
-                  <td className="py-2 pr-2 sticky left-0 bg-transparent">
+                <tr className="border-t border-red-500/20 bg-red-950/10">
+                  <td className="py-2 pr-3 sticky left-0 bg-transparent">
                     <span className="font-semibold text-red-400/70 text-[11px] uppercase tracking-wide">OPP</span>
                   </td>
-                  {BOX_COLS.map((col) => {
-                    const val = col.key === 'pts_calc'
-                      ? calcPts(oppEntries)
-                      : col.key === 'reb_calc'
-                        ? calcReb(oppEntries)
-                        : countStat(oppEntries, col.key as StatType)
-                    return (
-                      <td key={col.key} className="text-center px-1 py-2">
-                        <span className={`font-semibold ${val > 0 ? 'text-red-400/80' : 'text-white/15'}`}>{val}</span>
-                      </td>
-                    )
-                  })}
+                  {renderBoxRow(oppBox, true)}
                 </tr>
               )
             })()}
@@ -568,7 +573,7 @@ function BoxScorePanel({
       </div>
 
       <p className="text-[10px] text-white/20 pt-1">
-        PTS = (2M × 2) + (3M × 3) + (FT × 1). Tap a player row to expand timeline. Tap a timestamp to jump.
+        Tap a player row to expand their timeline. Tap a timestamp to jump to that moment in the film.
       </p>
     </div>
   )
