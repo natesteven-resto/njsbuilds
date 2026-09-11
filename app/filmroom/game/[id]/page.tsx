@@ -107,13 +107,14 @@ function VideoUploadZone({
   if (state.phase === 'done') return null // Player takes over
 
   return (
-    <div
+    <label
+      htmlFor="filmroom-video-upload"
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
       className="w-full aspect-video bg-[#0e1015] rounded-xl border-2 border-dashed border-white/10 hover:border-white/20 transition-colors flex flex-col items-center justify-center gap-4 cursor-pointer group"
-      onClick={() => state.phase === 'idle' && inputRef.current?.click()}
+      style={{ pointerEvents: state.phase === 'idle' ? 'auto' : 'none' }}
     >
-      <input ref={inputRef} type="file" accept="video/*" className="hidden" onChange={handleFile} />
+      <input ref={inputRef} id="filmroom-video-upload" type="file" accept="video/*" className="sr-only" onChange={handleFile} />
 
       {state.phase === 'idle' && (
         <>
@@ -171,7 +172,7 @@ function VideoUploadZone({
           </button>
         </div>
       )}
-    </div>
+    </label>
   )
 }
 
