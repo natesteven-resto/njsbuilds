@@ -4,6 +4,36 @@ import Link from 'next/link'
 
 const projects = [
   {
+    href: '/filmroom',
+    emoji: '🎬',
+    title: 'Film Room',
+    desc: 'Basketball film study — upload game film, tag stats, jog wheel scrubbing.',
+  },
+  {
+    href: '/forcast',
+    emoji: '📊',
+    title: 'Forcast',
+    desc: 'Personal budget and cash flow forecasting tool.',
+  },
+  {
+    href: '/hooppilot',
+    emoji: '🏀',
+    title: 'Hoop Pilot',
+    desc: 'Basketball team management and coaches community app.',
+  },
+  {
+    href: '/ava',
+    emoji: '📚',
+    title: "Ava's Study Tool",
+    desc: 'NCLEX-ready nursing review with AI tutor, flashcards, and mock exams.',
+  },
+  {
+    href: '/noah',
+    emoji: '🏈',
+    title: "Noah's Fantasy",
+    desc: 'Fantasy football dashboard and AI lineup advisor.',
+  },
+  {
     href: '/puppies',
     emoji: '🐾',
     title: 'Silver Lab Puppies',
@@ -26,6 +56,36 @@ const projects = [
     emoji: '🐕',
     title: 'Dog Training',
     desc: 'Phase-based training tracker for the new pup.',
+  },
+  {
+    href: '/hunting',
+    emoji: '🦌',
+    title: 'Hunting',
+    desc: '',
+  },
+  {
+    href: '/addison',
+    emoji: '👧',
+    title: 'Addison',
+    desc: '',
+  },
+  {
+    href: '/duckhunt',
+    emoji: '🦆',
+    title: 'Duck Hunt',
+    desc: 'Classic duck hunt game.',
+  },
+  {
+    href: '/dinsaurworld',
+    emoji: '🦕',
+    title: 'Dinosaur World',
+    desc: '',
+  },
+  {
+    href: '/ninjaturtles',
+    emoji: '🐢',
+    title: 'Ninja Turtles',
+    desc: '',
   },
   {
     href: '/bc.html',
