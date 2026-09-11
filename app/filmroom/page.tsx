@@ -1,21 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Film, Plus, Users, Trophy, ChevronRight, Calendar, MapPin, Video, X, Loader2, Star } from 'lucide-react'
 import type { Game } from '@/types/filmroom'
 import { TEST_TEAM_ID } from '@/types/filmroom'
+import { TransitionOverlay } from './components/TransitionOverlay'
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr + 'T12:00:00')
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-function GameCard({ game, onDelete }: { game: Game; onDelete: (id: string) => void }) {
+function GameCard({ game, onDelete, onSelect }: { game: Game; onDelete: (id: string) => void; onSelect: (id: string) => void }) {
   const hasVideo = !!game.video_url
 
   return (
-    <Link href={`/filmroom/game/${game.id}`} className="group block">
+    <div className="group block cursor-pointer" onClick={() => onSelect(game.id)}>
       <div className="relative rounded-lg border border-white/10 bg-[#111316] hover:border-white/20 hover:bg-[#14171c] transition-all duration-150 overflow-hidden">
         {/* Film strip thumbnail */}
         <div className="aspect-video bg-[#0a0b0d] relative overflow-hidden">
@@ -122,7 +123,7 @@ function GameCard({ game, onDelete }: { game: Game; onDelete: (id: string) => vo
           <X className="w-3 h-3" />
         </button>
       </div>
-    </Link>
+    </div>
   )
 }
 
@@ -234,6 +235,11 @@ export default function FilmRoomHome() {
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [filter, setFilter] = useState<'all' | 'video' | 'no-video'>('all')
+  const [transitionTarget, setTransitionTarget] = useState<string | null>(null)
+
+  const handleSelectGame = useCallback((id: string) => {
+    setTransitionTarget(`/filmroom/game/${id}`)
+  }, [])
 
   useEffect(() => {
     fetch(`/api/filmroom/games?team_id=${TEST_TEAM_ID}`)
@@ -374,7 +380,7 @@ export default function FilmRoomHome() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {filtered.map(game => (
-              <GameCard key={game.id} game={game} onDelete={deleteGame} />
+              <GameCard key={game.id} game={game} onDelete={deleteGame} onSelect={handleSelectGame} />
             ))}
 
             {/* Add game card */}
@@ -394,6 +400,14 @@ export default function FilmRoomHome() {
       </main>
 
       {showAdd && <AddGameModal onClose={() => setShowAdd(false)} onAdd={g => setGames(prev => [g, ...prev])} />}
+
+      {/* Cinematic transition overlay */}
+      {transitionTarget && (
+        <TransitionOverlay
+          targetUrl={transitionTarget}
+          onComplete={() => setTransitionTarget(null)}
+        />
+      )}
     </div>
   )
 }
