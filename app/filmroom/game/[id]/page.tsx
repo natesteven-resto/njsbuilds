@@ -280,6 +280,7 @@ function StatEntryPanel({
                     <div key={e.id} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
                       <span className="text-white/40 shrink-0 font-medium">{e.player_number !== 'OPP' ? `#${e.player_number}` : 'OPP'}</span>
+                      <span className="text-white/50 shrink-0">{e.player_number !== 'OPP' ? e.player_name.split(' ')[0] : 'Opponent'}</span>
                       <span className="text-white/75 font-semibold truncate">{STAT_DEFS.find(d => d.key === e.stat_type)?.label ?? e.stat_type}</span>
                     </div>
                   ))}
