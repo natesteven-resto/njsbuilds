@@ -39,8 +39,42 @@ function formatDuration(startMs: number, endMs: number): string {
 
 // ─── Stat Entry Types ─────────────────────────────────────────────────────────
 
-const STAT_TYPES = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TO', '2M', '3M', 'FT'] as const
+const STAT_TYPES = ['2M', '3M', 'FTM', '2X', '3X', 'FTX', 'OREB', 'DREB', 'AST', 'STL', 'BLK', 'DEF', 'TO', 'FOUL'] as const
 type StatType = typeof STAT_TYPES[number]
+
+// Legacy aliases for existing entries that used old stat types
+const LEGACY_STAT_MAP: Partial<Record<string, StatType>> = {
+  PTS: '2M', REB: 'OREB', AST: 'AST', STL: 'STL', BLK: 'BLK', TO: 'TO', '3M': '3M', FT: 'FTM',
+}
+
+function normaliseStatType(raw: string): StatType {
+  if ((STAT_TYPES as readonly string[]).includes(raw)) return raw as StatType
+  return (LEGACY_STAT_MAP[raw] ?? '2M') as StatType
+}
+
+interface StatDef {
+  key: StatType
+  label: string
+  col: 'made' | 'miss' | 'other'
+  redTint?: boolean
+}
+
+const STAT_DEFS: StatDef[] = [
+  { key: '2M',   label: '2PT Made',   col: 'made' },
+  { key: '3M',   label: '3PT Made',   col: 'made' },
+  { key: 'FTM',  label: 'FT Made',    col: 'made' },
+  { key: '2X',   label: '2PT Miss',   col: 'miss' },
+  { key: '3X',   label: '3PT Miss',   col: 'miss' },
+  { key: 'FTX',  label: 'FT Miss',    col: 'miss' },
+  { key: 'OREB', label: 'Off Reb',    col: 'other' },
+  { key: 'DREB', label: 'Def Reb',    col: 'other' },
+  { key: 'AST',  label: 'Assist',     col: 'other' },
+  { key: 'STL',  label: 'Steal',      col: 'other' },
+  { key: 'BLK',  label: 'Block',      col: 'other' },
+  { key: 'DEF',  label: 'Deflection', col: 'other' },
+  { key: 'TO',   label: 'Turnover',   col: 'other', redTint: true },
+  { key: 'FOUL', label: 'Foul',       col: 'other', redTint: true },
+]
 
 interface StatEntry {
   id: string
@@ -57,7 +91,7 @@ interface StatEntry {
 interface RawStatEntry {
   id: string
   player_id: string
-  stat_type: StatType
+  stat_type: string
   video_time_ms: number
   game_id: string
   created_at: string
@@ -70,12 +104,16 @@ function rawToEntry(raw: RawStatEntry): StatEntry {
     player_id: raw.player_id,
     player_name: raw.players?.name ?? 'Unknown',
     player_number: raw.players?.number != null ? String(raw.players.number) : '?',
-    stat_type: raw.stat_type,
+    stat_type: normaliseStatType(raw.stat_type),
     video_time_ms: raw.video_time_ms,
     game_id: raw.game_id,
     created_at: raw.created_at,
   }
 }
+
+// Opponent pseudo-player constant
+const OPP_ID = '__opp__'
+const OPP_PLAYER: Player = { id: OPP_ID, name: 'Opponent', number: null, position: null, team_id: '', parent_email: null, created_at: '' }
 
 // ─── Stat Entry Panel ─────────────────────────────────────────────────────────
 
@@ -96,11 +134,18 @@ function StatEntryPanel({
   onUndo: () => void
   onClose: () => void
 }) {
-  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
+  const [selectedStat, setSelectedStat] = useState<StatType | null>(null)
   const [logging, setLogging] = useState(false)
+  const [redoStack, setRedoStack] = useState<StatEntry[]>([])
 
-  const handleStatTap = async (statType: StatType) => {
-    if (!selectedPlayer || logging) return
+  const allPlayers = [...players, OPP_PLAYER]
+
+  const handleStatTap = (stat: StatType) => {
+    setSelectedStat(prev => prev === stat ? null : stat)
+  }
+
+  const handlePlayerTap = async (player: Player) => {
+    if (!selectedStat || logging) return
     setLogging(true)
     try {
       const res = await fetch('/api/filmroom/stat-entries', {
@@ -108,14 +153,20 @@ function StatEntryPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           game_id: gameId,
-          player_id: selectedPlayer.id,
-          stat_type: statType,
+          player_id: player.id === OPP_ID ? null : player.id,
+          stat_type: selectedStat,
           video_time_ms: currentMs,
         }),
       })
       if (!res.ok) throw new Error('Failed to save')
       const raw: RawStatEntry = await res.json()
-      onLog(rawToEntry(raw))
+      // For OPP entries the DB returns player_id null — patch the name/number
+      const entry: StatEntry = player.id === OPP_ID
+        ? { ...rawToEntry(raw), player_id: OPP_ID, player_name: 'Opponent', player_number: 'OPP' }
+        : rawToEntry(raw)
+      onLog(entry)
+      setRedoStack([]) // new entry clears redo
+      // Keep stat selected so coach can keep tapping players
     } catch {
       // silently ignore — entry was not saved
     } finally {
@@ -123,108 +174,242 @@ function StatEntryPanel({
     }
   }
 
+  const handleUndo = async () => {
+    const last = sessionEntries[sessionEntries.length - 1]
+    if (!last) return
+    setRedoStack(r => [...r, last])
+    onUndo()
+  }
+
+  const made   = STAT_DEFS.filter(d => d.col === 'made')
+  const miss   = STAT_DEFS.filter(d => d.col === 'miss')
+  const other  = STAT_DEFS.filter(d => d.col === 'other')
+
+  // Box score calculated from all session entries + existing entries passed in
+  const calcBoxRow = (entries: StatEntry[]) => ({
+    pts: entries.filter(e => e.stat_type === '2M').length * 2
+      + entries.filter(e => e.stat_type === '3M').length * 3
+      + entries.filter(e => e.stat_type === 'FTM').length,
+    reb: entries.filter(e => e.stat_type === 'OREB' || e.stat_type === 'DREB').length,
+    ast: entries.filter(e => e.stat_type === 'AST').length,
+    stl: entries.filter(e => e.stat_type === 'STL').length,
+    blk: entries.filter(e => e.stat_type === 'BLK').length,
+  })
+
+  const statLabel = (s: StatType) => STAT_DEFS.find(d => d.key === s)?.label ?? s
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.72)' }}
+      style={{ backgroundColor: 'rgba(0,0,0,0.76)' }}
     >
       {/* Backdrop tap closes */}
       <div className="absolute inset-0" onClick={onClose} />
 
       <div
-        className="relative w-full max-w-2xl rounded-t-2xl flex flex-col"
-        style={{ backgroundColor: '#1a1d23', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '85vh' }}
+        className="relative w-full max-w-3xl rounded-t-2xl flex flex-col"
+        style={{ backgroundColor: '#15181f', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '90vh' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="shrink-0 flex items-center justify-between px-5 pt-5 pb-3">
-          <div>
-            <p className="text-xs text-white/40 font-medium uppercase tracking-wider">Tagging at</p>
-            <p className="text-2xl font-bold text-white font-mono">{msToDisplay(currentMs)}</p>
-          </div>
+        {/* ── Header ── */}
+        <div className="shrink-0 flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/8">
+          <span className="text-sm font-semibold text-white/80 tracking-wide">
+            <span className="text-blue-400 font-bold">1</span>
+            <span className="text-white/40 mx-1.5">·</span>
+            TAP A STAT
+          </span>
           <div className="flex items-center gap-2">
             <button
-              onClick={onUndo}
+              onClick={handleUndo}
               disabled={sessionEntries.length === 0}
-              className="px-3 py-2 rounded-xl text-xs font-medium text-white/50 hover:text-white border border-white/10 hover:border-white/20 disabled:opacity-30 transition-all"
+              className="px-3 py-1.5 rounded-xl text-xs font-medium text-white/50 hover:text-white border border-white/10 hover:border-white/20 disabled:opacity-30 transition-all"
             >
               Undo
             </button>
             <button
+              disabled
+              className="px-3 py-1.5 rounded-xl text-xs font-medium text-white/20 border border-white/6 disabled:opacity-30 cursor-not-allowed"
+              title="Redo (coming soon)"
+            >
+              Redo
+            </button>
+            <button
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+              className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
             >
               Done
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-5">
-          {/* Step 1: Player selection */}
-          <div>
-            <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2.5">
-              {selectedPlayer ? 'Player' : 'Select Player'}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {players.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setSelectedPlayer(p)}
-                  className={`flex flex-col items-center px-3 py-2.5 rounded-xl border transition-all min-w-[72px] ${
-                    selectedPlayer?.id === p.id
-                      ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
-                      : 'border-white/10 bg-white/4 text-white/60 hover:bg-white/8 hover:text-white'
-                  }`}
-                >
-                  <span className={`text-lg font-bold leading-none ${selectedPlayer?.id === p.id ? 'text-white' : 'text-white/80'}`}>
-                    {p.number ?? '?'}
-                  </span>
-                  <span className="text-[10px] mt-1 leading-none max-w-[64px] truncate text-center">
-                    {p.name.split(' ')[0]}
-                  </span>
-                </button>
-              ))}
+        <div className="flex-1 overflow-y-auto">
+          {/* ── Stat grid ── */}
+          <div className="px-4 pt-4 pb-2">
+            <div className="grid grid-cols-3 gap-3">
+
+              {/* MADE column */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold text-white/40 uppercase tracking-widest text-center">Made</p>
+                {made.map(def => (
+                  <button
+                    key={def.key}
+                    onClick={() => handleStatTap(def.key)}
+                    className={`w-full h-14 rounded-2xl text-sm font-semibold transition-all active:scale-95 ${
+                      selectedStat === def.key
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                        : 'bg-white text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    {def.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* MISS column */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold text-red-400/70 uppercase tracking-widest text-center">Miss</p>
+                {miss.map(def => (
+                  <button
+                    key={def.key}
+                    onClick={() => handleStatTap(def.key)}
+                    className={`w-full h-14 rounded-2xl text-sm font-semibold transition-all active:scale-95 ${
+                      selectedStat === def.key
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                        : 'bg-red-950/60 text-red-300 hover:bg-red-900/60 border border-red-500/20'
+                    }`}
+                  >
+                    {def.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* OTHER column */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold text-white/40 uppercase tracking-widest text-center">Other</p>
+                {other.map(def => (
+                  <button
+                    key={def.key}
+                    onClick={() => handleStatTap(def.key)}
+                    className={`w-full h-14 rounded-2xl text-sm font-semibold transition-all active:scale-95 ${
+                      selectedStat === def.key
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                        : def.redTint
+                          ? 'bg-red-950/40 text-red-300/80 hover:bg-red-900/40 border border-red-500/15'
+                          : 'bg-white/8 text-white/80 hover:bg-white/14 border border-white/8'
+                    }`}
+                  >
+                    {def.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Step 2: Stat type buttons — shown after player selected */}
-          {selectedPlayer && (
-            <div>
-              <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2.5">
-                Stat — #{selectedPlayer.number} {selectedPlayer.name}
-              </p>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                {STAT_TYPES.map((s) => (
+          {/* ── Step 2 header ── */}
+          <div className="px-5 pt-3 pb-2 border-t border-white/6 mt-2">
+            <span className="text-sm font-semibold text-white/80 tracking-wide">
+              <span className={selectedStat ? 'text-blue-400 font-bold' : 'text-white/30 font-bold'}>2</span>
+              <span className="text-white/40 mx-1.5">·</span>
+              <span className={selectedStat ? 'text-white/80' : 'text-white/30'}>
+                {selectedStat ? `TAP WHO — ${statLabel(selectedStat)}` : 'TAP WHO'}
+              </span>
+            </span>
+          </div>
+
+          {/* ── Player cards ── */}
+          <div className="px-4 pb-3">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {allPlayers.map((p) => {
+                const playerEntries = sessionEntries.filter(e => e.player_id === p.id)
+                const pts = playerEntries.filter(e => e.stat_type === '2M').length * 2
+                  + playerEntries.filter(e => e.stat_type === '3M').length * 3
+                  + playerEntries.filter(e => e.stat_type === 'FTM').length
+                const isOpp = p.id === OPP_ID
+                return (
                   <button
-                    key={s}
-                    onClick={() => handleStatTap(s)}
-                    disabled={logging}
-                    className="flex items-center justify-center h-16 rounded-xl border border-white/12 bg-white/5 hover:bg-blue-600 hover:border-blue-500 text-white font-bold text-lg transition-all disabled:opacity-50 active:scale-95"
+                    key={p.id}
+                    onClick={() => handlePlayerTap(p)}
+                    disabled={!selectedStat || logging}
+                    className={`flex flex-col items-center justify-center px-2 py-3 rounded-2xl border transition-all active:scale-95 min-h-[88px] ${
+                      !selectedStat
+                        ? 'border-white/6 bg-white/3 opacity-50 cursor-not-allowed'
+                        : isOpp
+                          ? 'border-white/15 bg-white/6 hover:bg-white/12'
+                          : 'border-white/10 bg-white/5 hover:bg-blue-600/20 hover:border-blue-500/40'
+                    }`}
                   >
-                    {s}
+                    <span className={`text-3xl font-black leading-none ${
+                      isOpp ? 'text-white/50 text-xl font-bold' : 'text-white'
+                    }`}>
+                      {isOpp ? 'OPP' : (p.number ?? '?')}
+                    </span>
+                    <span className="text-[11px] mt-1 text-white/50 font-medium leading-tight text-center max-w-[70px] truncate">
+                      {isOpp ? 'Opponent' : p.name.split(' ')[0]}
+                    </span>
+                    <span className="text-[10px] mt-0.5 text-white/30">
+                      {pts} pts
+                    </span>
                   </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* ── Running log ── */}
+          {sessionEntries.length > 0 && (
+            <div className="px-4 pb-3 border-t border-white/6 pt-3">
+              <p className="text-[11px] font-semibold text-white/30 uppercase tracking-wider mb-1.5">Recent</p>
+              <div className="space-y-1 max-h-28 overflow-y-auto">
+                {[...sessionEntries].reverse().map((e) => (
+                  <div
+                    key={e.id}
+                    className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white/3 text-xs"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                    <span className="text-white/60 flex-1 truncate">
+                      {e.player_number !== 'OPP' ? `#${e.player_number} ` : ''}{e.player_name.split(' ')[0]}
+                    </span>
+                    <span className="font-medium text-white/70">{statLabel(e.stat_type)}</span>
+                  </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Running log */}
-          {sessionEntries.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-2">This session</p>
-              <div className="space-y-1 max-h-40 overflow-y-auto">
-                {[...sessionEntries].reverse().map((e) => (
-                  <div
-                    key={e.id}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/4 text-xs"
-                  >
-                    <span className="font-mono text-white/40 tabular-nums w-10 shrink-0">{msToDisplay(e.video_time_ms)}</span>
-                    <span className="text-white/60 flex-1">
-                      #{e.player_number} {e.player_name.split(' ')[0]}
-                    </span>
-                    <span className="font-bold text-blue-300 w-8 text-right">{e.stat_type}</span>
-                  </div>
-                ))}
+          {/* ── Box Score (read-only) ── */}
+          {sessionEntries.length > 0 && players.length > 0 && (
+            <div className="px-4 pb-5 border-t border-white/6 pt-3">
+              <p className="text-[11px] font-semibold text-white/30 uppercase tracking-wider mb-2">Box Score</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs min-w-[340px]">
+                  <thead>
+                    <tr className="border-b border-white/8">
+                      <th className="text-left text-white/30 font-medium pb-1.5 pr-2">Player</th>
+                      {(['PTS','REB','AST','STL','BLK'] as const).map(col => (
+                        <th key={col} className="text-center text-white/30 font-medium pb-1.5 px-1.5 min-w-[28px]">{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/4">
+                    {players.map(p => {
+                      const pe = sessionEntries.filter(e => e.player_id === p.id)
+                      if (pe.length === 0) return null
+                      const box = calcBoxRow(pe)
+                      return (
+                        <tr key={p.id}>
+                          <td className="py-1.5 pr-2 text-white/60 font-medium truncate max-w-[90px]">
+                            #{p.number} {p.name.split(' ')[0]}
+                          </td>
+                          <td className="text-center px-1.5 py-1.5"><span className={box.pts > 0 ? 'text-white font-semibold' : 'text-white/20'}>{box.pts}</span></td>
+                          <td className="text-center px-1.5 py-1.5"><span className={box.reb > 0 ? 'text-white font-semibold' : 'text-white/20'}>{box.reb}</span></td>
+                          <td className="text-center px-1.5 py-1.5"><span className={box.ast > 0 ? 'text-white font-semibold' : 'text-white/20'}>{box.ast}</span></td>
+                          <td className="text-center px-1.5 py-1.5"><span className={box.stl > 0 ? 'text-white font-semibold' : 'text-white/20'}>{box.stl}</span></td>
+                          <td className="text-center px-1.5 py-1.5"><span className={box.blk > 0 ? 'text-white font-semibold' : 'text-white/20'}>{box.blk}</span></td>
+                        </tr>
+                      )
+                    }).filter(Boolean)}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -236,26 +421,31 @@ function StatEntryPanel({
 
 // ─── Box Score Panel ──────────────────────────────────────────────────────────
 
-const BOX_COLS: Array<{ key: StatType | 'pts_calc'; label: string }> = [
-  { key: 'pts_calc', label: 'PTS' },
-  { key: 'REB', label: 'REB' },
-  { key: 'AST', label: 'AST' },
-  { key: 'STL', label: 'STL' },
-  { key: 'BLK', label: 'BLK' },
-  { key: 'TO', label: 'TO' },
-  { key: '2M', label: '2M' },
-  { key: '3M', label: '3M' },
-  { key: 'FT', label: 'FT' },
+const BOX_COLS: Array<{ key: StatType | 'pts_calc' | 'reb_calc'; label: string }> = [
+  { key: 'pts_calc',  label: 'PTS' },
+  { key: 'reb_calc',  label: 'REB' },
+  { key: 'AST',       label: 'AST' },
+  { key: 'STL',       label: 'STL' },
+  { key: 'BLK',       label: 'BLK' },
+  { key: 'TO',        label: 'TO' },
+  { key: 'FOUL',      label: 'F' },
+  { key: '2M',        label: '2M' },
+  { key: '3M',        label: '3M' },
+  { key: 'FTM',       label: 'FT' },
 ]
 
 function calcPts(entries: StatEntry[]): number {
   let pts = 0
   for (const e of entries) {
-    if (e.stat_type === '2M') pts += 2
-    else if (e.stat_type === '3M') pts += 3
-    else if (e.stat_type === 'FT') pts += 1
+    if (e.stat_type === '2M')  pts += 2
+    else if (e.stat_type === '3M')  pts += 3
+    else if (e.stat_type === 'FTM') pts += 1
   }
   return pts
+}
+
+function calcReb(entries: StatEntry[]): number {
+  return entries.filter(e => e.stat_type === 'OREB' || e.stat_type === 'DREB').length
 }
 
 function countStat(entries: StatEntry[], stat: StatType): number {
@@ -342,7 +532,9 @@ function BoxScorePanel({
                     {BOX_COLS.map((col) => {
                       const val = col.key === 'pts_calc'
                         ? calcPts(playerEntries)
-                        : countStat(playerEntries, col.key as StatType)
+                        : col.key === 'reb_calc'
+                          ? calcReb(playerEntries)
+                          : countStat(playerEntries, col.key as StatType)
                       return (
                         <td key={col.key} className="text-center px-1 py-2">
                           <span className={val > 0 ? 'text-white/90 font-medium' : 'text-white/20'}>
@@ -391,7 +583,9 @@ function BoxScorePanel({
               {BOX_COLS.map((col) => {
                 const val = col.key === 'pts_calc'
                   ? calcPts(teamTotals)
-                  : countStat(teamTotals, col.key as StatType)
+                  : col.key === 'reb_calc'
+                    ? calcReb(teamTotals)
+                    : countStat(teamTotals, col.key as StatType)
                 return (
                   <td key={col.key} className="text-center px-1 py-2">
                     <span className={`font-semibold ${val > 0 ? 'text-white/70' : 'text-white/20'}`}>{val}</span>
