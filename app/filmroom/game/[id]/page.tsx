@@ -32,6 +32,47 @@ function msToDisplay(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const [saving, setSaving] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const commit = async () => {
+    if (draft.trim() === value) { setEditing(false); return }
+    setSaving(true)
+    await onSave(draft.trim())
+    setSaving(false)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        autoFocus
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false) } }}
+        className="font-medium bg-transparent border-b border-blue-500 outline-none text-sm text-white w-40 px-0.5"
+        disabled={saving}
+      />
+    )
+  }
+
+  return (
+    <button
+      onClick={() => { setDraft(value); setEditing(true) }}
+      className="font-medium truncate text-sm hover:text-blue-300 transition-colors flex items-center gap-1 group"
+      title="Tap to edit"
+    >
+      vs {value}
+      <span className="opacity-0 group-hover:opacity-60 text-[10px] text-white/40">(edit)</span>
+    </button>
+  )
+}
+
 function formatDuration(startMs: number, endMs: number): string {
   const dur = endMs - startMs
   const s = Math.floor(dur / 1000)
@@ -1612,7 +1653,13 @@ export default function GameFilmRoom() {
           <div className="flex items-center gap-1 text-sm min-w-0">
             <span className="text-white/40 shrink-0">Film Room</span>
             <span className="text-white/20 mx-1">/</span>
-            <span className="font-medium truncate">vs {game.opponent}</span>
+            <EditableTitle
+              value={game.opponent}
+              onSave={async (val) => {
+                await fetch(`/api/filmroom/games/${gameId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ opponent: val }) })
+                setGame(g => g ? { ...g, opponent: val } : g)
+              }}
+            />
             <span className="text-white/30 text-xs ml-2 shrink-0">
               {new Date(game.game_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </span>
@@ -1853,7 +1900,10 @@ export default function GameFilmRoom() {
             {statsFullscreen && (
               <div className="fixed inset-0 z-50 bg-[#0d0f12] flex flex-col">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
-                  <span className="font-semibold text-white">Box Score</span>
+                  <div>
+                    <p className="text-[11px] text-white/30 uppercase tracking-widest mb-0.5">Box Score</p>
+                    <p className="font-bold text-white text-lg">Varsity Boys <span className="text-white/30 font-normal">vs</span> {game.opponent}</p>
+                  </div>
                   <button
                     onClick={() => setStatsFullscreen(false)}
                     style={{ touchAction: 'manipulation' }}
