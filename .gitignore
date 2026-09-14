@@ -40,3 +40,21 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 scripts/legacy-export.json
+
+# Nested repos / sub-projects
+assistant-coach/
+chalk-app/
+deadass/
+fleet-app/
+claude/
+
+# Build artifacts
+njsbuilds/.next/
+
+# Large files
+restoreports-v2/.next/
+public/ChoreLock-portable.zip
+njsbuilds/scripts/legacy-export.json
+supabase/.temp/
+the-x/dist/
+*.hbc

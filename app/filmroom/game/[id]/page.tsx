@@ -929,17 +929,21 @@ async function pollStreamReady(videoId: string, maxWaitMs = 120_000): Promise<vo
 
 // ─── Video Player Component ───────────────────────────────────────────────────
 
-// Extract R2 key from a stored video_url (the raw R2 endpoint URL)
-// e.g. https://filmroom-videos.108ae2b237d537d16e57f93a1a13444f.r2.cloudflarestorage.com/games/...
-// or   https://108ae2b237d537d16e57f93a1a13444f.r2.cloudflarestorage.com/filmroom-videos/games/...
-function extractR2Key(url: string): string | null {
+// CDN base for R2 public bucket (Cloudflare r2.dev domain)
+const R2_CDN_BASE = 'https://pub-9fa275ba678642e488776c297174f037.r2.dev'
+
+// Convert a raw R2 S3 endpoint URL to the public CDN URL.
+// e.g. https://108ae2b....r2.cloudflarestorage.com/filmroom-videos/games/x/file.mp4
+//   -> https://pub-9fa2....r2.dev/games/x/file.mp4
+function r2ToCdnUrl(url: string): string | null {
   try {
     const u = new URL(url)
     if (!u.hostname.includes('r2.cloudflarestorage.com')) return null
-    // Virtual-hosted style: filmroom-videos.account.r2.cloudflarestorage.com/KEY
-    if (u.hostname.startsWith('filmroom-videos.')) return u.pathname.replace(/^\//, '')
-    // Path style: account.r2.cloudflarestorage.com/filmroom-videos/KEY
-    return u.pathname.replace(/^\/filmroom-videos\//, '')
+    // Virtual-hosted: filmroom-videos.account.r2.cloudflarestorage.com/KEY
+    const key = u.hostname.startsWith('filmroom-videos.')
+      ? u.pathname.replace(/^\//, '')
+      : u.pathname.replace(/^\/filmroom-videos\//, '')
+    return `${R2_CDN_BASE}/${key}`
   } catch { return null }
 }
 
@@ -966,16 +970,9 @@ function VideoPlayer({
       return
     }
     if (!videoUrl) return
-    // If it's a raw R2 endpoint URL, fetch a presigned playback URL
-    const key = extractR2Key(videoUrl)
-    if (key) {
-      fetch(`/api/filmroom/upload/multipart?action=sign-get&key=${encodeURIComponent(key)}`)
-        .then(r => r.json())
-        .then(d => { if (d.signedUrl) setResolvedSrc(d.signedUrl) })
-        .catch(() => setResolvedSrc(videoUrl)) // fallback to raw url
-    } else {
-      setResolvedSrc(videoUrl)
-    }
+    // Convert raw R2 S3 endpoint URLs to the public CDN URL — no signing needed
+    const cdnUrl = r2ToCdnUrl(videoUrl)
+    setResolvedSrc(cdnUrl ?? videoUrl)
   }, [videoUrl, videoId])
 
   if (!resolvedSrc) return null
@@ -988,9 +985,9 @@ function VideoPlayer({
       // but cap height so transport bar stays on screen without scrolling
       className={isFullscreen
         ? 'w-full h-full object-contain bg-black'
-        : 'w-full bg-black' // no aspect-video — height driven by max-h on parent
+        : 'w-full object-contain bg-black'
       }
-      style={isFullscreen ? undefined : { maxHeight: 'calc(100vh - 48px - 130px)', aspectRatio: '16/9' }}
+      style={isFullscreen ? undefined : { maxHeight: 'calc(100vh - 48px - 130px)' }}
       onTimeUpdate={(e) => onTimeUpdate(Math.round(e.currentTarget.currentTime * 1000))}
       onDurationChange={(e) => onDurationChange(Math.round(e.currentTarget.duration * 1000))}
       onLoadedMetadata={(e) => onDurationChange(Math.round(e.currentTarget.duration * 1000))}
@@ -1643,8 +1640,7 @@ export default function GameFilmRoom() {
   const videoLoaded = !!game.video_url
 
   return (
-    <div className="min-h-screen bg-[#0d0f12] flex flex-col" style={{ animation: 'fadeIn 0.6s ease-out' }}>
-      <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
+    <div className="min-h-screen bg-[#0d0f12] flex flex-col">
       {/* Top bar */}
       <header className="shrink-0 border-b border-white/8 bg-[#0d0f12]/95 backdrop-blur-xl sticky top-0 z-40">
         <div className="px-3 sm:px-4 h-12 flex items-center gap-3">

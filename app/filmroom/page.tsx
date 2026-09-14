@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Film, Plus, Users, Trophy, ChevronRight, Calendar, MapPin, Video, X, Loader2, Star } from 'lucide-react'
 import type { Game } from '@/types/filmroom'
 import { TEST_TEAM_ID } from '@/types/filmroom'
-import { TransitionOverlay } from './components/TransitionOverlay'
+// import { TransitionOverlay } from './components/TransitionOverlay'
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr + 'T12:00:00')
@@ -235,12 +235,9 @@ export default function FilmRoomHome() {
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [filter, setFilter] = useState<'all' | 'video' | 'no-video'>('all')
-  const [transitionGame, setTransitionGame] = useState<Game | null>(null)
-
   const handleSelectGame = useCallback((id: string) => {
-    const game = games.find(g => g.id === id) ?? null
-    setTransitionGame(game)
-  }, [games])
+    window.location.href = `/filmroom/game/${id}`
+  }, [])
 
   useEffect(() => {
     fetch(`/api/filmroom/games?team_id=${TEST_TEAM_ID}`)
@@ -402,13 +399,7 @@ export default function FilmRoomHome() {
 
       {showAdd && <AddGameModal onClose={() => setShowAdd(false)} onAdd={g => setGames(prev => [g, ...prev])} />}
 
-      {/* Cinematic transition overlay */}
-      {transitionGame && (
-        <TransitionOverlay
-          targetUrl={`/filmroom/game/${transitionGame.id}`}
-          onCancel={() => setTransitionGame(null)}
-        />
-      )}
+
     </div>
   )
 }

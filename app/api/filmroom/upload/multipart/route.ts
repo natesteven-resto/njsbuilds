@@ -78,7 +78,9 @@ export async function POST(req: NextRequest) {
         ContentType: contentType,
       })
       const res = await client.send(cmd)
-      const playbackUrl = `${R2_ENDPOINT}/${R2_BUCKET}/${key}`
+      // Use the public CDN URL — served via Cloudflare edge, no expiry
+      const CDN_BASE = process.env.CLOUDFLARE_R2_CDN_URL ?? `${R2_ENDPOINT}/${R2_BUCKET}`
+      const playbackUrl = `${CDN_BASE}/${key}`
       return NextResponse.json({ uploadId: res.UploadId, key, playbackUrl })
     }
 

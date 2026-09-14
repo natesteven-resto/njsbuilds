@@ -101,8 +101,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Try Cloudflare Stream first
-    if (ACCOUNT_ID && STREAM_TOKEN && !STREAM_TOKEN.startsWith('cfat_')) {
-      // cfat_ tokens are R2-only; Stream needs a standard CF API token
+    if (ACCOUNT_ID && STREAM_TOKEN) {
       try {
         const { uploadUrl, videoId } = await tryStreamUpload(filename, gameId)
         return NextResponse.json({ method: 'stream', uploadUrl, videoId })
@@ -134,7 +133,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'videoId required' }, { status: 400 })
   }
 
-  if (!ACCOUNT_ID || !STREAM_TOKEN || STREAM_TOKEN.startsWith('cfat_')) {
+  if (!ACCOUNT_ID || !STREAM_TOKEN) {
     return NextResponse.json({
       videoId,
       readyToStream: false,

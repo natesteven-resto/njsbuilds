@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY)
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,6 +28,7 @@ export async function POST(req: NextRequest) {
 
     const completedCount = Object.values(completedDrills as Record<string, boolean>).filter(Boolean).length
 
+    const resend = getResend()
     await resend.emails.send({
       from: 'Addison Training <transfers@restoreports.com>',
       to: 'staticclark@gmail.com',
