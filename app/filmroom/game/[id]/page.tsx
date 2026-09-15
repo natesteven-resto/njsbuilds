@@ -1246,60 +1246,60 @@ function TransportBar({
       </div>
 
       {/* Controls row */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Frame back */}
         <button onClick={() => onFrameStep(-1)}
-          className="p-1.5 text-white/50 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Previous frame (← arrow)">
+          className="p-3 min-w-11 min-h-11 text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Previous frame (← arrow)">
           <SkipBack className="w-3.5 h-3.5" />
         </button>
 
         {/* Skip -5s */}
         <button onClick={() => onSkip(-5000)}
-          className="px-2 py-1 text-xs text-white/50 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Back 5s (J)">
+          className="px-3 py-3 min-w-11 min-h-11 text-xs text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Back 5s (J)">
           -5s
         </button>
 
         {/* Play/Pause */}
         <button onClick={onPlayPause}
-          className="w-9 h-9 rounded-full flex items-center justify-center transition-colors" style={{background:"#c66a3e",color:"#181917"}} title="Play/Pause (Space)">
+          className="w-11 h-11 shrink-0 rounded-full flex items-center justify-center transition-colors" style={{background:"#c66a3e",color:"#181917"}} title="Play/Pause (Space)">
           {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
         </button>
 
         {/* Skip +5s */}
         <button onClick={() => onSkip(5000)}
-          className="px-2 py-1 text-xs text-white/50 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Forward 5s (L)">
+          className="px-3 py-3 min-w-11 min-h-11 text-xs text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Forward 5s (L)">
           +5s
         </button>
 
         {/* Frame fwd */}
         <button onClick={() => onFrameStep(1)}
-          className="p-1.5 text-white/50 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Next frame (→ arrow)">
+          className="p-3 min-w-11 min-h-11 text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Next frame (→ arrow)">
           <SkipForward className="w-3.5 h-3.5" />
         </button>
 
-        <div className="flex-1" />
+        <div className="hidden sm:block flex-1" />
 
         {/* Timecode */}
-        <span className="font-mono text-xs text-white/50 tabular-nums">
+        <span className="w-full sm:w-auto whitespace-nowrap font-mono text-xs text-white/65 tabular-nums">
           {msToTimecode(currentMs)} / {msToTimecode(durationMs)}
         </span>
 
         {/* Mark In / Out */}
-        <div className="flex items-center gap-1 ml-2">
+        <div className="flex w-full sm:w-auto items-center justify-between sm:justify-start gap-1 sm:ml-2">
           <button onClick={onMarkIn}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${markIn != null ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-white/40 hover:text-white hover:bg-white/6'}`}
+            className={`flex items-center gap-1 px-3 py-3 rounded-lg text-xs font-medium transition-all ${markIn != null ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-white/40 hover:text-white hover:bg-white/6'}`}
             title="Mark In point (I)">
             <Scissors className="w-3 h-3" /> IN
           </button>
           <button onClick={onMarkOut}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${markOut != null ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'text-white/40 hover:text-white hover:bg-white/6'}`}
+            className={`flex items-center gap-1 px-3 py-3 rounded-lg text-xs font-medium transition-all ${markOut != null ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'text-white/40 hover:text-white hover:bg-white/6'}`}
             title="Mark Out point (O)">
             OUT <Scissors className="w-3 h-3" />
           </button>
           {onStatTap && (
             <button
               onClick={onStatTap}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg active:scale-95 text-xs font-semibold transition-all ml-1 border"
+              className="flex items-center gap-1.5 px-3 py-3 rounded-lg active:scale-95 text-xs font-semibold transition-all ml-1 border"
               style={{ touchAction: 'manipulation', background: '#c66a3e', color: '#181917', borderColor: 'rgba(198,106,62,0.5)' }}
             >
               <BarChart className="w-3 h-3" /> Tag Stat
@@ -1309,7 +1309,7 @@ function TransportBar({
       </div>
 
       {/* Keyboard shortcut hints */}
-      <div className="flex gap-3 text-[10px] text-white/50 border-t border-white/5 pt-2">
+      <div className="hidden md:flex flex-wrap gap-3 text-[10px] text-white/50 border-t border-white/5 pt-2">
         <span><kbd className="font-mono bg-white/8 px-1 rounded">Space</kbd> play/pause</span>
         <span><kbd className="font-mono bg-white/8 px-1 rounded">←</kbd><kbd className="font-mono bg-white/8 px-1 rounded">→</kbd> frame</span>
         <span><kbd className="font-mono bg-white/8 px-1 rounded">J</kbd><kbd className="font-mono bg-white/8 px-1 rounded">L</kbd> ±5s</span>
@@ -2139,7 +2139,7 @@ export default function GameFilmRoom() {
                 )}
 
                 {/* Jog wheel — appears when paused */}
-                <JogWheel
+                <div className="hidden sm:block"><JogWheel
                   visible={!isPlaying && durationMs > 0}
                   currentMs={currentMs}
                   onScrub={(deltaMs) => {
@@ -2151,7 +2151,7 @@ export default function GameFilmRoom() {
                     setCurrentMs(Math.round(next * 1000))
                   }}
                   onTap={playPause}
-                />
+                /></div>
 
                 {/* Fullscreen toggle */}
                 <button
