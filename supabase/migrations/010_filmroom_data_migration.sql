@@ -89,11 +89,19 @@ begin
    limit 1;
 
   if v_auto_coach_id is not null then
-    -- Signup ran first: an auto-provisioned coach exists linked to this user.
-    -- The legacy coach row cannot also get auth_user_id = v_user_id (unique constraint).
-    -- Resolution: leave legacy coach.auth_user_id NULL (it is still the owning coach
-    -- of the legacy team by team.coach_id FK), and proceed to assign owner_id on all rows.
-    raise notice 'Auto-provisioned coach % already linked to owner; legacy coach auth_user_id left NULL', v_auto_coach_id;
+    -- Signup ran first: provision_default_library created a new coach row already
+    -- linked to v_user_id. The legacy coach cannot also get auth_user_id = v_user_id
+    -- (unique constraint). Resolution:
+    --   1. Rebind legacy team.coach_id to the auto-provisioned coach (auth-linked).
+    --      This makes the legacy team pass teams_own WITH CHECK for the owner.
+    --   2. Leave legacy coach.auth_user_id NULL (orphaned but harmless; not referenced).
+    -- Do NOT delete any rows.
+    update public.teams
+       set coach_id = v_auto_coach_id
+     where id = v_team_id;
+
+    raise notice 'Rebound legacy team % coach_id from legacy coach % to auth-linked coach %',
+      v_team_id, v_coach_id, v_auto_coach_id;
   else
     -- Normal case or idempotent re-run: link legacy coach to owner
     update public.coaches
