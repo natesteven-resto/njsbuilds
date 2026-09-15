@@ -57,11 +57,16 @@ async function signInGetCookie(email: string, password: string): Promise<string>
       getAll: () => [...jar].map(([name, value]) => ({ name, value })),
       setAll: (cookies) => { for (const { name, value } of cookies) jar.set(name, value) },
     },
+    auth: { autoRefreshToken: false, persistSession: true },
   })
   const { error } = await client.auth.signInWithPassword({ email, password })
-  if (error) throw new Error('Test account sign-in failed')
-  return [...jar].map(([name, value]) => `${name}=${encodeURIComponent(value)}`).join('; ')
-
+  if (error) throw new Error(`Sign-in failed for ${email}: ${error.message}`)
+  if (jar.size === 0) throw new Error(`No session cookies set after sign-in for ${email} — cookie jar is empty`)
+  // Verify we got a real JWT, not a sentinel
+  const cookieStr = [...jar.entries()].map(([n, v]) => `${n}=${encodeURIComponent(v)}`).join('; ')
+  const hasJwt = [...jar.values()].some(v => v.startsWith('eyJ'))
+  if (!hasJwt) throw new Error(`Cookie jar does not contain a JWT — got: ${[...jar.keys()].join(', ')}`)
+  return cookieStr
 }
 
 async function apiAs(cookie: string, method: string, path: string, body?: unknown) {
