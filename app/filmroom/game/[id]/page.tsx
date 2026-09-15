@@ -527,7 +527,11 @@ function BoxScorePanel({
     totals[player.id] = statEntries.filter((e) => e.player_id === player.id)
   }
 
-  const teamTotals = statEntries
+  // Team totals: only named player events (player_id is non-null and not the synthetic OPP id).
+  // Null player_id means an opponent/untagged event — must NOT count toward the Team row.
+  const teamTotals = statEntries.filter(
+    e => e.player_id !== null && e.player_id !== OPP_ID
+  )
 
   return (
     <div className="space-y-2">
@@ -576,8 +580,9 @@ function BoxScorePanel({
                               <span className="font-bold text-blue-300 text-[11px] flex-1">{STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type}</span>
                               <button onClick={(e) => { e.stopPropagation(); onDeleteEntry(entry.id) }}
                                 style={{ touchAction: 'manipulation' }}
+                                aria-label={`Delete ${STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type} entry`}
                                 className="p-1 rounded text-white/20 hover:text-red-400 shrink-0">
-                                <X className="w-3 h-3" />
+                                <X className="w-3 h-3" aria-hidden />
                               </button>
                             </button>
                           ))}
@@ -599,7 +604,8 @@ function BoxScorePanel({
 
             {/* Opponent totals row */}
             {(() => {
-              const oppEntries = statEntries.filter(e => e.player_id === null || (e as StatEntry & { player_id: string | null }).player_id === '__opp__')
+              // OPP entries: player_id is null in DB (opponent events) or synthetic OPP_ID in memory
+              const oppEntries = statEntries.filter(e => e.player_id === null || e.player_id === OPP_ID)
               if (oppEntries.length === 0) return null
               const oppBox = calcBoxRow(oppEntries)
               return (
@@ -1473,8 +1479,8 @@ function ClipItem({
           <button
             onClick={(e) => { e.stopPropagation(); onJumpTo(clip.start_time_ms) }}
             className="shrink-0 mt-0.5 w-6 h-6 rounded-lg bg-white/8 hover:bg-blue-500/30 flex items-center justify-center transition-colors"
-            title="Jump to clip">
-            <Play className="w-2.5 h-2.5 ml-0.5" />
+            aria-label={`Jump to clip: ${clip.title}`}>
+            <Play className="w-2.5 h-2.5 ml-0.5" aria-hidden />
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1504,12 +1510,15 @@ function ClipItem({
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={(e) => { e.stopPropagation(); setShowComments(s => !s) }}
+              aria-label={showComments ? 'Hide comments' : 'Show comments'}
+              aria-expanded={showComments}
               className="p-1 rounded-lg text-white/30 hover:text-white/70 hover:bg-white/6 transition-all">
-              <MessageSquare className="w-3 h-3" />
+              <MessageSquare className="w-3 h-3" aria-hidden />
             </button>
             <button onClick={(e) => { e.stopPropagation(); onDelete(clip.id) }}
+              aria-label={`Delete clip: ${clip.title}`}
               className="p-1 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all">
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-3 h-3" aria-hidden />
             </button>
           </div>
         </div>
