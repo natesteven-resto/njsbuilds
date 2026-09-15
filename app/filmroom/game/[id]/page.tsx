@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   Play, Pause, SkipBack, SkipForward, ChevronLeft,
@@ -1577,11 +1577,14 @@ export default function GameFilmRoom() {
   const params = useParams()
   const gameId = params.id as string
 
+  const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const [game, setGame] = useState<Game | null>(null)
   const [clips, setClips] = useState<Clip[]>([])
   const [players, setPlayers] = useState<Player[]>([])
   const [loading, setLoading] = useState(true)
+  const [gameError, setGameError] = useState<'not_found' | 'error' | null>(null)
+  const [retryKey, setRetryKey] = useState(0)
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentMs, setCurrentMs] = useState(0)
@@ -1606,21 +1609,62 @@ export default function GameFilmRoom() {
 
   // Load data
   useEffect(() => {
-    Promise.all([
-      fetch(`/api/filmroom/games/${gameId}`).then(r => r.json()),
-      fetch(`/api/filmroom/clips?game_id=${gameId}`).then(r => r.json()),
-      fetch(`/api/filmroom/players`).then(r => r.ok ? r.json() : []),
-      fetch(`/api/filmroom/stat-entries?game_id=${gameId}`).then(r => r.json()),
-    ]).then(([g, c, p, se]) => {
-      setGame(g)
-      setClips(Array.isArray(c) ? c : [])
-      setPlayers(Array.isArray(p) ? p : [])
-      if (Array.isArray(se)) {
-        setStatEntries(se.map((raw: RawStatEntry) => rawToEntry(raw)))
+    // Reset state for new game/retry so stale data never renders
+    setGame(null)
+    setClips([])
+    setPlayers([])
+    setStatEntries([])
+    setLoading(true)
+    setGameError(null)
+
+    const controller = new AbortController()
+    const { signal } = controller
+
+    async function loadGame() {
+      try {
+        const gameRes = await fetch(`/api/filmroom/games/${gameId}`, { signal })
+        if (gameRes.status === 401) {
+          if (!signal.aborted) router.replace('/filmroom/login')
+          return
+        }
+        if (gameRes.status === 403 || gameRes.status === 404) {
+          if (!signal.aborted) { setGameError('not_found'); setLoading(false) }
+          return
+        }
+        if (!gameRes.ok) {
+          if (!signal.aborted) { setGameError('error'); setLoading(false) }
+          return
+        }
+        const g = await gameRes.json()
+        // Guard: if response JSON is not a valid game object (e.g. error body used as game)
+        if (!g || typeof g !== 'object' || !g.id) {
+          if (!signal.aborted) { setGameError('error'); setLoading(false) }
+          return
+        }
+
+        const [c, p, se] = await Promise.all([
+          fetch(`/api/filmroom/clips?game_id=${gameId}`, { signal }).then(r => r.ok ? r.json() : []),
+          fetch(`/api/filmroom/players`, { signal }).then(r => r.ok ? r.json() : []),
+          fetch(`/api/filmroom/stat-entries?game_id=${gameId}`, { signal }).then(r => r.ok ? r.json() : []),
+        ])
+
+        if (signal.aborted) return
+        setGame(g)
+        setClips(Array.isArray(c) ? c : [])
+        setPlayers(Array.isArray(p) ? p : [])
+        if (Array.isArray(se)) {
+          setStatEntries(se.map((raw: RawStatEntry) => rawToEntry(raw)))
+        }
+        setLoading(false)
+      } catch (err) {
+        if (signal.aborted) return // normal cleanup, not an error
+        setGameError('error')
+        setLoading(false)
       }
-      setLoading(false)
-    })
-  }, [gameId])
+    }
+    loadGame()
+    return () => controller.abort()
+  }, [gameId, router, retryKey])
 
   // Video controls
   const playPause = useCallback(() => {
@@ -1750,9 +1794,54 @@ export default function GameFilmRoom() {
     </div>
   )
 
+  // 'unauthorized' variant removed — 401 redirects immediately in the effect
+  if (gameError === 'not_found') return (
+    <div className="min-h-screen bg-[#0d0f12] flex flex-col items-center justify-center gap-4 text-center px-6">
+      <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-1">
+        <AlertCircle className="w-6 h-6 text-white/30" />
+      </div>
+      <div>
+        <p className="text-white/70 font-medium">Game unavailable</p>
+        <p className="text-sm text-white/35 mt-1">This game doesn&apos;t exist or you don&apos;t have access to it.</p>
+      </div>
+      <Link
+        href="/filmroom"
+        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/8 hover:bg-white/12 text-sm text-white/70 hover:text-white transition-colors border border-white/10"
+      >
+        <ChevronLeft className="w-4 h-4" /> Back to library
+      </Link>
+    </div>
+  )
+
+  if (gameError === 'error') return (
+    <div className="min-h-screen bg-[#0d0f12] flex flex-col items-center justify-center gap-4 text-center px-6">
+      <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-1">
+        <AlertCircle className="w-6 h-6 text-red-400/60" />
+      </div>
+      <div>
+        <p className="text-white/70 font-medium">Something went wrong</p>
+        <p className="text-sm text-white/35 mt-1">Failed to load game data. Check your connection and try again.</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Link
+          href="/filmroom"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/8 hover:bg-white/12 text-sm text-white/70 hover:text-white transition-colors border border-white/10"
+        >
+          <ChevronLeft className="w-4 h-4" /> Back to library
+        </Link>
+        <button
+          onClick={() => { setGameError(null); setLoading(true); setRetryKey(k => k + 1) }}
+          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    </div>
+  )
+
   if (!game) return (
     <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center text-white/40">
-      Game not found.
+      <Loader2 className="w-6 h-6 animate-spin text-white/30" />
     </div>
   )
 
