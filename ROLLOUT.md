@@ -28,16 +28,55 @@ Branch: `filmroom-auth` | Worktree: `/Users/natesteven/.openclaw/filmroom-auth`
 
 ---
 
-## External Setup Required
+## Verified Supabase Project State (read from dashboard 2026-09-14)
 
-### 1. Supabase Auth settings (dashboard only — cannot be set via API)
-- Authentication → Settings → **Email provider**: must be enabled
-- **Site URL**: set to `https://www.njsbuilds.com`
-- **Redirect URLs**: add `https://www.njsbuilds.com/filmroom/auth/callback`
-- **SMTP**: Supabase free plan limits to 4 emails/hour. For password reset to work reliably in production, configure custom SMTP (Resend, SendGrid, etc.) under Authentication → Settings → SMTP.
+**Project:** `suhfyckmuenjskitrzlq` ("Rebuild")  
+**SHARED with RestoReports** — 91 existing auth users from a different application.  
+**Site URL:** `https://app.restoreports.com` (RestoReports — do NOT change)  
+**Redirect allowlist:** only `https://restoreports-v2.vercel.app/**` and `https://app.restoreports.com/**`  
+**Email:** built-in sender only, no custom SMTP, **2 emails/hour** rate limit (not 4)  
+**Email provider:** enabled (`external.email = true`)  
+**Signup:** enabled (`disable_signup = false`)  
+**Email confirmation:** required (`mailer_autoconfirm = false`)  
 
-### 2. No new Vercel env vars needed
-All required variables are already present. Do not add the Cloudflare API token or R2 secret as plaintext in config — use the existing Vercel secret references.
+## ⚠️ Blocking Decision Required Before Any Deployment
+
+The Supabase project is shared between Film Room and RestoReports. This creates two options — **Nate must choose before proceeding**:
+
+**Option A: Separate Film Room onto its own Supabase project (recommended)**
+- Create a new free Supabase project for Film Room
+- Film Room gets its own Site URL, redirect allowlist, SMTP, user pool
+- RestoReports is untouched
+- Cost: free tier, no new paid resources
+- Requires: update `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` in Vercel for Film Room routes only
+- Migration 009–012 run on the new project
+- natesteven@gmail.com signs up fresh on the new project (already confirmed on old project, not portable)
+
+**Option B: Stay on shared project**
+- Film Room users join the same auth pool as RestoReports
+- Site URL cannot change (would break RestoReports email links)
+- Redirect allowlist needs `/filmroom/auth/callback` added (safe — additive, doesn’t affect RestoReports)
+- Email confirmation links use `app.restoreports.com` as sender domain
+- 2/hr email rate limit shared across both apps
+- natesteven@gmail.com already exists and confirmed — migration 010 can run immediately once code is deployed
+- Password reset emails will show RestoReports branding unless SMTP is configured
+
+**Neither option requires changing global Supabase settings that would break RestoReports.**  
+**Do not deploy code or run migrations until this decision is made.**
+
+## External Setup (Option B — shared project, minimal changes)
+
+### 1. Add redirect URL (additive, does not affect RestoReports)
+In Supabase → Authentication → URL Configuration, add to redirect allowlist:
+```
+https://www.njsbuilds.com/filmroom/auth/callback
+```
+
+### 2. SMTP (optional but strongly recommended)
+Built-in email: 2/hr limit, team address sender. Without custom SMTP, password reset and email confirmation will fail silently under any real load. Configure via Authentication → SMTP Settings using Resend, SendGrid, or Postmark.
+
+### 3. No new Vercel env vars needed (for Option B)
+All required variables are already present and working.
 
 ---
 
@@ -127,3 +166,15 @@ After disabling: `pub-9fa275ba678642e488776c297174f037.r2.dev` URLs return 403. 
 5. **3 duplicate 9GB video objects in R2**: `games/e2f0285d-...`, `games/f18b6f3a-...`, `games/f8e36052-...` all contain the same video (identical ETag on the 8.7GB ones). Only one is referenced by the game record. The others can be deleted manually via Cloudflare dashboard after launch to reclaim storage.
 
 6. **`coaches` table**: after migration 010, the legacy `TEST_COACH_ID` row will have `auth_user_id = natesteven@gmail.com's uid`. The `provision_default_library` RPC checks for an existing coach by `auth_user_id` first — it will find and reuse this row rather than creating a duplicate. This is the correct behavior.
+
+---
+
+## Verified Facts (updated 2026-09-14 from dashboard)
+
+- Supabase project `suhfyckmuenjskitrzlq` is **shared with RestoReports** (91 existing users)
+- Site URL: `https://app.restoreports.com` — **do not change**, would break RestoReports
+- Redirect allowlist: `https://restoreports-v2.vercel.app/**` and `https://app.restoreports.com/**` only — `/filmroom/auth/callback` is **missing**, must be added before PKCE works
+- Email: **built-in sender only**, **2/hour** hard limit (official Supabase docs, not 4), team address only — no custom SMTP configured
+- No Film Room staging Supabase project exists — second project (`uepvtwsfcvvsviyckbje`) is Hoop Pilot, unrelated
+- `natesteven@gmail.com` already confirmed in this project — do **not** sign up again, sign in directly after migration 010
+- Corrected SMTP limit from ROLLOUT item 1: **2/hr**, not 4/hr
