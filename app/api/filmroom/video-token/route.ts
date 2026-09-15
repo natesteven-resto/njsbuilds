@@ -67,13 +67,14 @@ export async function GET(request: NextRequest) {
     if (game.owner_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     if (!game.video_url) return NextResponse.json({ error: 'No video attached to this game' }, { status: 404 })
 
-    // Cloudflare Stream — return HLS URL directly (Stream CDN handles delivery)
+    // Cloudflare Stream URLs: we do NOT return raw permanent manifest URLs.
+    // Stream requires signed playback tokens (requireSignedURLs) to be private.
+    // Until signed Stream tokens are implemented, fail closed rather than
+    // returning an unsigned URL that exposes the video to anyone with the link.
     if (isStreamUrl(game.video_url)) {
       return NextResponse.json({
-        type: 'stream',
-        src: game.video_url,
-        expiresInSeconds: null, // Stream manifests don't expire
-      })
+        error: 'Stream video delivery not yet configured for private playback. Re-upload via R2.',
+      }, { status: 501 })
     }
 
     // R2 — generate short-lived presigned GET URL
