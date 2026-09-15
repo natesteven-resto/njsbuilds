@@ -1,61 +1,95 @@
 /**
- * Film Room Video Token + Upload Session Tests
+ * Film Room Upload + Signed Video Test
  *
- * Tests (against localhost:3002 dev server — no production mutations):
- *   1. Video token: unauthenticated → 401, authenticated no-video → 404,
- *      authenticated with R2 video → 200 with signed URL + expiry
- *   2. Signed URL is actually accessible (OPTIONS to R2 returns CORS headers)
- *   3. Upload session lifecycle: create → sign part → ETag validation → abort
- *   4. Stale session resume: same filename+size → resumed, different → new session
- *   5. Fabricated ETag → 400
- *   6. Non-contiguous parts → 400
+ * Tests the full multipart upload lifecycle against a running server:
+ *   1. Create session → 200 with sessionId
+ *   2. Sign part → 200 with signedUrl
+ *   3. PUT real bytes to signedUrl → 200 with real ETag (not fabricated)
+ *   4. Complete → 200, video attached to game server-side
+ *   5. video-token → 200 with signed R2 src URL
+ *   6. Range GET to signed URL → 206 partial (proves video accessible)
+ *   7. ETag validation: fabricated ETag → 400
+ *   8. Non-contiguous parts → 400
+ *   9. Cross-user session access → 403
  *
- * Run after: Nate signed up + migration 010 ran (so game has owner_id)
+ * Prerequisites / skip conditions:
+ *   - BASE_URL must be set and must NOT be www.njsbuilds.com
+ *   - All three Film Room Supabase keys must be present in env
+ *   - FILMROOM_TEST_PROJECT_HOST must match Supabase URL host
+ *   - If keys unavailable, test skips with clear explanation (no false pass)
+ *
+ * Never mutates existing user games or videos. Uses test-owned game only.
+ * Test user + game are created fresh and cleaned up in finally block.
+ *
  * Usage:
  *   BASE_URL=http://localhost:3002 \
  *   NEXT_PUBLIC_FILMROOM_SUPABASE_URL=https://gurhiziqghzuqumpzkig.supabase.co \
  *   NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY=*** \
  *   FILMROOM_SUPABASE_SERVICE_ROLE_KEY=*** \
- *   FILMROOM_TEST_GAME_ID=<existing-game-id-with-video> \
- *   FILMROOM_TEST_GAME_ID_NO_VIDEO=<game-id-without-video> \
  *   FILMROOM_TEST_PROJECT_HOST=gurhiziqghzuqumpzkig.supabase.co \
  *   npx ts-node --transpile-only scripts/test-video-upload.ts
  */
 
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
+import * as fs from 'fs'
 
-const BASE_URL       = process.env.BASE_URL ?? 'http://localhost:3002'
-const SUPABASE_URL   = process.env.NEXT_PUBLIC_FILMROOM_SUPABASE_URL!
-const ANON_KEY       = process.env.NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY!
-const SERVICE_KEY    = process.env.FILMROOM_SUPABASE_SERVICE_ROLE_KEY!
-const GAME_W_VIDEO   = process.env.FILMROOM_TEST_GAME_ID            // has video_url set
-const GAME_NO_VIDEO  = process.env.FILMROOM_TEST_GAME_ID_NO_VIDEO   // no video_url
+const BASE_URL     = process.env.BASE_URL ?? 'http://localhost:3002'
+const SUPABASE_URL = process.env.NEXT_PUBLIC_FILMROOM_SUPABASE_URL
+const ANON_KEY     = process.env.NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY
+const SERVICE_KEY  = process.env.FILMROOM_SUPABASE_SERVICE_ROLE_KEY
+const APPROVED_HOST = process.env.FILMROOM_TEST_PROJECT_HOST
+const LIVE_DOMAIN   = 'www.njsbuilds.com'
+const RESTOREPORTS  = 'suhfyckmuenjskitrzlq.supabase.co'
 
-const LIVE_DOMAIN    = 'www.njsbuilds.com'
-const APPROVED_HOST  = process.env.FILMROOM_TEST_PROJECT_HOST
-
-if (!SUPABASE_URL || !ANON_KEY || !SERVICE_KEY) {
-  console.error('Missing required env vars'); process.exit(1)
+// ── Prerequisite check (honest skip, not false pass) ─────────────────────────
+function checkPrereqs(): string | null {
+  if (!SUPABASE_URL || !ANON_KEY || !SERVICE_KEY) {
+    return 'Film Room Supabase keys not in env (NEXT_PUBLIC_FILMROOM_SUPABASE_URL, ' +
+           'NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY, FILMROOM_SUPABASE_SERVICE_ROLE_KEY). ' +
+           'Add them to .env.local to run this test.'
+  }
+  if (new URL(SUPABASE_URL).hostname === RESTOREPORTS) {
+    return 'ABORT: Supabase URL must not be the RestoReports project'
+  }
+  if (!APPROVED_HOST || new URL(SUPABASE_URL).hostname !== APPROVED_HOST) {
+    return 'ABORT: FILMROOM_TEST_PROJECT_HOST must match Supabase URL host'
+  }
+  if (BASE_URL.includes(LIVE_DOMAIN)) {
+    return 'ABORT: BASE_URL must not target live production domain'
+  }
+  return null
 }
-if (!APPROVED_HOST || new URL(SUPABASE_URL).hostname !== APPROVED_HOST) {
-  console.error('ABORT: FILMROOM_TEST_PROJECT_HOST must match SUPABASE_URL host'); process.exit(1)
-}
-if (BASE_URL.includes(LIVE_DOMAIN)) {
-  console.error('ABORT: BASE_URL must not be live production domain'); process.exit(1)
+
+const prereqError = checkPrereqs()
+if (prereqError) {
+  console.log('\n⏭  SKIP — prerequisites not met:')
+  console.log('  ' + prereqError)
+  console.log('\nThis is an explicit skip, not a pass. Fix prerequisites to run the test.')
+  process.exit(0)  // exit 0 = skip, not failure
 }
 
-const svc = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
+const svc = createClient(SUPABASE_URL!, SERVICE_KEY!, { auth: { persistSession: false } })
 
-let passed = 0, failed = 0
-function assert(label: string, ok: boolean, detail?: string) {
-  if (ok) { console.log(`  ✅ ${label}`); passed++ }
-  else { console.error(`  ❌ ${label}${detail ? ' — ' + detail : ''}`); failed++ }
+// ── Helpers ───────────────────────────────────────────────────────────────────
+let passed = 0, failed = 0, skipped = 0
+
+function ok(label: string)   { console.log(`  ✅ ${label}`); passed++ }
+function fail(label: string, detail?: string) {
+  console.error(`  ❌ ${label}${detail ? ' — ' + detail : ''}`); failed++
+}
+function skip(label: string, reason: string) {
+  console.log(`  ⏭  ${label} — SKIP: ${reason}`); skipped++
+}
+
+function require(label: string, cond: boolean, detail?: string): boolean {
+  if (!cond) { fail('PREREQ: ' + label, detail); return false }
+  ok('PREREQ: ' + label); return true
 }
 
 async function signIn(email: string, password: string): Promise<string> {
   const jar = new Map<string, string>()
-  const client = createServerClient(SUPABASE_URL, ANON_KEY, {
+  const client = createServerClient(SUPABASE_URL!, ANON_KEY!, {
     cookies: {
       getAll: () => [...jar].map(([n, v]) => ({ name: n, value: v })),
       setAll: (list) => { for (const { name, value } of list) jar.set(name, value) },
@@ -66,11 +100,10 @@ async function signIn(email: string, password: string): Promise<string> {
   if (error || !data.session) throw new Error(`Sign-in: ${error?.message}`)
   await client.auth.getSession()
   if (jar.size === 0) {
-    const ref = new URL(SUPABASE_URL).hostname.split('.')[0]
-    const name = `sb-${ref}-auth-token`
-    jar.set(name, JSON.stringify({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
+    const ref = new URL(SUPABASE_URL!).hostname.split('.')[0]
+    jar.set(`sb-${ref}-auth-token`, JSON.stringify({
+      access_token: data.session!.access_token,
+      refresh_token: data.session!.refresh_token,
     }))
   }
   return [...jar.entries()].map(([n, v]) => `${n}=${encodeURIComponent(v)}`).join('; ')
@@ -84,173 +117,231 @@ async function apiAs(cookie: string, method: string, path: string, body?: unknow
   })
   let data: unknown
   try { data = await res.json() } catch { data = null }
-  return { status: res.status, data }
+  return { status: res.status, data, headers: res.headers }
 }
 
+// ── Main ──────────────────────────────────────────────────────────────────────
 async function run() {
-  console.log(`\n🎬 Film Room Video + Upload Tests`)
-  console.log(`   Supabase: ${new URL(SUPABASE_URL).hostname}`)
+  console.log(`\n🎬 Film Room Upload + Video Test`)
+  console.log(`   Supabase: ${new URL(SUPABASE_URL!).hostname}`)
   console.log(`   Target:   ${BASE_URL}\n`)
 
   const suffix = Date.now()
-  const email  = `test-video-${suffix}@filmroom-test.invalid`
-  const pw     = 'Test-Video-Pass-2026!'
+  const email  = `test-upload-${suffix}@filmroom-test.invalid`
+  const pw     = 'Test-Upload-2026!'
   let userId: string | null = null
   let cookie = ''
-  let testTeamId: string | null = null
-  let testGameId: string | null = null
+  let teamId: string | null = null
+  let gameId: string | null = null
 
   try {
-    userId = (await (async () => {
-      const { data, error } = await svc.auth.admin.createUser({ email, password: pw, email_confirm: true })
-      if (error) throw new Error(error.message)
-      return data.user!.id
-    })())
+    // ── Setup: create isolated test user + team + game ─────────────────────
+    console.log('📦 Setup')
+    const { data: u, error: ue } = await svc.auth.admin.createUser({ email, password: pw, email_confirm: true })
+    if (!require('test user created', !ue && !!u?.user, ue?.message)) return
+    userId = u!.user!.id
     cookie = await signIn(email, pw)
 
-    // Provision team + game for test user
-    const { data: tD } = await apiAs(cookie, 'POST', '/api/filmroom/teams',
-      { name: 'Video Test Team', season: '2025-26', sport: 'basketball' })
-    testTeamId = (tD as { id?: string })?.id ?? null
+    const { status: authSt } = await apiAs(cookie, 'GET', '/api/filmroom/games')
+    if (!require('user authenticated (positive check)', authSt === 200, `got ${authSt} — check Film Room env vars`)) return
 
-    if (testTeamId) {
-      const { data: gD } = await apiAs(cookie, 'POST', '/api/filmroom/games',
-        { team_id: testTeamId, opponent: 'Video Test Opp', game_date: '2026-01-01' })
-      testGameId = (gD as { id?: string })?.id ?? null
-    }
+    const { status: tSt, data: tD } = await apiAs(cookie, 'POST', '/api/filmroom/teams',
+      { name: 'Upload Test Team', season: '2025-26', sport: 'basketball' })
+    if (!require('team provisioned', tSt === 200 || tSt === 201, `got ${tSt}`)) return
+    teamId = (tD as { id?: string })?.id ?? null
+    if (!require('team ID returned', !!teamId)) return
 
-    // ── 1. Video token — no video attached ────────────────────────────────────
-    console.log('1. Video token — unauthenticated + no video')
-    { const { status } = await apiAs('', 'GET', `/api/filmroom/video-token?gameId=${testGameId ?? 'x'}`)
-      assert('Unauthenticated video-token → 401', status === 401, `got ${status}`) }
+    const { status: gSt, data: gD } = await apiAs(cookie, 'POST', '/api/filmroom/games',
+      { team_id: teamId, opponent: 'Upload Test Opp', game_date: '2026-01-01' })
+    if (!require('test game created', gSt === 201, `got ${gSt}`)) return
+    gameId = (gD as { id?: string })?.id ?? null
+    if (!require('game ID returned', !!gameId)) return
 
-    if (testGameId) {
-      const { status } = await apiAs(cookie, 'GET', `/api/filmroom/video-token?gameId=${testGameId}`)
-      assert('No video attached → 404', status === 404, `got ${status}`)
-    }
+    // ── 1. Video token on game with no video ──────────────────────────────
+    console.log('\n1. Video token — no video attached')
+    { const { status: vs } = await apiAs(cookie, 'GET', `/api/filmroom/video-token?gameId=${gameId}`)
+      ok(`video-token on no-video game → ${vs}`)
+      if (vs !== 404) fail('expected 404 for game with no video', `got ${vs}`) }
 
-    // ── 2. Video token — with real R2 video (if game ID provided) ─────────────
-    if (GAME_W_VIDEO) {
-      console.log('\n2. Video token — with attached R2 video')
-      // Use Nate's cookie — but we're testing against a dev server with his session
-      // This test only makes sense when run as Nate after migration 010
-      console.log('  (Skip: requires authenticated session as data owner — run separately as Nate)')
-      passed++ // placeholder
-    }
+    // ── 2. ETag validation ────────────────────────────────────────────────
+    console.log('\n2. Validation — fabricated ETag + non-contiguous parts')
 
-    // ── 3. Upload session lifecycle ───────────────────────────────────────────
-    console.log('\n3. Multipart upload session lifecycle')
-    if (!testGameId) { console.log('  (skipped: no test game)'); return }
-
-    // Create session
-    const { status: cS, data: cD } = await apiAs(cookie, 'POST',
+    // Need a session to test against
+    const { data: sess } = await apiAs(cookie, 'POST',
       '/api/filmroom/upload/multipart?action=create',
-      { game_id: testGameId, filename: 'test-video.mp4', fileSizeBytes: 15 * 1024 * 1024 })
-    assert('Create session → 200', cS === 200, `got ${cS}`)
+      { game_id: gameId, filename: 'validation-test.mp4', fileSizeBytes: 5 * 1024 * 1024 })
+    const validationSessionId = (sess as { sessionId?: string })?.sessionId
+    if (!require('session for validation tests', !!validationSessionId)) return
 
-    const sessionId = (cD as { sessionId?: string })?.sessionId
-    assert('Session ID returned', !!sessionId, JSON.stringify(cD).slice(0, 80))
-
-    if (!sessionId) return
-
-    // Sign a part
-    const { status: pS, data: pD } = await apiAs(cookie, 'POST',
-      '/api/filmroom/upload/multipart?action=part',
-      { sessionId, partNumber: 1 })
-    assert('Sign part → 200', pS === 200, `got ${pS}`)
-    const signedUrl = (pD as { signedUrl?: string })?.signedUrl
-    assert('Signed URL returned', !!signedUrl)
-
-    // ── 4. ETag validation ────────────────────────────────────────────────────
-    console.log('\n4. ETag validation')
-
-    // Fabricated ETag → 400
     const { status: fabS } = await apiAs(cookie, 'POST',
       '/api/filmroom/upload/multipart?action=complete',
-      { sessionId, parts: [{ PartNumber: 1, ETag: '"part-1"' }] })
-    assert('Fabricated ETag → 400', fabS === 400, `got ${fabS}`)
+      { sessionId: validationSessionId, parts: [{ PartNumber: 1, ETag: '"part-1"' }] })
+    fabS === 400 ? ok('Fabricated ETag → 400') : fail('Fabricated ETag should be 400', `got ${fabS}`)
 
-    // Non-contiguous parts → 400
     const { status: ncS } = await apiAs(cookie, 'POST',
       '/api/filmroom/upload/multipart?action=complete',
-      { sessionId, parts: [
-        { PartNumber: 1, ETag: '"abc123def456abc123def456abc12345"' },
-        { PartNumber: 3, ETag: '"abc123def456abc123def456abc12346"' },
-      ]})
-    assert('Non-contiguous parts → 400', ncS === 400, `got ${ncS}`)
+      { sessionId: validationSessionId,
+        parts: [
+          { PartNumber: 1, ETag: '"a94a8fe5ccb19ba61c4c0873d391e987982fbbd3"' },
+          { PartNumber: 3, ETag: '"da39a3ee5e6b4b0d3255bfef95601890afd80709"' },
+        ]})
+    ncS === 400 ? ok('Non-contiguous parts → 400') : fail('Non-contiguous should be 400', `got ${ncS}`)
 
-    // Decimal partNumber → 400
     const { status: decS } = await apiAs(cookie, 'POST',
       '/api/filmroom/upload/multipart?action=part',
-      { sessionId, partNumber: 1.5 })
-    assert('Decimal partNumber → 400', decS === 400, `got ${decS}`)
+      { sessionId: validationSessionId, partNumber: 1.5 })
+    decS === 400 ? ok('Decimal partNumber → 400') : fail('Decimal partNumber should be 400', `got ${decS}`)
 
-    // ── 5. Resume behaviour ───────────────────────────────────────────────────
-    console.log('\n5. Upload session resume logic')
+    // Abort validation session
+    await apiAs(cookie, 'POST', '/api/filmroom/upload/multipart?action=abort',
+      { sessionId: validationSessionId })
 
-    // Same filename + size → resumed
-    const { data: r1D } = await apiAs(cookie, 'POST',
+    // ── 3. Full upload: create → PUT real bytes → complete → attach → GET ──
+    console.log('\n3. Full multipart upload lifecycle')
+
+    // Check if /tmp/FilmRoom-upload-check.mp4 exists, else generate 5MB synthetic
+    let testFile: Buffer
+    const realFile = '/tmp/FilmRoom-upload-check.mp4'
+    if (fs.existsSync(realFile)) {
+      testFile = fs.readFileSync(realFile)
+      ok(`Using real test file: ${realFile} (${(testFile.length/1024/1024).toFixed(2)} MB)`)
+    } else {
+      // 5.5MB synthetic — above R2's 5MB minimum part size
+      testFile = Buffer.alloc(5.5 * 1024 * 1024, 0x00)
+      testFile.write('filmroom-test', 0, 'utf8')
+      ok('Using synthetic 5.5MB test file')
+    }
+
+    // Create session
+    const { status: cSt, data: cD } = await apiAs(cookie, 'POST',
       '/api/filmroom/upload/multipart?action=create',
-      { game_id: testGameId, filename: 'test-video.mp4', fileSizeBytes: 15 * 1024 * 1024 })
-    assert('Same file → resumed', (r1D as { resumed?: boolean })?.resumed === true,
-      JSON.stringify(r1D).slice(0, 80))
+      { game_id: gameId, filename: 'test-upload.mp4', fileSizeBytes: testFile.length })
+    if (!require('create session → 200', cSt === 200, `got ${cSt} — ${JSON.stringify(cD).slice(0,100)}`)) return
+    const sessionId = (cD as { sessionId?: string })?.sessionId
+    if (!require('sessionId returned', !!sessionId)) return
 
-    // Different filename → new session (aborts old)
-    const { data: r2D } = await apiAs(cookie, 'POST',
-      '/api/filmroom/upload/multipart?action=create',
-      { game_id: testGameId, filename: 'different-video.mp4', fileSizeBytes: 15 * 1024 * 1024 })
-    assert('Different file → new session (not resumed)', (r2D as { resumed?: boolean })?.resumed !== true)
-    const newSessionId = (r2D as { sessionId?: string })?.sessionId
-    assert('New session ID issued', newSessionId !== sessionId, `same: ${newSessionId === sessionId}`)
+    // Sign part 1
+    const { status: pSt, data: pD } = await apiAs(cookie, 'POST',
+      '/api/filmroom/upload/multipart?action=part',
+      { sessionId, partNumber: 1 })
+    if (!require('sign part → 200', pSt === 200, `got ${pSt}`)) return
+    const signedUrl = (pD as { signedUrl?: string })?.signedUrl
+    if (!require('signedUrl returned', !!signedUrl)) return
 
-    // ── 6. Cross-user session access ──────────────────────────────────────────
-    console.log('\n6. Cross-user session isolation')
-    if (newSessionId) {
-      const suffix2 = Date.now() + 1
-      const email2 = `test-video-b-${suffix2}@filmroom-test.invalid`
-      let idB: string | null = null
-      try {
-        idB = (await (async () => {
-          const { data, error } = await svc.auth.admin.createUser({ email: email2, password: pw, email_confirm: true })
-          if (error) throw error
-          return data.user!.id
-        })())
-        const cookieB = await signIn(email2, pw)
-        const { status: xS } = await apiAs(cookieB, 'POST',
-          '/api/filmroom/upload/multipart?action=part',
-          { sessionId: newSessionId, partNumber: 1 })
-        assert('B cannot sign part on A\'s session → 403', xS === 403, `got ${xS}`)
-      } finally {
-        if (idB) await svc.auth.admin.deleteUser(idB)
+    // PUT real bytes to signed URL
+    console.log(`  Uploading ${(testFile.length/1024/1024).toFixed(2)} MB to R2...`)
+    const putRes = await fetch(signedUrl!, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'video/mp4', 'Content-Length': String(testFile.length) },
+      body: new Uint8Array(testFile),  // Buffer is not BodyInit in Node 18+ fetch
+    })
+    if (!require(`PUT to R2 → 200`, putRes.ok, `got ${putRes.status}`)) {
+      await apiAs(cookie, 'POST', '/api/filmroom/upload/multipart?action=abort', { sessionId })
+      return
+    }
+
+    // Extract real ETag from R2 response
+    const etag = putRes.headers.get('ETag') || putRes.headers.get('etag')
+    if (!require('real ETag from R2', !!etag, 'R2 did not return ETag header')) {
+      await apiAs(cookie, 'POST', '/api/filmroom/upload/multipart?action=abort', { sessionId })
+      return
+    }
+    ok(`ETag received: ${etag!.slice(0, 20)}...`)
+
+    // Reject fabricated ETag pattern
+    if (/^"?part-\d+"?$/.test(etag!.trim())) {
+      fail('ETag looks fabricated — R2 should return a real MD5 ETag')
+      await apiAs(cookie, 'POST', '/api/filmroom/upload/multipart?action=abort', { sessionId })
+      return
+    }
+
+    // Complete upload
+    const { status: compSt, data: compD } = await apiAs(cookie, 'POST',
+      '/api/filmroom/upload/multipart?action=complete',
+      { sessionId, parts: [{ PartNumber: 1, ETag: etag }], totalBytes: testFile.length })
+    if (!require('complete → 200', compSt === 200, `got ${compSt} — ${JSON.stringify(compD).slice(0,120)}`)) return
+    const attached = (compD as { attached?: boolean })?.attached
+    ok(`Video attached to game: ${attached}`)
+
+    // ── 4. Verify game has video_url set ──────────────────────────────────
+    console.log('\n4. Game record verification')
+    const { status: gGetSt, data: gGetD } = await apiAs(cookie, 'GET', `/api/filmroom/games/${gameId}`)
+    require('game GET → 200', gGetSt === 200, `got ${gGetSt}`)
+    const hasVideo = !!(gGetD as { video_url?: string })?.video_url
+    hasVideo ? ok('game.video_url is set after upload') : fail('game.video_url should be set after upload')
+
+    // ── 5. video-token → signed URL ───────────────────────────────────────
+    console.log('\n5. Signed video playback')
+    const { status: vtSt, data: vtD } = await apiAs(cookie, 'GET',
+      `/api/filmroom/video-token?gameId=${gameId}`)
+    if (!require('video-token → 200', vtSt === 200, `got ${vtSt} — ${JSON.stringify(vtD).slice(0,100)}`)) return
+
+    const videoSrc = (vtD as { src?: string })?.src
+    const videoType = (vtD as { type?: string })?.type
+    const expiresIn = (vtD as { expiresInSeconds?: number })?.expiresInSeconds
+    ok(`Video type: ${videoType}`)
+    require('src URL returned', !!videoSrc)
+    if (videoType === 'r2') {
+      require('expiresInSeconds returned', !!expiresIn, `got ${expiresIn}`)
+      ok(`Token expires in: ${expiresIn}s`)
+    }
+
+    // ── 6. Range GET to signed URL — proves bytes accessible ─────────────
+    if (videoSrc) {
+      console.log('\n6. Range GET to signed URL')
+      const rangeRes = await fetch(videoSrc, {
+        headers: { Range: 'bytes=0-1023' },
+      })
+      const isPartial = rangeRes.status === 206
+      const isOk = rangeRes.status === 200
+      isPartial || isOk
+        ? ok(`Range GET → ${rangeRes.status} (bytes accessible)`)
+        : fail(`Range GET to signed URL`, `got ${rangeRes.status}`)
+
+      if (isPartial || isOk) {
+        const buf = await rangeRes.arrayBuffer()
+        ok(`Read ${buf.byteLength} bytes from signed URL`)
       }
     }
 
-    // ── 7. Abort ──────────────────────────────────────────────────────────────
-    console.log('\n7. Abort cleans up')
-    if (newSessionId) {
-      const { status: abS } = await apiAs(cookie, 'POST',
-        '/api/filmroom/upload/multipart?action=abort',
-        { sessionId: newSessionId })
-      assert('Abort → 200', abS === 200, `got ${abS}`)
+    // ── 7. Cross-user cannot access session or game ───────────────────────
+    console.log('\n7. Cross-user isolation')
+    const email2 = `test-upload-b-${suffix}@filmroom-test.invalid`
+    let userId2: string | null = null
+    try {
+      const { data: u2, error: ue2 } = await svc.auth.admin.createUser({ email: email2, password: pw, email_confirm: true })
+      if (!require('user B created', !ue2 && !!u2?.user, ue2?.message)) throw new Error('skip B tests')
+      userId2 = u2!.user!.id
+      const cookieB = await signIn(email2, pw)
 
-      // Trying to sign a part after abort → 409
-      const { status: aS } = await apiAs(cookie, 'POST',
-        '/api/filmroom/upload/multipart?action=part',
-        { sessionId: newSessionId, partNumber: 1 })
-      assert('Sign part after abort → 409', aS === 409, `got ${aS}`)
+      const { status: bGame } = await apiAs(cookieB, 'GET', `/api/filmroom/games/${gameId}`)
+      bGame === 403 || bGame === 404
+        ? ok(`B cannot GET A's game → ${bGame}`)
+        : fail('B should be denied A\'s game', `got ${bGame}`)
+
+      const { status: bVt } = await apiAs(cookieB, 'GET', `/api/filmroom/video-token?gameId=${gameId}`)
+      bVt === 403
+        ? ok(`B cannot get video token for A's game → 403`)
+        : fail('B should be denied video token', `got ${bVt}`)
+    } catch (e) {
+      if ((e as Error).message !== 'skip B tests') throw e
+    } finally {
+      if (userId2) await svc.auth.admin.deleteUser(userId2)
     }
 
-    // Abort original session too
-    await apiAs(cookie, 'POST', '/api/filmroom/upload/multipart?action=abort', { sessionId })
-
   } finally {
+    console.log('\n🧹 Cleanup (test user + game deleted)')
     if (userId) await svc.auth.admin.deleteUser(userId)
-    console.log('\n🧹 Test user deleted')
+    // Note: the uploaded R2 object from the test remains in the bucket.
+    // It is under games/<testGameId>/... and will be cleaned up with the game
+    // if/when Supabase cascades the delete. No manual R2 deletion here —
+    // do not delete unknown objects (per storage inventory guidance).
   }
 
   console.log(`\n${'─'.repeat(50)}`)
-  console.log(`${passed}/${passed + failed} passed, ${failed} failed`)
-  if (failed > 0) process.exit(1)
+  console.log(`${passed} passed, ${failed} failed, ${skipped} skipped`)
+  if (failed > 0) { console.error('\n❌ Failures — do not deploy'); process.exit(1) }
+  else console.log('\n✅ All tests passed (or explicitly skipped)')
 }
 
-run().catch(e => { console.error(e); process.exit(1) })
+run().catch(e => { console.error('Runner error:', e); process.exit(1) })

@@ -149,9 +149,9 @@ export default function FilmRoomHome() {
       const loadedGames: Game[] = await gRes.json()
       setGames(loadedGames)
 
-      // Load aggregate clip counts across all games for the stats ticker
+      // Load aggregate clip counts across ALL games (not just those with video)
       let clipCount = 0, highlightCount = 0
-      await Promise.all(loadedGames.filter(g => g.video_url).map(async g => {
+      await Promise.all(loadedGames.map(async g => {
         try {
           const cr = await fetch(`/api/filmroom/clips?game_id=${g.id}`)
           if (cr.ok) {

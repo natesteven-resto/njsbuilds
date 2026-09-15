@@ -658,7 +658,7 @@ function VideoUploadZone({
         body: JSON.stringify({
           filename: file.name,
           contentType: file.type || 'video/mp4',
-          gameId,
+          game_id: gameId,   // server expects snake_case
           fileSizeBytes: file.size,
         }),
       })
@@ -1791,11 +1791,11 @@ export default function GameFilmRoom() {
               </span>
             )}
             {game.video_url ? (
-              <button onClick={() => setShowVideoUrl(true)}
+              <button onClick={() => setGame(g => g ? { ...g, video_url: null, video_id: null } : g)}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs text-white/50 hover:text-white hover:bg-white/6 transition-all border border-white/8 hover:border-white/15"
-                aria-label="Change game video">
+                aria-label="Replace game video (upload new file)">
                 <Upload className="w-3 h-3" aria-hidden />
-                <span className="hidden sm:inline">Change Video</span>
+                <span className="hidden sm:inline">Replace Video</span>
               </button>
             ) : (
               <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs text-orange-400/80 border border-orange-500/20 bg-orange-500/5">
