@@ -178,7 +178,7 @@ async function run() {
     ok('ON CONFLICT DO NOTHING preserves original (mismatch NOT applied)')
     // Now verify detection: import verification must compare source vs dest
     // This is the responsibility of a post-import check query, not the INSERT itself
-    const mismatch = kept !== 'Changed'  // source said 'Changed', dest has 'Original'
+    const mismatch = (kept as string) !== 'Changed'  // source said 'Changed', dest has 'Original'
     mismatch
       ? ok('Mismatch detectable by post-import SELECT comparison')
       : fail('Mismatch should be detectable')

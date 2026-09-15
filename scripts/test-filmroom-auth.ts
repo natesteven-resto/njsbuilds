@@ -1,75 +1,123 @@
 /**
  * Film Room Auth Security Test
  *
- * Tests ownership enforcement at the API layer using two real Supabase auth users.
- * Uses @supabase/ssr-compatible cookie flow — signs in and extracts the
- * project-scoped session cookie that Next.js middleware reads.
+ * Two-user API ownership test against a STAGING endpoint.
+ * Uses @supabase/ssr createServerClient to produce project-scoped session cookies
+ * that Next.js middleware can read server-side.
  *
- * SAFETY GUARD: refuses to run against the production Supabase URL.
- * Run against staging or local only.
+ * Guards:
+ *   - NEXT_PUBLIC_FILMROOM_SUPABASE_URL must NOT be the RestoReports project
+ *   - FILMROOM_TEST_PROJECT_HOST must match the Supabase URL host (explicit approval)
+ *   - BASE_URL must NOT be www.njsbuilds.com (never run against live production)
+ *   - Test users are created fresh, tested, then deleted — never touches Nate's data
  *
  * Usage:
- *   BASE_URL=http://localhost:3000 \
- *   NEXT_PUBLIC_FILMROOM_SUPABASE_URL=https://YOUR-STAGING-PROJECT.supabase.co \
- *   NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY=... \
- *   FILMROOM_SUPABASE_SERVICE_ROLE_KEY=... \
- *   npx ts-node scripts/test-filmroom-auth.ts
+ *   BASE_URL=https://njsbuilds-<preview>.vercel.app \
+ *   NEXT_PUBLIC_FILMROOM_SUPABASE_URL=https://gurhiziqghzuqumpzkig.supabase.co \
+ *   NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY=*** \
+ *   FILMROOM_SUPABASE_SERVICE_ROLE_KEY=*** \
+ *   FILMROOM_TEST_PROJECT_HOST=gurhiziqghzuqumpzkig.supabase.co \
+ *   npx ts-node --transpile-only scripts/test-filmroom-auth.ts
  */
 
-import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 
-const BASE_URL     = process.env.BASE_URL ?? 'http://localhost:3000'
+const BASE_URL     = process.env.BASE_URL ?? 'http://localhost:3002'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_FILMROOM_SUPABASE_URL!
 const ANON_KEY     = process.env.NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY!
 const SERVICE_KEY  = process.env.FILMROOM_SUPABASE_SERVICE_ROLE_KEY!
 
-// ── Production guard ──────────────────────────────────────────────────────────
-const PRODUCTION_URL = 'https://suhfyckmuenjskitrzlq.supabase.co'
-if (!SUPABASE_URL || new URL(SUPABASE_URL).hostname === new URL(PRODUCTION_URL).hostname) {
-  console.error('ABORT: refusing to run test user creation against production Supabase project.')
-  console.error('Set NEXT_PUBLIC_FILMROOM_SUPABASE_URL to a staging project.')
+const RESTOREPORTS_HOST = 'suhfyckmuenjskitrzlq.supabase.co'
+const LIVE_DOMAIN       = 'www.njsbuilds.com'
+
+// ── Guards ────────────────────────────────────────────────────────────────────
+
+if (!SUPABASE_URL || !ANON_KEY || !SERVICE_KEY) {
+  console.error('Required: NEXT_PUBLIC_FILMROOM_SUPABASE_URL, NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY, FILMROOM_SUPABASE_SERVICE_ROLE_KEY')
   process.exit(1)
 }
 
-if (!process.env.FILMROOM_TEST_PROJECT_HOST || new URL(SUPABASE_URL).hostname !== process.env.FILMROOM_TEST_PROJECT_HOST) {
-  throw new Error('Set FILMROOM_TEST_PROJECT_HOST to the explicitly approved disposable test database host')
+if (new URL(SUPABASE_URL).hostname === RESTOREPORTS_HOST) {
+  console.error('ABORT: SUPABASE_URL must not be the RestoReports project')
+  process.exit(1)
+}
+
+const approvedHost = process.env.FILMROOM_TEST_PROJECT_HOST
+if (!approvedHost || new URL(SUPABASE_URL).hostname !== approvedHost) {
+  console.error('ABORT: Set FILMROOM_TEST_PROJECT_HOST to the explicitly approved test DB host')
+  console.error('       This prevents accidental test-user creation on wrong project')
+  process.exit(1)
+}
+
+if (BASE_URL.includes(LIVE_DOMAIN)) {
+  console.error('ABORT: BASE_URL must not target www.njsbuilds.com (live production domain)')
+  console.error('       Use a preview/staging URL or localhost')
+  process.exit(1)
 }
 
 const svc = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
 
-let passed = 0; let failed = 0
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function assert(label: string, condition: boolean, detail?: string) {
-  if (condition) { console.log(`  ✅ ${label}`); passed++ }
+let passed = 0, failed = 0
+function assert(label: string, ok: boolean, detail?: string) {
+  if (ok) { console.log(`  ✅ ${label}`); passed++ }
   else { console.error(`  ❌ ${label}${detail ? ' — ' + detail : ''}`); failed++ }
 }
 
 /**
- * Sign in and extract the project-scoped @supabase/ssr session cookie.
- * @supabase/ssr encodes the session as sb-<project-ref>-auth-token (chunked).
- * We use the raw fetch flow to capture Set-Cookie headers.
+ * Sign in and capture the @supabase/ssr project-scoped session cookie.
+ * createServerClient stores the JWT in a chunked cookie named
+ * sb-<project-ref>-auth-token which Next.js middleware can read.
  */
-async function signInGetCookie(email: string, password: string): Promise<string> {
+async function signIn(email: string, password: string): Promise<string> {
   const jar = new Map<string, string>()
+
   const client = createServerClient(SUPABASE_URL, ANON_KEY, {
     cookies: {
       getAll: () => [...jar].map(([name, value]) => ({ name, value })),
-      setAll: (cookies) => { for (const { name, value } of cookies) jar.set(name, value) },
+      setAll: (list) => { for (const { name, value } of list) jar.set(name, value) },
     },
-    auth: { autoRefreshToken: false, persistSession: true },
+    auth: { autoRefreshToken: false, persistSession: true, detectSessionInUrl: false },
   })
-  const { error } = await client.auth.signInWithPassword({ email, password })
-  if (error) throw new Error(`Sign-in failed for ${email}: ${error.message}`)
-  if (jar.size === 0) throw new Error(`No session cookies set after sign-in for ${email} — cookie jar is empty`)
-  // Verify we got a real JWT, not a sentinel
-  const cookieStr = [...jar.entries()].map(([n, v]) => `${n}=${encodeURIComponent(v)}`).join('; ')
-  const hasJwt = [...jar.values()].some(v => v.startsWith('eyJ'))
-  if (!hasJwt) throw new Error(`Cookie jar does not contain a JWT — got: ${[...jar.keys()].join(', ')}`)
+
+  const { data, error } = await client.auth.signInWithPassword({ email, password })
+  if (error || !data.session) throw new Error(`Sign-in failed for ${email}: ${error?.message}`)
+
+  // @supabase/ssr may store session lazily — check jar and also try getSession to flush
+  await client.auth.getSession()
+
+  if (jar.size === 0) {
+    // Fallback: manually construct the cookie that @supabase/ssr expects
+    // The project ref is the subdomain of the Supabase URL
+    const projectRef = new URL(SUPABASE_URL).hostname.split('.')[0]
+    const cookieName = `sb-${projectRef}-auth-token`
+    const sessionJson = JSON.stringify({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      token_type: 'bearer',
+      expires_at: data.session.expires_at,
+    })
+    jar.set(cookieName, sessionJson)
+  }
+
+  const cookieStr = [...jar.entries()]
+    .map(([n, v]) => `${n}=${encodeURIComponent(v)}`)
+    .join('; ')
+
+  // Verify JWT is present
+  const hasJwt = [...jar.values()].some(v =>
+    v.startsWith('eyJ') || v.includes('"access_token"')
+  )
+  if (!hasJwt) throw new Error(`No JWT in cookie jar for ${email}. Keys: ${[...jar.keys()].join(', ')}`)
+
   return cookieStr
 }
 
-async function apiAs(cookie: string, method: string, path: string, body?: unknown) {
+async function apiAs(
+  cookie: string, method: string, path: string, body?: unknown
+): Promise<{ status: number; data: unknown }> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', Cookie: cookie },
@@ -80,140 +128,193 @@ async function apiAs(cookie: string, method: string, path: string, body?: unknow
   return { status: res.status, data }
 }
 
-async function createTestUser(email: string, password: string): Promise<string> {
-  const { data, error } = await svc.auth.admin.createUser({ email, password, email_confirm: true })
-  if (error) throw new Error(`Create user ${email}: ${error.message}`)
+async function createUser(email: string, password: string): Promise<string> {
+  const { data, error } = await svc.auth.admin.createUser({
+    email, password, email_confirm: true,
+  })
+  if (error) throw new Error(`createUser ${email}: ${error.message}`)
   return data.user!.id
 }
 
-async function deleteTestUser(id: string) {
-  await svc.auth.admin.deleteUser(id)
+async function deleteUser(id: string) {
+  await svc.auth.admin.deleteUser(id).catch(() => {})
 }
 
-async function run() {
-  console.log(`\n🔐 Film Room Auth Security Tests`)
-  console.log(`   Target: ${BASE_URL}`)
-  console.log(`   Supabase: ${SUPABASE_URL}\n`)
+// ── Test runner ───────────────────────────────────────────────────────────────
 
-  const suffix   = Date.now()
-  const emailA   = `test-filmroom-a-${suffix}@test.invalid`
-  const emailB   = `test-filmroom-b-${suffix}@test.invalid`
-  const password = 'FilmRoomTest123!'
+async function run() {
+  console.log(`\n🔐 Film Room Two-User API Security Test`)
+  console.log(`   Supabase: ${new URL(SUPABASE_URL).hostname}`)
+  console.log(`   Target:   ${BASE_URL}\n`)
+
+  const suffix  = Date.now()
+  const emailA  = `test-fr-a-${suffix}@filmroom-test.invalid`
+  const emailB  = `test-fr-b-${suffix}@filmroom-test.invalid`
+  const pw      = 'Test-Secure-Pass-2026!'
 
   let idA: string | null = null, idB: string | null = null
   let cookieA = '', cookieB = ''
-  let gameAId: string | null = null, teamAId: string | null = null
+  let teamAId: string | null = null
+  let gameAId: string | null = null
 
   try {
-    console.log('📦 Setup: creating test users...')
-    idA = await createTestUser(emailA, password)
-    idB = await createTestUser(emailB, password)
-    cookieA = await signInGetCookie(emailA, password)
-    cookieB = await signInGetCookie(emailB, password)
+    // ── Setup ────────────────────────────────────────────────────────────────
+    console.log('📦 Creating test users...')
+    idA = await createUser(emailA, pw)
+    idB = await createUser(emailB, pw)
+    cookieA = await signIn(emailA, pw)
+    cookieB = await signIn(emailB, pw)
 
-    // Positive auth check before negative tests
+    // Positive auth check before any negative tests
     const { status: authCheck } = await apiAs(cookieA, 'GET', '/api/filmroom/games')
-    assert('User A authenticated successfully (positive auth check)', authCheck === 200, `got ${authCheck}`)
+    assert('User A authenticated (positive check first)', authCheck === 200, `got ${authCheck}`)
+    if (authCheck !== 200) {
+      console.error('\n  Cannot proceed: A is not authenticated. Cookie may be malformed.')
+      console.error('  Check that BASE_URL points to a deployment with the new Film Room env vars.')
+      return
+    }
 
-    // Provision team for A
-    const { status: tStatus, data: tData } = await apiAs(cookieA, 'POST', '/api/filmroom/teams',
+    const { status: authCheckB } = await apiAs(cookieB, 'GET', '/api/filmroom/games')
+    assert('User B authenticated (positive check)', authCheckB === 200, `got ${authCheckB}`)
+
+    // Provision team for A via POST /api/filmroom/teams
+    const { status: tS, data: tD } = await apiAs(cookieA, 'POST', '/api/filmroom/teams',
       { name: 'Test Team A', season: '2025-26', sport: 'basketball' })
-    assert('A can provision default team', tStatus === 200 || tStatus === 201, `got ${tStatus}`)
-    teamAId = (tData as { id?: string })?.id ?? null
+    assert('A can provision default team', tS === 200 || tS === 201, `got ${tS}`)
+    teamAId = (tD as { id?: string })?.id ?? null
+    assert('Team ID returned', !!teamAId, JSON.stringify(tD).slice(0, 80))
 
-    // Provision team for B (each user's own coach — no legacy coach reuse)
-    const { status: tBStatus } = await apiAs(cookieB, 'POST', '/api/filmroom/teams',
+    // Provision team for B (separate coach, no shared data)
+    const { status: tBS } = await apiAs(cookieB, 'POST', '/api/filmroom/teams',
       { name: 'Test Team B', season: '2025-26', sport: 'basketball' })
-    assert('B can provision their own team (separate coach)', tBStatus === 200 || tBStatus === 201, `got ${tBStatus}`)
+    assert('B can provision their own team', tBS === 200 || tBS === 201, `got ${tBS}`)
 
     // Create game for A
     if (teamAId) {
-      const { status: gStatus, data: gData } = await apiAs(cookieA, 'POST', '/api/filmroom/games',
+      const { status: gS, data: gD } = await apiAs(cookieA, 'POST', '/api/filmroom/games',
         { team_id: teamAId, opponent: 'Test Opponent', game_date: '2026-01-01' })
-      assert('A can create a game', gStatus === 201, `got ${gStatus}`)
-      gameAId = (gData as { id?: string })?.id ?? null
+      assert('A can create a game', gS === 201, `got ${gS}`)
+      gameAId = (gD as { id?: string })?.id ?? null
     }
 
-    // ── Test 1: Anonymous → 401 ────────────────────────────────────────────
-    console.log('\n🔒 Test 1: Anonymous requests → 401')
-    for (const [m, p] of [
-      ['GET', '/api/filmroom/games'],
-      ['GET', '/api/filmroom/teams'],
-      ['GET', `/api/filmroom/clips?game_id=${gameAId ?? '00000000-0000-0000-0000-000000000033'}`],
+    // ── Test 1: Anonymous → 401 ───────────────────────────────────────────────
+    console.log('\n🔒 Test 1: Anonymous → 401 on all routes')
+    const anonRoutes: Array<[string, string]> = [
+      ['GET',  '/api/filmroom/games'],
+      ['GET',  '/api/filmroom/teams'],
       ['POST', '/api/filmroom/upload/multipart?action=create'],
-    ] as const) {
+    ]
+    if (gameAId) {
+      anonRoutes.push(
+        ['GET', `/api/filmroom/clips?game_id=${gameAId}`],
+        ['GET', `/api/filmroom/stat-entries?game_id=${gameAId}`],
+        ['GET', `/api/filmroom/video-token?gameId=${gameAId}`],
+      )
+    }
+    for (const [m, p] of anonRoutes) {
       const { status } = await apiAs('', m, p, m === 'POST' ? {} : undefined)
       assert(`Anonymous ${m} ${p.split('?')[0]} → 401`, status === 401, `got ${status}`)
     }
 
-    // ── Test 2: B cannot access A's resources ─────────────────────────────
+    // ── Test 2: B cannot access A's resources ─────────────────────────────────
     if (gameAId) {
-      console.log('\n🚫 Test 2: Cross-user denial')
-      const checks = [
+      console.log('\n🚫 Test 2: B cannot access A\'s data')
+      const crossRoutes: Array<[string, string, unknown?]> = [
         ['GET',    `/api/filmroom/games/${gameAId}`],
-        ['PATCH',  `/api/filmroom/games/${gameAId}`],
+        ['PATCH',  `/api/filmroom/games/${gameAId}`, { opponent: 'Hacked' }],
         ['DELETE', `/api/filmroom/games/${gameAId}`],
         ['GET',    `/api/filmroom/clips?game_id=${gameAId}`],
         ['GET',    `/api/filmroom/stat-entries?game_id=${gameAId}`],
         ['GET',    `/api/filmroom/video-token?gameId=${gameAId}`],
-      ] as const
-      for (const [m, p] of checks) {
-        const body = m === 'PATCH' ? { opponent: 'Hacked' } : undefined
-        const { status } = await apiAs(cookieB, m, p, body)
-        assert(`B cannot ${m} A's resource ${p.split('?')[0]}`, status === 403 || status === 404, `got ${status}`)
+      ]
+      for (const [m, p, b] of crossRoutes) {
+        const { status } = await apiAs(cookieB, m, p, b)
+        assert(`B cannot ${m} ${p.split('?')[0]}`, status === 403 || status === 404, `got ${status}`)
       }
     }
 
-    // ── Test 3: B cannot upload to A's game ───────────────────────────────
+    // ── Test 3: owner_id in body is stripped ──────────────────────────────────
+    if (teamAId) {
+      console.log('\n🔒 Test 3: Forged owner_id in body is ignored')
+      const { status: cs, data: cd } = await apiAs(cookieB, 'POST', '/api/filmroom/games', {
+        team_id: teamAId,    // B trying to create in A's team
+        opponent: 'Forged',
+        game_date: '2026-06-01',
+        owner_id: idA,       // forged — must be rejected
+      })
+      // Should be 403 (can't use A's team) not 201
+      assert('B cannot create game in A\'s team', cs === 403, `got ${cs}`)
+
+      // B creates in own team — owner_id in body must be ignored
+      const { data: bTeams } = await apiAs(cookieB, 'GET', '/api/filmroom/teams')
+      const bTeamId = (bTeams as { id: string }[])?.[0]?.id
+      if (bTeamId) {
+        const { status: bgs, data: bgd } = await apiAs(cookieB, 'POST', '/api/filmroom/games', {
+          team_id: bTeamId,
+          opponent: 'B Game',
+          game_date: '2026-06-01',
+          owner_id: idA,  // forged — server must use B's actual user.id
+        })
+        assert('B can create game in own team', bgs === 201, `got ${bgs}`)
+        if (bgs === 201) {
+          const bGame = bgd as { owner_id?: string }
+          assert('Returned game has B\'s owner_id (not forged A)',
+            bGame.owner_id === idB, `got ${bGame.owner_id}`)
+        }
+      }
+    }
+
+    // ── Test 4: Upload isolation ──────────────────────────────────────────────
     if (gameAId) {
-      console.log('\n🚫 Test 3: Upload isolation')
-      const { status: s1 } = await apiAs(cookieB, 'POST', '/api/filmroom/upload/multipart?action=create',
+      console.log('\n🚫 Test 4: Upload session isolation')
+      const { status: us } = await apiAs(cookieB, 'POST',
+        '/api/filmroom/upload/multipart?action=create',
         { game_id: gameAId, filename: 'hack.mp4', fileSizeBytes: 1000 })
-      assert('B cannot create multipart session for A\'s game', s1 === 403, `got ${s1}`)
+      assert('B cannot create multipart session for A\'s game', us === 403, `got ${us}`)
 
-      const { status: s2 } = await apiAs(cookieB, 'POST', '/api/filmroom/upload/multipart?action=part',
+      const { status: ps } = await apiAs(cookieB, 'POST',
+        '/api/filmroom/upload/multipart?action=part',
         { sessionId: '00000000-0000-0000-0000-000000000099', partNumber: 1 })
-      assert('B cannot sign part with forged sessionId', s2 === 403, `got ${s2}`)
+      assert('B cannot sign part with forged sessionId', ps === 403, `got ${ps}`)
     }
 
-    // ── Test 4: owner_id in body is ignored ──────────────────────────────
+    // ── Test 5: A can manage own resources ────────────────────────────────────
+    console.log('\n✅ Test 5: Positive — A can CRUD own resources')
     if (teamAId) {
-      console.log('\n🔒 Test 4: owner_id forging rejected')
-      const { status: cs, data: cd } = await apiAs(cookieB, 'POST', '/api/filmroom/teams',
-        { name: 'Forged Team' })
-      if (cs === 200 || cs === 201) {
-        const t = cd as { owner_id?: string }
-        assert('B\'s team has B\'s owner_id (not A)', t.owner_id !== idA, `got ${t.owner_id}`)
-      } else {
-        assert('B team creation did not 500', cs !== 500, `got ${cs}`)
-      }
-    }
-
-    // ── Test 5: A can manage their own resources ──────────────────────────
-    console.log('\n✅ Test 5: Positive owner CRUD')
-    if (teamAId) {
-      const { status: gs } = await apiAs(cookieA, 'POST', '/api/filmroom/games',
+      const { status: gcs, data: gcd } = await apiAs(cookieA, 'POST', '/api/filmroom/games',
         { team_id: teamAId, opponent: 'Delete Me', game_date: '2026-09-01' })
-      assert('A can create game', gs === 201, `got ${gs}`)
+      assert('A creates a second game', gcs === 201, `got ${gcs}`)
+      const tempGameId = (gcd as { id?: string })?.id
+      if (tempGameId) {
+        const { status: ds } = await apiAs(cookieA, 'DELETE', `/api/filmroom/games/${tempGameId}`)
+        assert('A deletes own game', ds === 200, `got ${ds}`)
+        const { status: check } = await apiAs(cookieA, 'GET', `/api/filmroom/games/${tempGameId}`)
+        assert('Deleted game returns 404', check === 404, `got ${check}`)
+      }
     }
 
     const { data: gList } = await apiAs(cookieA, 'GET', '/api/filmroom/games')
-    assert('A games list is array', Array.isArray(gList), `got ${typeof gList}`)
+    assert('A games list is an array', Array.isArray(gList), typeof gList)
 
-    const { status: tList } = await apiAs(cookieA, 'GET', '/api/filmroom/teams')
-    assert('A can list teams', tList === 200, `got ${tList}`)
+    if (gameAId) {
+      const { status: vs } = await apiAs(cookieA, 'GET',
+        `/api/filmroom/video-token?gameId=${gameAId}`)
+      // 404 is fine (no video attached to test game), 200 would mean signed URL works
+      assert('Video token responds (200 or 404, not 403/500)',
+        vs === 200 || vs === 404, `got ${vs}`)
+    }
 
   } finally {
     console.log('\n🧹 Cleanup...')
-    if (idA) await deleteTestUser(idA).catch(() => {})
-    if (idB) await deleteTestUser(idB).catch(() => {})
-    console.log('   Done.\n')
+    if (idA) await deleteUser(idA)
+    if (idB) await deleteUser(idB)
+    console.log('   Test users deleted\n')
   }
 
   console.log('─'.repeat(50))
-  console.log(`Results: ${passed}/${passed + failed} passed, ${failed} failed`)
-  if (failed > 0) { console.error(`\n❌ ${failed} test(s) failed.`); process.exit(1) }
-  else console.log('\n✅ All tests passed.')
+  console.log(`${passed}/${passed + failed} passed, ${failed} failed`)
+  if (failed > 0) { console.error(`\n❌ ${failed} failure(s)`); process.exit(1) }
+  else console.log('\n✅ All tests passed')
 }
 
 run().catch(e => { console.error('Runner error:', e); process.exit(1) })

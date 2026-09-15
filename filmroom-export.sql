@@ -1,6 +1,6 @@
 -- Film Room selective export
 -- Source: suhfyckmuenjskitrzlq.supabase.co  (read-only — no source writes)
--- Generated: 2026-09-15T05:31:08.518Z
+-- Generated: 2026-09-15T05:38:28.968Z
 -- Rows: coaches=1 teams=1 games=2 players=5 clips=1 stat_entries=19
 -- R2 keys: filmroom-videos/games/e2f0285d-7767-4ee9-b4fa-5a509c25e9d3/1789091674465-2026-07-31_19_54_53.MP4, games/f18b6f3a-6472-4d01-9815-97c90b75d382/1789441470476-2026-09-13_14_38_16.MP4
 -- owner_id/auth_user_id/author_id = NULL; assigned by migration 010 after owner signup
