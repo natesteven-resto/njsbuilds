@@ -188,6 +188,19 @@ export async function POST(request: NextRequest) {
 
       if (session.status === 'complete_pending_attach')
         return recoverPendingAttach(svc, session, sessionId, user.id)
+
+      // Idempotent success: already complete and attached to same game/key.
+      // Lost HTTP response after a successful complete must not become 409.
+      if (session.status === 'complete') {
+        const { data: game } = await svc.from('games').select('video_url, owner_id').eq('id', session.game_id).single()
+        if (game && game.owner_id === user.id) {
+          const playbackUrl = `${CDN_BASE}/${session.r2_key}`
+          // Idempotent if game still references this session's key
+          const attached = game.video_url === playbackUrl
+          return NextResponse.json({ ok: true, playbackUrl, attached, idempotent: true })
+        }
+      }
+
       if (session.status !== 'in_progress') return NextResponse.json({ error: 'Session not active' }, { status: 409 })
 
       const { data: game } = await svc.from('games').select('owner_id, active_upload_session').eq('id', session.game_id).single()
