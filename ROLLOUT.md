@@ -185,10 +185,15 @@ After disabling: `pub-9fa275ba678642e488776c297174f037.r2.dev` URLs return 403. 
 
 Nate chose a dedicated Supabase project for Film Room, completely separate from RestoReports.
 
-### Cost
-- **Supabase Free tier**: $0/month — includes 500 MB DB, 1 GB file storage, 50k MAU, unlimited API requests
-- Film Room needs: 1 project, ~10 users to start, no storage (videos in R2) → **free tier sufficient**
-- No paid resources needed to set up
+### Cost — HOLD until approved
+- Supabase free tier requires a **Free organization** with available project quota
+- Your existing organization is **Pro** — additional projects in a Pro org start at **~$10/month**
+- Options:
+  a) Create a new **Free organization** (separate Supabase account or org) → $0/month
+  b) Add project to existing Pro org → ~$10/month
+  c) Use Supabase CLI + local Postgres for dev/test → $0, defer cloud decision
+- **Do not create any paid resource without explicit cost approval from Nate**
+- This rollout step is blocked until the project exists and cost is confirmed
 
 ### Step 0 — Create the new Supabase project (one-time, before anything else)
 1. Go to supabase.com → New project
