@@ -672,14 +672,7 @@ function VideoUploadZone({
         onComplete(hlsUrl, sign.videoId)
         setState({ phase: 'done', url: hlsUrl, videoId: sign.videoId })
       } else {
-        // R2 multipart upload (handles any file size, no single-PUT 5GB limit)
-        const playbackUrl = await r2MultipartUpload(
-          file,
-          gameId,
-          (p, partInfo) => setState({ phase: 'uploading', progress: p, method: 'r2', partInfo })
-        )
-        onComplete(playbackUrl)
-        setState({ phase: 'done', url: playbackUrl })
+        setState({ phase: 'error', message: 'R2 upload unavailable — please try again or contact support.' })
       }
     } catch (err) {
       setState({ phase: 'error', message: err instanceof Error ? err.message : String(err) })
