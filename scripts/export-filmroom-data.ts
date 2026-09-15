@@ -45,9 +45,15 @@ const db = createClient(SOURCE_URL, SOURCE_KEY, { auth: { persistSession: false 
 
 // ── Serialization ─────────────────────────────────────────────────────────────
 
-/** Escape a single text value for use inside a Postgres string literal. */
+/**
+ * Escape a single text value for use inside a Postgres standard string literal.
+ * With standard_conforming_strings=ON (Postgres default since 9.1, always on in Supabase):
+ *   - Only single quotes need escaping (doubled: '')
+ *   - Backslashes are LITERAL — do NOT double them
+ *   - Doubling backslashes would corrupt data (store two instead of one)
+ */
 function pgEscStr(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/'/g, "''")
+  return s.replace(/'/g, "''")
 }
 
 /** Serialize a text[] array as ARRAY['a','b']::text[] — NOT as a JSON string. */
