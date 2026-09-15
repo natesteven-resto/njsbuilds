@@ -828,6 +828,7 @@ async function r2MultipartUpload(
   const parts: { ETag: string; PartNumber: number }[] = []
   let bytesUploaded = 0
   const MAX_PART_RETRIES = 3
+  let r2MayBeComplete = false // once true, never abort (R2 object may exist)
 
   try {
     for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
@@ -883,26 +884,49 @@ async function r2MultipartUpload(
       onProgress(Math.round(bytesUploaded / file.size * 100), `Part ${partNumber}/${totalParts} done`)
     }
 
-    const completeRes = await fetch('/api/filmroom/upload/multipart?action=complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, parts, totalBytes: file.size }),
-    })
-    if (!completeRes.ok) {
-      const errData = await completeRes.json().catch(() => ({}))
-      throw new Error(`Multipart complete failed: ${completeRes.status}: ${errData.error ?? ''}`)
+    r2MayBeComplete = true // from here on, never abort
+    // Complete: retry up to 3 times (handles lost HTTP responses after R2 completes)
+    // Server returns idempotent success for already-complete sessions.
+    // NEVER abort after attempting complete — R2 object may already exist.
+    let completeOk = false
+    let lastCompleteError = ''
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const completeRes = await fetch('/api/filmroom/upload/multipart?action=complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, parts, totalBytes: file.size }),
+      })
+      if (completeRes.ok) {
+        const data = await completeRes.json()
+        if (data.ok) { completeOk = true; break }
+        // recoverable=true means attachment failed but R2 is done — retry complete
+        if (data.recoverable === false) throw new Error(data.error ?? 'Upload superseded')
+        lastCompleteError = data.error ?? 'Attachment failed'
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+      } else if (completeRes.status >= 500) {
+        // Server error — retry (R2 may have completed, DB attachment may have failed)
+        lastCompleteError = `Complete server error ${completeRes.status}`
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+      } else {
+        // 4xx — non-recoverable
+        const errData = await completeRes.json().catch(() => ({}))
+        throw new Error(errData.error ?? `Complete failed: ${completeRes.status}`)
+      }
     }
+    if (!completeOk) throw new Error(`Complete failed after retries: ${lastCompleteError}`)
 
     try { sessionStorage.removeItem(`upload_session_${gameId}`) } catch {}
     return playbackUrl
   } catch (err) {
-    // Abort the session on failure
-    fetch('/api/filmroom/upload/multipart?action=abort', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId }),
-    }).catch(() => {})
     try { sessionStorage.removeItem(`upload_session_${gameId}`) } catch {}
+    // Abort only if R2 CompleteMultipartUpload was never called
+    if (!r2MayBeComplete) {
+      fetch('/api/filmroom/upload/multipart?action=abort', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      }).catch(() => {})
+    }
     throw err
   }
 }
@@ -989,37 +1013,55 @@ function VideoPlayer({
   useEffect(() => {
     let cancelled = false
 
+    // Recursive refresh loop: fires every refreshAfterSeconds, indefinitely.
+    // Uses loadedmetadata event (not load()) to restore position after src swap.
+    async function scheduleRefresh(afterSeconds: number) {
+      if (cancelled) return
+      refreshTimerRef.current = setTimeout(async () => {
+        if (cancelled) return
+        const v = playerRef.current
+        const wasPlaying = v ? !v.paused : false
+        const savedTime = v ? v.currentTime : 0
+        try {
+          const { src: newSrc, refreshAfterSeconds } = await fetchVideoToken(gameId)
+          if (cancelled) return
+          setResolvedSrc(newSrc)
+          if (v) {
+            // Restore position on loadedmetadata — src change triggers async load
+            const restoreOnMetadata = () => {
+              v.currentTime = savedTime
+              if (wasPlaying) v.play().catch(() => {})
+              v.removeEventListener('loadedmetadata', restoreOnMetadata)
+            }
+            v.addEventListener('loadedmetadata', restoreOnMetadata)
+            v.src = newSrc
+            v.load() // non-blocking; loadedmetadata fires when ready
+          }
+          // Schedule next refresh cycle
+          if (refreshAfterSeconds) scheduleRefresh(refreshAfterSeconds)
+        } catch {
+          // Token refresh failed — keep playing with old URL until it expires
+          // Retry refresh in 60s
+          if (!cancelled) scheduleRefresh(60)
+        }
+      }, afterSeconds * 1000)
+    }
+
     async function load() {
       try {
         const { src, refreshAfterSeconds } = await fetchVideoToken(gameId)
         if (cancelled) return
         setResolvedSrc(src)
         setTokenError(null)
-        // Schedule refresh — preserves currentTime and play state
-        if (refreshAfterSeconds) {
-          refreshTimerRef.current = setTimeout(async () => {
-            if (cancelled) return
-            const v = playerRef.current
-            const wasPlaying = v ? !v.paused : false
-            const savedTime = v ? v.currentTime : 0
-            try {
-              const { src: newSrc } = await fetchVideoToken(gameId)
-              if (cancelled) return
-              setResolvedSrc(newSrc)
-              if (v) {
-                v.src = newSrc
-                await v.load()
-                v.currentTime = savedTime
-                if (wasPlaying) v.play().catch(() => {})
-              }
-            } catch { /* silently keep old URL until it expires */ }
-          }, refreshAfterSeconds * 1000)
-        }
+        if (refreshAfterSeconds) scheduleRefresh(refreshAfterSeconds)
       } catch (err: unknown) {
         if (cancelled) return
         const status = (err as { status?: number }).status
-        setTokenError(status === 401 ? 'Please sign in to watch this video' :
-          status === 403 ? 'You do not have access to this video' : 'Failed to load video')
+        setTokenError(
+          status === 401 ? 'Please sign in to watch this video' :
+          status === 403 ? 'You do not have access to this video' :
+          'Failed to load video'
+        )
       }
     }
 
