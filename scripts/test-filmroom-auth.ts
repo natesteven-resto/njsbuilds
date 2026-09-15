@@ -112,15 +112,23 @@ async function signIn(email: string, password: string): Promise<string> {
     jar.set(cookieName, sessionJson)
   }
 
+  if (jar.size === 0) throw new Error(`Cookie jar empty after sign-in for ${email}`)
+
   const cookieStr = [...jar.entries()]
     .map(([n, v]) => `${n}=${encodeURIComponent(v)}`)
     .join('; ')
 
-  // Verify JWT is present
-  const hasJwt = [...jar.values()].some(v =>
-    v.startsWith('eyJ') || v.includes('"access_token"')
-  )
-  if (!hasJwt) throw new Error(`No JWT in cookie jar for ${email}. Keys: ${[...jar.keys()].join(', ')}`)
+  // Verify the cookie actually authenticates against the API — no content sniffing.
+  // @supabase/ssr may chunk, encode, or structure cookie values in any format.
+  const verifyRes = await fetch(`${BASE_URL}/api/filmroom/games`, {
+    headers: { Cookie: cookieStr },
+  })
+  if (verifyRes.status !== 200) {
+    throw new Error(
+      `Cookie for ${email} does not authenticate: GET /api/filmroom/games → ${verifyRes.status}. ` +
+      `Cookie keys: ${[...jar.keys()].join(', ')}`
+    )
+  }
 
   return cookieStr
 }

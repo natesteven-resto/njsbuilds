@@ -119,11 +119,25 @@ async function signIn(email: string, password: string): Promise<string> {
   if (jar.size === 0) {
     const ref = new URL(SUPABASE_URL!).hostname.split('.')[0]
     jar.set(`sb-${ref}-auth-token`, JSON.stringify({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
+      access_token: data.session!.access_token,
+      refresh_token: data.session!.refresh_token,
     }))
   }
-  return [...jar.entries()].map(([n, v]) => `${n}=${encodeURIComponent(v)}`).join('; ')
+
+  const cookieStr = [...jar.entries()].map(([n, v]) => `${n}=${encodeURIComponent(v)}`).join('; ')
+
+  // Verify cookie authenticates against the API — no content sniffing.
+  const verifyRes = await fetch(`${BASE_URL}/api/filmroom/games`, {
+    headers: { Cookie: cookieStr },
+  })
+  if (verifyRes.status !== 200) {
+    throw new Error(
+      `Cookie for ${email} does not authenticate: GET /api/filmroom/games → ${verifyRes.status}. ` +
+      `Cookie keys: ${[...jar.keys()].join(', ')}`
+    )
+  }
+
+  return cookieStr
 }
 
 async function apiAs(cookie: string, method: string, path: string, body?: unknown) {
