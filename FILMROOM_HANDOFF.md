@@ -1,5 +1,14 @@
 # Film Room — Private Library Handoff
 
+## ✅ RELEASED — 2026-09-15
+
+- **Promoted deployment:** `dpl_9CgbbyYqrnWuW1sNh4qjouZdZaQk` (commit `7748292`)
+- **Live URL:** https://www.njsbuilds.com/filmroom
+- **main SHA:** `7748292` (fast-forward merged from `filmroom-auth`; branches in sync)
+- **Verified live:** 2 games, 1 clip, top-right layout correct, B-copies-A-game shows unavailable screen
+- **Cleanup:** temp test accounts removed, generated R2 test object removed
+
+
 ## Worktree / Branch / Commit
 
 - **Worktree:** `/Users/natesteven/.openclaw/filmroom-auth`
@@ -69,11 +78,7 @@
 
 ## Remaining Before Promotion
 
-1. **Root browser-tests staged URL** (in progress) — login, library, game, upload, video playback
-2. **Two-user API test** against staged URL with injected Film Room keys (Vercel Deployment Protection means test scripts need authenticated session cookies, not raw API calls — use `BASE_URL=https://njsbuilds-8tywcf9cl-...vercel.app` with a browser-captured session or bypass)
-3. **Upload test** against staged URL — `SignatureDoesNotMatch` on localhost was stale local R2 creds; staged deployment uses Vercel's correct R2 env vars
-4. **R2 test object cleanup** — if staged upload test creates an object, delete via Cloudflare dashboard (root approved)
-5. **Coordinate promotion** — root explicitly promotes via Vercel dashboard after browser verification passes
+**All complete.** Released 2026-09-15.
 
 ## Known Limitations / Not In This Release
 - Cloudflare Stream: disabled, returns 501. Re-upload via R2 if a Stream video is attached.
