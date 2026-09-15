@@ -11,7 +11,7 @@ import {
   ZoomIn, AlertCircle, CheckCircle2, BarChart, Maximize2, Minimize2,
 } from 'lucide-react'
 import type { Game, Clip, Player, ClipCategory, ClipComment } from '@/types/filmroom'
-import { CATEGORY_LABELS, CATEGORY_COLORS, TEST_TEAM_ID } from '@/types/filmroom'
+import { CATEGORY_LABELS, CATEGORY_COLORS } from '@/types/filmroom'
 import { DrawingOverlay, type DrawingData } from '@/app/filmroom/components/DrawingOverlay'
 import { JogWheel } from '@/app/filmroom/components/JogWheel'
 
@@ -816,13 +816,18 @@ async function r2MultipartUpload(
   const createRes = await fetch('/api/filmroom/upload/multipart?action=create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ filename: file.name, contentType: file.type || 'video/mp4', gameId }),
+    body: JSON.stringify({ filename: file.name, contentType: file.type || 'video/mp4', game_id: gameId, fileSizeBytes: file.size }),
   })
-  if (!createRes.ok) throw new Error(`Multipart create failed: ${createRes.status}`)
-  const { uploadId, key: confirmedKey, playbackUrl } = await createRes.json()
+  if (!createRes.ok) throw new Error(`Multipart create failed: ${createRes.status}: ${await createRes.text()}`)
+  const { sessionId, playbackUrl } = await createRes.json()
+  if (!sessionId) throw new Error(`Multipart create failed: no sessionId returned`)
+
+  // Persist session for resume on reload
+  try { sessionStorage.setItem(`upload_session_${gameId}`, JSON.stringify({ sessionId, filename: file.name, fileSizeBytes: file.size })) } catch {}
 
   const parts: { ETag: string; PartNumber: number }[] = []
   let bytesUploaded = 0
+  const MAX_PART_RETRIES = 3
 
   try {
     for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
@@ -830,59 +835,74 @@ async function r2MultipartUpload(
       const end = Math.min(start + CHUNK_SIZE, file.size)
       const chunk = file.slice(start, end)
 
-      // 2. Get signed URL for this part
-      const partRes = await fetch('/api/filmroom/upload/multipart?action=part', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uploadId, key: confirmedKey, partNumber }),
-      })
-      if (!partRes.ok) throw new Error(`Part sign failed: ${partRes.status}`)
-      const { signedUrl } = await partRes.json()
-
-      // 3. Upload the chunk via XHR for progress tracking
-      const etag = await new Promise<string>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('PUT', signedUrl)
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const totalDone = bytesUploaded + e.loaded
-            const pct = Math.round((totalDone / file.size) * 100)
-            onProgress(pct, `Part ${partNumber} of ${totalParts}`)
-          }
+      let etag: string | null = null
+      for (let attempt = 0; attempt < MAX_PART_RETRIES; attempt++) {
+        // Fresh signed URL each retry
+        const partRes = await fetch('/api/filmroom/upload/multipart?action=part', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, partNumber }),
+        })
+        if (!partRes.ok) {
+          if (partRes.status >= 400 && partRes.status < 500) throw new Error(`Part sign failed: ${partRes.status}`)
+          if (attempt === MAX_PART_RETRIES - 1) throw new Error(`Part sign failed after retries: ${partRes.status}`)
+          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+          continue
         }
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            const etag = xhr.getResponseHeader('ETag') ?? xhr.getResponseHeader('etag') ?? `"part-${partNumber}"`
-            resolve(etag)
-          } else {
-            reject(new Error(`R2 PUT ${xhr.status} on part ${partNumber}`))
-          }
-        }
-        xhr.onerror = () => reject(new Error(`Network error on part ${partNumber}`))
-        xhr.send(chunk)
-      })
+        const { signedUrl } = await partRes.json()
 
+        const result = await new Promise<{ ok: boolean; etag: string | null; status: number }>((resolve) => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('PUT', signedUrl)
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              onProgress(Math.round((bytesUploaded + e.loaded) / file.size * 100), `Part ${partNumber}/${totalParts}`)
+            }
+          }
+          xhr.onload = () => {
+            const rawEtag = xhr.getResponseHeader('ETag') ?? xhr.getResponseHeader('etag')
+            resolve({ ok: xhr.status >= 200 && xhr.status < 300, etag: rawEtag, status: xhr.status })
+          }
+          xhr.onerror = () => resolve({ ok: false, etag: null, status: 0 })
+          xhr.send(chunk)
+        })
+
+        if (result.ok) {
+          if (!result.etag) throw new Error(`Missing ETag on part ${partNumber} — upload cannot continue`)
+          etag = result.etag
+          break
+        }
+        if (result.status >= 400 && result.status < 500) throw new Error(`R2 PUT ${result.status} on part ${partNumber}`)
+        if (attempt === MAX_PART_RETRIES - 1) throw new Error(`Part ${partNumber} failed after ${MAX_PART_RETRIES} retries`)
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+      }
+
+      if (!etag) throw new Error(`No ETag for part ${partNumber}`)
       parts.push({ ETag: etag, PartNumber: partNumber })
       bytesUploaded += chunk.size
-      onProgress(Math.round((bytesUploaded / file.size) * 100), `Part ${partNumber} of ${totalParts} done`)
+      onProgress(Math.round(bytesUploaded / file.size * 100), `Part ${partNumber}/${totalParts} done`)
     }
 
-    // 4. Complete the multipart upload
     const completeRes = await fetch('/api/filmroom/upload/multipart?action=complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uploadId, key: confirmedKey, parts }),
+      body: JSON.stringify({ sessionId, parts, totalBytes: file.size }),
     })
-    if (!completeRes.ok) throw new Error(`Multipart complete failed: ${completeRes.status}`)
+    if (!completeRes.ok) {
+      const errData = await completeRes.json().catch(() => ({}))
+      throw new Error(`Multipart complete failed: ${completeRes.status}: ${errData.error ?? ''}`)
+    }
 
+    try { sessionStorage.removeItem(`upload_session_${gameId}`) } catch {}
     return playbackUrl
   } catch (err) {
-    // Abort on any failure to clean up the incomplete upload on R2
+    // Abort the session on failure
     fetch('/api/filmroom/upload/multipart?action=abort', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uploadId, key: confirmedKey }),
+      body: JSON.stringify({ sessionId }),
     }).catch(() => {})
+    try { sessionStorage.removeItem(`upload_session_${gameId}`) } catch {}
     throw err
   }
 }
@@ -929,58 +949,105 @@ async function pollStreamReady(videoId: string, maxWaitMs = 120_000): Promise<vo
 
 // ─── Video Player Component ───────────────────────────────────────────────────
 
-// CDN base for R2 public bucket (Cloudflare r2.dev domain)
-const R2_CDN_BASE = 'https://pub-9fa275ba678642e488776c297174f037.r2.dev'
+// Video token cache: {src, type, expiresAt, refreshAfterSeconds}
+let _videoTokenCache: { gameId: string; src: string; type: string; expiresAt: number; refreshAfterSeconds: number | null } | null = null
 
-// Convert a raw R2 S3 endpoint URL to the public CDN URL.
-// e.g. https://108ae2b....r2.cloudflarestorage.com/filmroom-videos/games/x/file.mp4
-//   -> https://pub-9fa2....r2.dev/games/x/file.mp4
-function r2ToCdnUrl(url: string): string | null {
-  try {
-    const u = new URL(url)
-    if (!u.hostname.includes('r2.cloudflarestorage.com')) return null
-    // Virtual-hosted: filmroom-videos.account.r2.cloudflarestorage.com/KEY
-    const key = u.hostname.startsWith('filmroom-videos.')
-      ? u.pathname.replace(/^\//, '')
-      : u.pathname.replace(/^\/filmroom-videos\//, '')
-    return `${R2_CDN_BASE}/${key}`
-  } catch { return null }
+async function fetchVideoToken(gameId: string): Promise<{ src: string; type: string; refreshAfterSeconds: number | null }> {
+  const res = await fetch(`/api/filmroom/video-token?gameId=${encodeURIComponent(gameId)}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw Object.assign(new Error(err.error ?? 'Video token failed'), { status: res.status })
+  }
+  const data = await res.json()
+  _videoTokenCache = {
+    gameId,
+    src: data.src,
+    type: data.type,
+    expiresAt: data.expiresInSeconds ? Date.now() + data.expiresInSeconds * 1000 : Infinity,
+    refreshAfterSeconds: data.refreshAfterSeconds ?? null,
+  }
+  return { src: data.src, type: data.type, refreshAfterSeconds: data.refreshAfterSeconds ?? null }
 }
 
 function VideoPlayer({
-  videoUrl,
-  videoId,
+  gameId,
   onTimeUpdate,
   onDurationChange,
   playerRef,
   isFullscreen,
 }: {
-  videoUrl: string | null
-  videoId: string | null
+  gameId: string
   onTimeUpdate: (ms: number) => void
   onDurationChange: (ms: number) => void
   playerRef: React.RefObject<HTMLVideoElement | null>
   isFullscreen?: boolean
 }) {
   const [resolvedSrc, setResolvedSrc] = useState<string | null>(null)
+  const [tokenError, setTokenError] = useState<string | null>(null)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    if (videoId) {
-      setResolvedSrc(`https://videodelivery.net/${videoId}/manifest/video.m3u8`)
-      return
-    }
-    if (!videoUrl) return
-    // Convert raw R2 S3 endpoint URLs to the public CDN URL — no signing needed
-    const cdnUrl = r2ToCdnUrl(videoUrl)
-    setResolvedSrc(cdnUrl ?? videoUrl)
-  }, [videoUrl, videoId])
+    let cancelled = false
 
-  if (!resolvedSrc) return null
+    async function load() {
+      try {
+        const { src, refreshAfterSeconds } = await fetchVideoToken(gameId)
+        if (cancelled) return
+        setResolvedSrc(src)
+        setTokenError(null)
+        // Schedule refresh — preserves currentTime and play state
+        if (refreshAfterSeconds) {
+          refreshTimerRef.current = setTimeout(async () => {
+            if (cancelled) return
+            const v = playerRef.current
+            const wasPlaying = v ? !v.paused : false
+            const savedTime = v ? v.currentTime : 0
+            try {
+              const { src: newSrc } = await fetchVideoToken(gameId)
+              if (cancelled) return
+              setResolvedSrc(newSrc)
+              if (v) {
+                v.src = newSrc
+                await v.load()
+                v.currentTime = savedTime
+                if (wasPlaying) v.play().catch(() => {})
+              }
+            } catch { /* silently keep old URL until it expires */ }
+          }, refreshAfterSeconds * 1000)
+        }
+      } catch (err: unknown) {
+        if (cancelled) return
+        const status = (err as { status?: number }).status
+        setTokenError(status === 401 ? 'Please sign in to watch this video' :
+          status === 403 ? 'You do not have access to this video' : 'Failed to load video')
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+    }
+  }, [gameId, playerRef])
+
+  if (tokenError) return (
+    <div className={`flex items-center justify-center bg-black text-white/40 text-sm ${
+      isFullscreen ? 'w-full h-full' : 'w-full aspect-video'
+    }`}>{tokenError}</div>
+  )
+
+  if (!resolvedSrc) return (
+    <div className={`flex items-center justify-center bg-black ${
+      isFullscreen ? 'w-full h-full' : 'w-full aspect-video'
+    }`}>
+      <div className="w-6 h-6 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" aria-label="Loading video" />
+    </div>
+  )
 
   return (
     <video
       ref={playerRef}
-      src={resolvedSrc}
+      src={resolvedSrc ?? ''}
       // In fullscreen: fill the flex container height; in normal layout: use aspect-video
       // but cap height so transport bar stays on screen without scrolling
       className={isFullscreen
@@ -1490,7 +1557,7 @@ export default function GameFilmRoom() {
     Promise.all([
       fetch(`/api/filmroom/games/${gameId}`).then(r => r.json()),
       fetch(`/api/filmroom/clips?game_id=${gameId}`).then(r => r.json()),
-      fetch(`/api/filmroom/players?team_id=${TEST_TEAM_ID}`).then(r => r.json()),
+      fetch(`/api/filmroom/players`).then(r => r.ok ? r.json() : []),
       fetch(`/api/filmroom/stat-entries?game_id=${gameId}`).then(r => r.json()),
     ]).then(([g, c, p, se]) => {
       setGame(g)
@@ -1547,14 +1614,16 @@ export default function GameFilmRoom() {
     setShowStatPanel(true)
   }, [])
 
-  // Close stat panel: resume video if it was playing
+  // Close stat panel: only resume if video was playing before panel opened
   const closeStatPanel = useCallback(() => {
     setShowStatPanel(false)
-    // Auto-resume playback when Done is tapped
-    const video = videoRef.current
-    if (video && video.src) video.play().catch(() => {})
-    setIsPlaying(true)
-  }, [])
+    // isPlaying tracks state before panel opened (openStatPanel paused if playing)
+    // Re-check: only resume if we were actually playing before
+    if (isPlaying) {
+      const video = videoRef.current
+      if (video && video.src) video.play().catch(() => {})
+    }
+  }, [isPlaying])
 
   // Log a stat entry
   const handleLogEntry = useCallback((entry: StatEntry) => {
@@ -1707,8 +1776,7 @@ export default function GameFilmRoom() {
             {game.video_url && (
               <div className={`relative bg-black ${isFullscreen ? 'flex-1 min-h-0' : 'rounded-t-xl overflow-hidden border border-b-0 border-white/8'}`}>
                 <VideoPlayer
-                  videoUrl={game.video_url}
-                  videoId={game.video_id}
+                  gameId={gameId}
                   onTimeUpdate={setCurrentMs}
                   onDurationChange={setDurationMs}
                   playerRef={videoRef}
@@ -1853,7 +1921,10 @@ export default function GameFilmRoom() {
                   <div className="text-center py-10">
                     <Scissors className="w-8 h-8 mx-auto text-white/15 mb-2" />
                     <p className="text-xs text-white/30">No clips yet.</p>
-                    <p className="text-xs text-white/20 mt-1">Use I / O to mark in/out, then S to save.</p>
+                    <p className="text-xs text-white/20 mt-1">
+                      Tap <strong className="text-white/35">IN</strong> on the timeline, then <strong className="text-white/35">OUT</strong>, then <strong className="text-white/35">Save Clip</strong>.
+                      On desktop use <kbd className="font-mono bg-white/8 px-1 rounded text-[10px]">I</kbd> and <kbd className="font-mono bg-white/8 px-1 rounded text-[10px]">O</kbd> keys.
+                    </p>
                   </div>
                 ) : (
                   clips.map(clip => (
@@ -1924,7 +1995,7 @@ export default function GameFilmRoom() {
             {/* ROSTER tab */}
             {panelTab === 'roster' && (
               <div className="p-3">
-                <RosterPanel players={players} onPlayersChange={setPlayers} />
+                <RosterPanel players={players} teamId={game.team_id} onPlayersChange={setPlayers} />
               </div>
             )}
           </div>
@@ -1978,7 +2049,7 @@ export default function GameFilmRoom() {
 
 // ─── Inline Roster Panel ──────────────────────────────────────────────────────
 
-function RosterPanel({ players, onPlayersChange }: { players: Player[]; onPlayersChange: (p: Player[]) => void }) {
+function RosterPanel({ players, teamId, onPlayersChange }: { players: Player[]; teamId: string; onPlayersChange: (p: Player[]) => void }) {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ name: '', number: '', position: '', parent_email: '' })
   const [loading, setLoading] = useState(false)
@@ -1990,13 +2061,20 @@ function RosterPanel({ players, onPlayersChange }: { players: Player[]; onPlayer
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        team_id: TEST_TEAM_ID,
+        team_id: teamId,
         name: form.name,
-        number: parseInt(form.number) || null,
+        // jersey 0 is valid — only null when empty or non-numeric
+        number: form.number !== '' ? (isNaN(parseInt(form.number, 10)) ? null : parseInt(form.number, 10)) : null,
         position: form.position || null,
         parent_email: form.parent_email || null,
       }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(err.error ?? 'Failed to add player')
+      setLoading(false)
+      return
+    }
     const player = await res.json()
     onPlayersChange([...players, player])
     setForm({ name: '', number: '', position: '', parent_email: '' })
@@ -2005,8 +2083,13 @@ function RosterPanel({ players, onPlayersChange }: { players: Player[]; onPlayer
   }
 
   const removePlayer = async (id: string) => {
-    await fetch(`/api/filmroom/players/${id}`, { method: 'DELETE' })
-    onPlayersChange(players.filter(p => p.id !== id))
+    const res = await fetch(`/api/filmroom/players/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      onPlayersChange(players.filter(p => p.id !== id))
+    } else {
+      const err = await res.json().catch(() => ({}))
+      alert(err.error ?? 'Failed to remove player')
+    }
   }
 
   return (
@@ -2021,8 +2104,9 @@ function RosterPanel({ players, onPlayersChange }: { players: Player[]; onPlayer
             {p.position && <p className="text-[10px] text-white/35">{p.position}</p>}
           </div>
           <button onClick={() => removePlayer(p.id)}
+            aria-label={`Remove ${p.name} (#${p.number ?? '?'})`}
             className="p-1 rounded-lg text-white/20 hover:text-red-400 transition-colors">
-            <X className="w-3 h-3" />
+            <X className="w-3 h-3" aria-hidden />
           </button>
         </div>
       ))}
@@ -2032,7 +2116,7 @@ function RosterPanel({ players, onPlayersChange }: { players: Player[]; onPlayer
           <div className="grid grid-cols-2 gap-1.5">
             <input required placeholder="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               className="col-span-2 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500/60 placeholder-white/20" />
-            <input placeholder="#" type="number" value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value }))}
+            <input placeholder="#" type="number" min="0" value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value }))}
               className="bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500/60 placeholder-white/20" />
             <input placeholder="PG/SG/SF/PF/C" value={form.position} onChange={e => setForm(f => ({ ...f, position: e.target.value }))}
               className="bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500/60 placeholder-white/20" />

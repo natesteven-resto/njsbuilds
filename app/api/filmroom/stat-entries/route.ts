@@ -1,28 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getVerifiedUser, createServiceClient, stripServerFields } from '@/lib/supabase-server'
+import { getVerifiedUser, createServiceClient } from '@/lib/supabase-server'
+
+const VALID_STAT_TYPES = new Set([
+  '2M','2X','3M','3X','FTM','FTX','OREB','DREB','AST','STL','BLK','DEF','TO','FOUL',
+  'PTS','REB','FT', // legacy
+])
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getVerifiedUser(request)
-    const supabase = createServiceClient()
+    const { user, supabase } = await getVerifiedUser(request)
     const { searchParams } = new URL(request.url)
     const gameId = searchParams.get('game_id')
     if (!gameId) return NextResponse.json({ error: 'game_id required' }, { status: 400 })
 
-    const { data: game } = await supabase
-      .from('games').select('owner_id').eq('id', gameId).single()
-    if (!game || game.owner_id !== user.id)
+    // Verify game via RLS client
+    const { data: game, error: gameErr } = await supabase
+      .from('games').select('id, owner_id').eq('id', gameId).single()
+    if (gameErr || !game || game.owner_id !== user.id)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    const { data, error } = await supabase
+    const svc = createServiceClient()
+    const { data, error } = await svc
       .from('stat_entries')
       .select('*, players(id, name, number)')
-      .eq('game_id', gameId)
-      .eq('owner_id', user.id)
+      .eq('game_id', gameId).eq('owner_id', user.id)
       .order('video_time_ms', { ascending: true })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json(data)
+    return NextResponse.json(data ?? [])
   } catch (e) {
     if (e instanceof NextResponse) return e
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
@@ -31,37 +36,41 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await getVerifiedUser(request)
-    const supabase = createServiceClient()
+    const { user, supabase } = await getVerifiedUser(request)
     const raw = await request.json()
-    const body = stripServerFields(raw)
 
-    if (!body.game_id) return NextResponse.json({ error: 'game_id required' }, { status: 400 })
+    // Explicit allowlist
+    const gameId      = typeof raw.game_id    === 'string' ? raw.game_id    : null
+    const playerId    = typeof raw.player_id  === 'string' ? raw.player_id  : null
+    const statType    = typeof raw.stat_type  === 'string' ? raw.stat_type  : null
+    const videoTimeMs = typeof raw.video_time_ms === 'number' ? Math.max(0, Math.floor(raw.video_time_ms)) : 0
 
-    // Verify game ownership — get team_id too for player cross-check
-    const { data: game } = await supabase
-      .from('games').select('owner_id, team_id').eq('id', body.game_id).single()
-    if (!game || game.owner_id !== user.id)
+    if (!gameId)   return NextResponse.json({ error: 'game_id required' }, { status: 400 })
+    if (!statType) return NextResponse.json({ error: 'stat_type required' }, { status: 400 })
+    if (!VALID_STAT_TYPES.has(statType))
+      return NextResponse.json({ error: `Invalid stat_type: ${statType}` }, { status: 400 })
+
+    // Verify game via RLS client
+    const { data: game, error: gameErr } = await supabase
+      .from('games').select('id, owner_id, team_id').eq('id', gameId).single()
+    if (gameErr || !game || game.owner_id !== user.id)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    // Verify player ownership AND same team as game
-    if (body.player_id) {
+    // Verify player: owned + same team as game
+    if (playerId) {
       const { data: player } = await supabase
-        .from('players')
-        .select('owner_id, team_id')
-        .eq('id', body.player_id)
-        .single()
+        .from('players').select('id, owner_id, team_id').eq('id', playerId).single()
       if (!player || player.owner_id !== user.id)
         return NextResponse.json({ error: 'Forbidden: player not owned' }, { status: 403 })
       if (player.team_id !== game.team_id)
         return NextResponse.json({ error: 'Forbidden: player not on game team' }, { status: 403 })
     }
 
-    const { data, error } = await supabase
+    const svc = createServiceClient()
+    const { data, error } = await svc
       .from('stat_entries')
-      .insert({ ...body, owner_id: user.id })
-      .select('*, players(id, name, number)')
-      .single()
+      .insert({ game_id: gameId, player_id: playerId, stat_type: statType, video_time_ms: videoTimeMs, owner_id: user.id })
+      .select('*, players(id, name, number)').single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data, { status: 201 })
@@ -73,19 +82,19 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { user } = await getVerifiedUser(request)
-    const supabase = createServiceClient()
+    const { user, supabase } = await getVerifiedUser(request)
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
+    // Verify via RLS client — will return null if not owned
     const { data: entry } = await supabase
-      .from('stat_entries').select('owner_id').eq('id', id).single()
+      .from('stat_entries').select('id, owner_id').eq('id', id).single()
     if (!entry || entry.owner_id !== user.id)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    const { error } = await supabase
-      .from('stat_entries').delete().eq('id', id).eq('owner_id', user.id)
+    const svc = createServiceClient()
+    const { error } = await svc.from('stat_entries').delete().eq('id', id).eq('owner_id', user.id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
   } catch (e) {

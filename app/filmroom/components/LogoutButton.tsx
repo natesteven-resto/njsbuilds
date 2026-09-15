@@ -1,18 +1,14 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabaseBrowser } from '@/lib/supabase-browser'
 import { LogOut } from 'lucide-react'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 export function LogoutButton() {
   const router = useRouter()
 
   const handleLogout = async () => {
+    const supabase = getSupabaseBrowser()
     await supabase.auth.signOut()
     router.push('/filmroom/login')
     router.refresh()

@@ -79,8 +79,8 @@ export async function GET(request: NextRequest) {
     // R2 — generate short-lived presigned GET URL
     const key = extractR2Key(game.video_url)
     if (!key) {
-      // Unrecognized URL format — return as-is (legacy; should not reach after cutover)
-      return NextResponse.json({ type: 'direct', src: game.video_url, expiresInSeconds: null })
+      // Unrecognized URL format — fail closed; never return raw URL
+      return NextResponse.json({ error: 'Unsupported video storage format' }, { status: 400 })
     }
 
     const signedUrl = await getSignedUrl(
