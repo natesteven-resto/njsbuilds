@@ -34,7 +34,18 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       .order('position', { ascending: true })
 
     if (pcErr) return NextResponse.json({ error: pcErr.message }, { status: 500 })
-    return NextResponse.json({ ...pl, clips: pclips ?? [] })
+
+    // Supabase returns relation names as plural (clips, games).
+    // Normalize to singular (clip, clip.game) for page consumption.
+    const normalized = (pclips ?? []).map((pc: Record<string, unknown>) => {
+      const clipRaw = (Array.isArray(pc.clips) ? pc.clips[0] : pc.clips) as Record<string, unknown> | null
+      if (!clipRaw) return { ...pc, clips: undefined, clip: null }
+      const gameRaw = (Array.isArray(clipRaw.games) ? clipRaw.games[0] : clipRaw.games) as Record<string, unknown> | null
+      const clip = { ...clipRaw, games: undefined, game: gameRaw ?? null }
+      return { ...pc, clips: undefined, clip }
+    })
+
+    return NextResponse.json({ ...pl, clips: normalized })
   } catch (e) {
     if (e instanceof NextResponse) return e
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

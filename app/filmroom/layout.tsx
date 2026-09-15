@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Barlow_Condensed } from 'next/font/google'
 
 export const metadata: Metadata = {
-  title: 'Courtside Studio — NJS Builds',
+  title: 'Film Room — Basketball Film Study',
   description: 'Basketball film study platform for coaches.',
 }
 
@@ -17,7 +17,7 @@ const barlowCondensed = Barlow_Condensed({
 
 export default function FilmRoomLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`min-h-screen bg-[#0d0f12] text-white font-sans ${barlowCondensed.variable}`}>
+    <div className={`min-h-screen bg-[#181917] text-[#eee9df] font-sans ${barlowCondensed.variable}`}>
       {children}
     </div>
   )

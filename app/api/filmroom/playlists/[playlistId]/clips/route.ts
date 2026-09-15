@@ -55,7 +55,10 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 // Body: { ordered_ids: string[] }  — full membership in desired order
 export async function PATCH(request: NextRequest, { params }: Ctx) {
   try {
-    const { user } = await getVerifiedUser(request)
+    // Use the cookie-session client (supabase) for the RPC so auth.uid() is set
+    // in the DB session. svc (service role) has no JWT — auth.uid() would be null
+    // and the SECURITY DEFINER guard would correctly reject it.
+    const { user, supabase } = await getVerifiedUser(request)
     const { playlistId } = await params
     const body = await request.json().catch(() => ({}))
 
@@ -68,28 +71,28 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     if (!orderedIds.every(id => typeof id === 'string' && UUID_RE.test(id))) {
       return NextResponse.json({ error: 'ordered_ids must be valid UUIDs' }, { status: 400 })
     }
-    // Reject duplicates
     if (new Set(orderedIds).size !== orderedIds.length) {
       return NextResponse.json({ error: 'ordered_ids contains duplicates' }, { status: 400 })
     }
 
-    // Ownership check before calling the RPC (defense in depth; RPC also checks)
+    // Pre-flight ownership check via service client (fast, no RLS scan needed)
     const svc = createServiceClient()
     const { data: pl } = await svc.from('playlists').select('owner_id').eq('id', playlistId).single()
     if (!pl) return NextResponse.json({ error: 'Playlist not found' }, { status: 404 })
     assertOwner(pl.owner_id, user.id)
 
-    // Atomic reorder via SECURITY DEFINER function — validates membership and applies atomically
-    const { error: rpcErr } = await svc.rpc('reorder_playlist_clips', {
+    // Call RPC through the authenticated session client so auth.uid() resolves
+    // correctly inside the SECURITY DEFINER function.
+    const { error: rpcErr } = await supabase.rpc('reorder_playlist_clips', {
       p_playlist_id: playlistId,
       p_ordered_ids: orderedIds as string[],
     })
 
     if (rpcErr) {
-      // Surface RPC validation errors (membership mismatch, foreign IDs) as 400
       const msg = rpcErr.message ?? ''
-      const status = /not found|mismatch|does not belong|length/.test(msg) ? 400 : 500
-      return NextResponse.json({ error: msg }, { status })
+      // Map RPC validation errors (membership, unknown IDs, duplicates) to 400
+      const is400 = /not found|mismatch|does not belong|length|duplicate|authenticated/i.test(msg)
+      return NextResponse.json({ error: msg }, { status: is400 ? 400 : 500 })
     }
 
     return NextResponse.json({ ok: true })

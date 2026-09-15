@@ -57,7 +57,7 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
         onChange={e => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false) } }}
-        className="font-medium bg-transparent border-b border-blue-500 outline-none text-sm text-white w-40 px-0.5"
+        className="font-medium bg-transparent border-b border-[#c66a3e] outline-none text-sm text-white w-40 px-0.5"
         disabled={saving}
       />
     )
@@ -66,7 +66,7 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
   return (
     <button
       onClick={() => { setDraft(value); setEditing(true) }}
-      className="font-medium truncate text-sm hover:text-blue-300 transition-colors flex items-center gap-1 group"
+      className="font-medium truncate text-sm hover:text-[#c66a3e] transition-colors flex items-center gap-1 group"
       title="Tap to edit"
     >
       {value}
@@ -129,6 +129,8 @@ interface StatEntry {
   video_time_ms: number
   game_id: string
   created_at: string
+  shot_x?: number | null
+  shot_y?: number | null
 }
 
 // Raw entry from DB (includes nested players object)
@@ -140,6 +142,8 @@ interface RawStatEntry {
   game_id: string
   created_at: string
   players: { id: string; name: string; number: number | null } | null
+  shot_x?: number | null
+  shot_y?: number | null
 }
 
 function rawToEntry(raw: RawStatEntry): StatEntry {
@@ -152,6 +156,8 @@ function rawToEntry(raw: RawStatEntry): StatEntry {
     video_time_ms: raw.video_time_ms,
     game_id: raw.game_id,
     created_at: raw.created_at,
+    shot_x: raw.shot_x ?? null,
+    shot_y: raw.shot_y ?? null,
   }
 }
 
@@ -181,26 +187,48 @@ function StatEntryPanel({
   const [selectedStat, setSelectedStat] = useState<StatType | null>(null)
   const [logging, setLogging] = useState(false)
   const [redoStack, setRedoStack] = useState<StatEntry[]>([])
+  // Staged shot location: set by tapping the court SVG, cleared after player tap
+  const [stagedShot, setStagedShot] = useState<{ x: number; y: number } | null>(null)
+  const [showCourtCapture, setShowCourtCapture] = useState(false)
+
+  const SHOT_TYPES_SET = new Set(['2M','3M','FTM','2X','3X','FTX'])
 
   const allPlayers = [...players, OPP_PLAYER]
 
   const handleStatTap = (stat: StatType) => {
-    setSelectedStat(prev => prev === stat ? null : stat)
+    const next = selectedStat === stat ? null : stat
+    setSelectedStat(next)
+    // Auto-show court when a shot stat is selected, hide for non-shots
+    if (next && SHOT_TYPES_SET.has(next)) setShowCourtCapture(true)
+    else { setShowCourtCapture(false); setStagedShot(null) }
+  }
+
+  const handleCourtTap = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    const y = Math.max(0, Math.min(1, (e.clientY - rect.top)  / rect.height))
+    setStagedShot({ x: parseFloat(x.toFixed(4)), y: parseFloat(y.toFixed(4)) })
   }
 
   const handlePlayerTap = async (player: Player) => {
     if (!selectedStat || logging) return
     setLogging(true)
     try {
+      const body: Record<string, unknown> = {
+        game_id: gameId,
+        player_id: player.id === OPP_ID ? null : player.id,
+        stat_type: selectedStat,
+        video_time_ms: currentMs,
+      }
+      // Include staged shot coords only for shot stat types
+      if (stagedShot && SHOT_TYPES_SET.has(selectedStat)) {
+        body.shot_x = stagedShot.x
+        body.shot_y = stagedShot.y
+      }
       const res = await fetch('/api/filmroom/stat-entries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          game_id: gameId,
-          player_id: player.id === OPP_ID ? null : player.id,
-          stat_type: selectedStat,
-          video_time_ms: currentMs,
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error('Failed to save')
       const raw: RawStatEntry = await res.json()
@@ -209,8 +237,8 @@ function StatEntryPanel({
         ? { ...rawToEntry(raw), player_id: OPP_ID, player_name: 'Opponent', player_number: 'OPP' }
         : rawToEntry(raw)
       onLog(entry)
-      setRedoStack([]) // new entry clears redo
-      // Keep stat selected so coach can keep tapping players
+      setRedoStack([])
+      setStagedShot(null) // clear after commit; keep stat selected for rapid entry
     } catch {
       // silently ignore — entry was not saved
     } finally {
@@ -279,7 +307,7 @@ function StatEntryPanel({
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+              className="px-4 py-1.5 rounded-xl text-xs font-semibold transition-colors" style={{background:"#c66a3e",color:"#181917"}}
             >
               Done
             </button>
@@ -353,11 +381,44 @@ function StatEntryPanel({
 
 
 
+        {/* ── Court shot capture — visible when a shot stat is selected ── */}
+        {showCourtCapture && (
+          <div className="shrink-0 border-t border-white/8 px-4 py-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-widest"
+                style={{ color: 'rgba(238,233,223,0.50)' }}>Tap court to place shot</span>
+              {stagedShot
+                ? <span className="text-[10px] font-semibold" style={{ color: '#c66a3e' }}>✓ Location set</span>
+                : <span className="text-[10px]" style={{ color: 'rgba(238,233,223,0.35)' }}>Optional</span>}
+            </div>
+            <svg viewBox="0 0 50 47" role="button" aria-label="Tap to set shot location"
+              className="w-full rounded-lg cursor-crosshair"
+              style={{ background: '#1a1d23', border: '1px solid rgba(255,255,255,0.08)', maxHeight: 110, display: 'block' }}
+              onClick={handleCourtTap}>
+              <rect x="1" y="1" width="48" height="45" rx="1" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
+              <rect x="16" y="1" width="18" height="19" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
+              <circle cx="25" cy="20" r="6" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
+              <path d="M 4 1 Q 4 35 25 38 Q 46 35 46 1" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
+              <circle cx="25" cy="5" r="1.2" fill="none" stroke="rgba(255,255,255,0.40)" strokeWidth="0.5" />
+              {stagedShot && (
+                <circle cx={1 + stagedShot.x * 48} cy={1 + stagedShot.y * 45}
+                  r="1.8" fill="#c66a3e" stroke="#e07a4a" strokeWidth="0.4"
+                  style={{ pointerEvents: 'none' }} />
+              )}
+            </svg>
+            {stagedShot && (
+              <button onClick={() => setStagedShot(null)}
+                className="mt-1 w-full text-center text-[10px]"
+                style={{ color: 'rgba(238,233,223,0.40)' }}>Clear location</button>
+            )}
+          </div>
+        )}
+
         {/* ── Step 2 + Players — also NOT scrollable ── */}
         <div className="shrink-0 border-t border-white/8">
           <div className="px-5 py-2">
             <span className="text-sm font-semibold">
-              <span className={selectedStat ? 'text-blue-400' : 'text-white/30'}>2 · </span>
+              <span className={selectedStat ? 'text-[#c66a3e]' : 'text-white/30'}>2 · </span>
               <span className={selectedStat ? 'text-white/80' : 'text-white/30'}>
                 {selectedStat ? `TAP WHO — ${statLabel(selectedStat)}` : 'TAP WHO'}
               </span>
@@ -518,7 +579,7 @@ function BoxScorePanel({
       <div className="text-center py-8">
         <BarChart className="w-8 h-8 mx-auto text-white/15 mb-2" />
         <p className="text-xs text-white/30">No stats yet.</p>
-        <p className="text-xs text-white/20 mt-1">Tap the stat button below the video to start tagging.</p>
+        <p className="text-xs text-white/50 mt-1">Tap the stat button below the video to start tagging.</p>
       </div>
     )
   }
@@ -574,11 +635,11 @@ function BoxScorePanel({
                           {playerEntries.slice().sort((a, b) => a.video_time_ms - b.video_time_ms).map((entry) => (
                             <button key={entry.id}
                               onClick={(e) => { e.stopPropagation(); onSeek(entry.video_time_ms) }}
-                              className="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-blue-500/15 border border-transparent text-left group"
+                              className="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-[rgba(198,106,62,0.12)] border border-transparent text-left group"
                             >
-                              <Play className="w-3 h-3 text-white/20 group-hover:text-blue-400 shrink-0" />
+                              <Play className="w-3 h-3 text-white/40 group-hover:text-[#c66a3e] shrink-0" />
                               <span className="font-mono text-white/40 tabular-nums text-[11px] w-10 shrink-0">{msToDisplay(entry.video_time_ms)}</span>
-                              <span className="font-bold text-blue-300 text-[11px] flex-1">{STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type}</span>
+                              <span className="font-bold text-[11px] flex-1" style={{color:"#c66a3e"}}>{STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type}</span>
                               <button onClick={(e) => { e.stopPropagation(); onDeleteEntry(entry.id) }}
                                 style={{ touchAction: 'manipulation' }}
                                 aria-label={`Delete ${STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type} entry`}
@@ -747,7 +808,7 @@ function VideoUploadZone({
           <button
             type="button"
             onClick={triggerPicker}
-            className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-semibold text-white transition-colors shadow-lg"
+            className="px-6 py-3 rounded-xl text-sm font-semibold transition-colors shadow-lg" style={{background:"#c66a3e",color:"#181917"}}
           >
             Choose Video
           </button>
@@ -760,7 +821,7 @@ function VideoUploadZone({
 
       {state.phase === 'signing' && (
         <>
-          <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+          <Loader2 className="w-8 h-8 animate-spin" style={{color:"#c66a3e"}} />
           <p className="text-sm text-white/50">Preparing upload…</p>
         </>
       )}
@@ -768,7 +829,7 @@ function VideoUploadZone({
       {state.phase === 'uploading' && (
         <div className="w-full max-w-xs px-6 text-center">
           <div className="mb-3">
-            <Loader2 className="w-7 h-7 text-blue-400 animate-spin mx-auto" />
+            <Loader2 className="w-7 h-7 animate-spin mx-auto" style={{color:"#c66a3e"}} />
           </div>
           <p className="text-sm text-white/70 mb-3">
             Uploading via {state.method === 'stream' ? 'Cloudflare Stream' : 'R2'}… {state.progress}%
@@ -778,8 +839,8 @@ function VideoUploadZone({
           </p>
           <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
             <div
-              className="h-full bg-blue-500 rounded-full transition-all duration-300"
-              style={{ width: `${state.progress}%` }}
+              className="h-full rounded-full transition-all duration-300"
+              style={{ width: `${state.progress}%`, background: '#c66a3e' }}
             />
           </div>
         </div>
@@ -1154,12 +1215,12 @@ function TransportBar({
           }}>
           {/* Clip region highlight */}
           {inPct != null && outPct != null && (
-            <div className="absolute top-0 h-full bg-blue-500/40 rounded-full"
-              style={{ left: `${inPct}%`, width: `${outPct - inPct}%` }} />
+            <div className="absolute top-0 h-full rounded-full"
+              style={{ left: `${inPct}%`, width: `${outPct - inPct}%`, background: 'rgba(198,106,62,0.35)' }} />
           )}
           {/* Progress */}
-          <div className="absolute top-0 left-0 h-full bg-blue-500 rounded-full transition-none"
-            style={{ width: `${pct}%` }} />
+          <div className="absolute top-0 left-0 h-full rounded-full transition-none"
+            style={{ width: `${pct}%`, background: '#c66a3e' }} />
           {/* Thumb */}
           <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity"
             style={{ left: `calc(${pct}% - 6px)` }} />
@@ -1192,7 +1253,7 @@ function TransportBar({
 
         {/* Play/Pause */}
         <button onClick={onPlayPause}
-          className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center transition-colors" title="Play/Pause (Space)">
+          className="w-9 h-9 rounded-full flex items-center justify-center transition-colors" style={{background:"#c66a3e",color:"#181917"}} title="Play/Pause (Space)">
           {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
         </button>
 
@@ -1230,8 +1291,8 @@ function TransportBar({
           {onStatTap && (
             <button
               onClick={onStatTap}
-              style={{ touchAction: 'manipulation' }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-semibold transition-all ml-1 border border-blue-500/40"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg active:scale-95 text-xs font-semibold transition-all ml-1 border"
+              style={{ touchAction: 'manipulation', background: '#c66a3e', color: '#181917', borderColor: 'rgba(198,106,62,0.5)' }}
             >
               <BarChart className="w-3 h-3" /> Tag Stat
             </button>
@@ -1240,7 +1301,7 @@ function TransportBar({
       </div>
 
       {/* Keyboard shortcut hints */}
-      <div className="flex gap-3 text-[10px] text-white/20 border-t border-white/5 pt-2">
+      <div className="flex gap-3 text-[10px] text-white/50 border-t border-white/5 pt-2">
         <span><kbd className="font-mono bg-white/8 px-1 rounded">Space</kbd> play/pause</span>
         <span><kbd className="font-mono bg-white/8 px-1 rounded">←</kbd><kbd className="font-mono bg-white/8 px-1 rounded">→</kbd> frame</span>
         <span><kbd className="font-mono bg-white/8 px-1 rounded">J</kbd><kbd className="font-mono bg-white/8 px-1 rounded">L</kbd> ±5s</span>
@@ -1336,7 +1397,7 @@ function SaveClipModal({
             <label className="block text-xs text-white/50 mb-1">Clip Title</label>
             <input type="text" placeholder="e.g. Pick and roll coverage"
               value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500/60 placeholder-white/20" />
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
           </div>
 
           <div>
@@ -1355,7 +1416,7 @@ function SaveClipModal({
             <label className="block text-xs text-white/50 mb-1">Tags <span className="text-white/25">(comma-separated)</span></label>
             <input type="text" placeholder="closeout, help-D, zone"
               value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500/60 placeholder-white/20" />
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
           </div>
 
           {players.length > 0 && (
@@ -1364,7 +1425,7 @@ function SaveClipModal({
               <div className="flex flex-wrap gap-1.5">
                 {players.map(p => (
                   <button key={p.id} type="button" onClick={() => togglePlayer(p.id)}
-                    className={`px-2.5 py-1 rounded-xl text-xs transition-all border ${form.player_ids.includes(p.id) ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'border-white/8 text-white/40 hover:text-white/70'}`}>
+                    className={`px-2.5 py-1 rounded-xl text-xs transition-all border ${form.player_ids.includes(p.id) ? 'bg-[rgba(198,106,62,0.15)] text-[#eee9df] border-[rgba(198,106,62,0.35)]' : 'border-white/8 text-white/50 hover:text-white/80'}`}>
                     #{p.number} {p.name}
                   </button>
                 ))}
@@ -1381,7 +1442,7 @@ function SaveClipModal({
               placeholder="What to watch for…"
               rows={2}
               maxLength={500}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500/60 placeholder-white/20 resize-none"
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20 resize-none"
             />
           </div>
 
@@ -1419,7 +1480,7 @@ function SaveClipModal({
               Cancel
             </button>
             <button type="submit" disabled={loading}
-              className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50">
+              className="flex-1 py-2 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50" style={{background:"#c66a3e",color:"#181917"}}>
               {loading && <Loader2 className="w-3 h-3 animate-spin" />}
               Save Clip
             </button>
@@ -1470,9 +1531,9 @@ function CommentThread({ clipId }: { clipId: string }) {
       {expanded && (
         <div className="space-y-2">
           {comments.map(c => (
-            <div key={c.id} className={`rounded-xl px-3 py-2 text-xs ${c.author_role === 'coach' ? 'bg-blue-500/10 border border-blue-500/15' : 'bg-white/4 border border-white/8'}`}>
+            <div key={c.id} className={`rounded-xl px-3 py-2 text-xs ${c.author_role === 'coach' ? 'bg-[rgba(198,106,62,0.10)] border border-[rgba(198,106,62,0.18)]' : 'bg-white/4 border border-white/8'}`}>
               <div className="flex items-center gap-2 mb-1">
-                <span className={`font-medium ${c.author_role === 'coach' ? 'text-blue-300' : 'text-white/70'}`}>{c.author_name}</span>
+                <span className={`font-medium ${c.author_role === 'coach' ? 'text-[#c66a3e]' : 'text-white/70'}`}>{c.author_name}</span>
                 <span className="text-white/25">{new Date(c.created_at).toLocaleDateString()}</span>
               </div>
               <p className="text-white/70">{c.text}</p>
@@ -1482,9 +1543,9 @@ function CommentThread({ clipId }: { clipId: string }) {
             <input value={text} onChange={e => setText(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() } }}
               placeholder="Add coaching note..."
-              className="flex-1 bg-black/20 border border-white/8 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500/40 placeholder-white/20" />
+              className="flex-1 bg-black/20 border border-white/8 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:border-[rgba(198,106,62,0.40)] placeholder-white/20" />
             <button onClick={submit} disabled={loading || !text.trim()}
-              className="p-1.5 bg-blue-600 hover:bg-blue-500 rounded-xl disabled:opacity-40 transition-colors">
+              className="p-1.5 rounded-xl disabled:opacity-40 transition-colors" style={{background:"#c66a3e",color:"#181917"}}>
               {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
             </button>
           </div>
@@ -1509,12 +1570,12 @@ function ClipItem({
   const [showComments, setShowComments] = useState(false)
 
   return (
-    <div className={`rounded-xl border transition-all ${isActive ? 'border-blue-500/40 bg-blue-500/8' : 'border-white/6 bg-white/3 hover:bg-white/5'}`}>
+    <div className={`rounded-xl border transition-all ${isActive ? 'border-[rgba(198,106,62,0.40)] bg-[rgba(198,106,62,0.08)]' : 'border-white/6 bg-white/3 hover:bg-white/5'}`}>
       <div className="p-3 cursor-pointer" onClick={onSelect}>
         <div className="flex items-start gap-2">
           <button
             onClick={(e) => { e.stopPropagation(); onJumpTo(clip.start_time_ms) }}
-            className="shrink-0 mt-0.5 w-6 h-6 rounded-lg bg-white/8 hover:bg-blue-500/30 flex items-center justify-center transition-colors"
+            className="shrink-0 mt-0.5 w-6 h-6 rounded-lg bg-white/8 hover:bg-[rgba(198,106,62,0.25)] flex items-center justify-center transition-colors"
             aria-label={`Jump to clip: ${clip.title}`}>
             <Play className="w-2.5 h-2.5 ml-0.5" aria-hidden />
           </button>
@@ -1598,11 +1659,11 @@ function VideoUrlModal({ gameId, current, onClose, onSave }: {
         <h2 className="text-sm font-semibold mb-4">Set Video URL</h2>
         <p className="text-xs text-white/40 mb-3">Paste any direct video URL. Cloudflare Stream URLs work natively.</p>
         <input type="url" placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)}
-          className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500/60 placeholder-white/20 mb-3" />
+          className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20 mb-3" />
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-white/10 text-xs text-white/60 hover:bg-white/5 transition-colors">Cancel</button>
           <button onClick={save} disabled={loading}
-            className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50">
+            className="flex-1 py-2 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50" style={{background:"#c66a3e",color:"#181917"}}>
             {loading && <Loader2 className="w-3 h-3 animate-spin" />} Save
           </button>
         </div>
@@ -2193,7 +2254,7 @@ export default function GameFilmRoom() {
               ['roster', 'Roster', Users],
             ] as const).map(([tab, label, Icon]) => (
               <button key={tab} onClick={() => setPanelTab(tab)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium border-b-2 transition-all ${panelTab === tab ? 'border-blue-500 text-blue-300' : 'border-transparent text-white/40 hover:text-white/70'}`}>
+                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium border-b-2 transition-all ${panelTab === tab ? 'border-[#c66a3e] text-[#eee9df]' : 'border-transparent text-white/50 hover:text-white/80'}`}>
                 <Icon className="w-3.5 h-3.5" /> {label}
 
               </button>
@@ -2218,7 +2279,7 @@ export default function GameFilmRoom() {
                   <div className="text-center py-10">
                     <Scissors className="w-8 h-8 mx-auto text-white/15 mb-2" />
                     <p className="text-xs text-white/30">No clips yet.</p>
-                    <p className="text-xs text-white/20 mt-1">
+                    <p className="text-xs text-white/50 mt-1">
                       Tap <strong className="text-white/35">IN</strong> on the timeline, then <strong className="text-white/35">OUT</strong>, then <strong className="text-white/35">Save Clip</strong>.
                       On desktop use <kbd className="font-mono bg-white/8 px-1 rounded text-[10px]">I</kbd> and <kbd className="font-mono bg-white/8 px-1 rounded text-[10px]">O</kbd> keys.
                     </p>
@@ -2390,7 +2451,7 @@ function ShotChartPanel({
     <div className="p-4 text-center py-10">
       <ZoomIn className="w-7 h-7 mx-auto mb-2 text-white/15" />
       <p className="text-xs text-white/30">No shot locations yet.</p>
-      <p className="text-xs text-white/20 mt-1">Set shot coordinates when tagging shots in the stat panel.</p>
+      <p className="text-xs text-white/50 mt-1">Set shot coordinates when tagging shots in the stat panel.</p>
     </div>
   )
 
@@ -2608,13 +2669,13 @@ function RosterPanel({ players, teamId, onPlayersChange }: { players: Player[]; 
         <form onSubmit={addPlayer} className="space-y-2 p-3 rounded-xl bg-white/3 border border-blue-500/25">
           <div className="grid grid-cols-2 gap-1.5">
             <input required placeholder="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="col-span-2 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500/60 placeholder-white/20" />
+              className="col-span-2 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
             <input placeholder="#" type="number" min="0" value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value }))}
-              className="bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500/60 placeholder-white/20" />
+              className="bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
             <input placeholder="PG/SG/SF/PF/C" value={form.position} onChange={e => setForm(f => ({ ...f, position: e.target.value }))}
-              className="bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500/60 placeholder-white/20" />
+              className="bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
             <input placeholder="Parent email" type="email" value={form.parent_email} onChange={e => setForm(f => ({ ...f, parent_email: e.target.value }))}
-              className="col-span-2 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500/60 placeholder-white/20" />
+              className="col-span-2 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
           </div>
           <div className="flex gap-1.5">
             <button type="button" onClick={() => setAdding(false)}

@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { AuthShell } from '../components/AuthShell'
 import { getSupabaseBrowser } from '@/lib/filmroom-supabase-browser'
-import { Loader2, Film, AlertCircle, Mail, RefreshCw, CheckCircle2, Info } from 'lucide-react'
+import { Loader2, AlertCircle, Mail, RefreshCw, CheckCircle2, Info } from 'lucide-react'
 
 const RESEND_COOLDOWN_SEC = 60
 
@@ -37,10 +38,10 @@ function callbackErrorInfo(slug: string | null): CallbackErrorInfo | null {
 
 function SenderGuidance() {
   return (
-    <div className="bg-white/4 border border-white/8 rounded-xl px-4 py-3 space-y-1">
-      <p className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">Email comes from</p>
+    <div className="bg-white/4 border border-white/8 rounded-md px-4 py-3 space-y-1">
+      <p className="text-[11px] font-semibold text-white/60 uppercase tracking-wider">Email comes from</p>
       <p className="text-xs font-mono text-white/70">noreply@mail.njsbuilds.com</p>
-      <p className="text-xs text-white/40">Check spam, junk, and Promotions tabs</p>
+      <p className="text-xs text-white/60">Check spam, junk, and Promotions tabs</p>
     </div>
   )
 }
@@ -72,6 +73,7 @@ function LoginForm() {
   const handleResend = useCallback(async (emailToSend: string) => {
     if (cooldownSec > 0 || resending || !emailToSend.trim()) return
     setResending(true); setResendError(null); setResendOk(false)
+    try {
     const supabase = getSupabaseBrowser()
     const { error: err } = await supabase.auth.resend({
       type: 'signup',
@@ -81,11 +83,13 @@ function LoginForm() {
     setResending(false)
     if (err) { setResendError(err.message) }
     else { setResendOk(true); setCooldownSec(RESEND_COOLDOWN_SEC) }
+    } catch { setResendError('Unable to send email. Please try again.')} finally {setResending(false)}
   }, [cooldownSec, resending])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true); setError(null); setUnconfirmed(false); setResendOk(false); setResendError(null)
+    try {
     const supabase = getSupabaseBrowser()
     const { error: authErr } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
@@ -100,6 +104,7 @@ function LoginForm() {
     }
     router.push(next)
     router.refresh()
+    } catch { setError('Unable to sign in. Please try again.')} finally {setLoading(false)}
   }
 
   const ResendButton = ({ emailVal }: { emailVal: string }) => (
@@ -119,7 +124,7 @@ function LoginForm() {
       <button
         onClick={() => handleResend(emailVal)}
         disabled={cooldownSec > 0 || resending || !emailVal.trim()}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-white/10 text-sm text-white/60 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md border border-white/10 text-sm text-white/60 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {resending
           ? <><Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />Sending…</>
@@ -134,7 +139,7 @@ function LoginForm() {
   if (cbError) {
     return (
       <div className="space-y-4">
-        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+        <div className="flex items-start gap-3 px-4 py-3 rounded-md bg-amber-500/10 border border-amber-500/20">
           <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden />
           <div className="space-y-1">
             <p className="text-xs font-semibold text-amber-300">{cbError.title}</p>
@@ -144,12 +149,12 @@ function LoginForm() {
         <SenderGuidance />
         {cbError.action === 'resend' && (
           <>
-            {!email && (
+            {(
               <div>
                 <label htmlFor="resend-email" className="block text-xs font-medium text-white/60 mb-1.5">Your email address</label>
                 <input id="resend-email" type="email" autoComplete="email" value={email}
                   onChange={e => setEmail(e.target.value)} placeholder="you@example.com"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 transition-colors" />
+                  className="w-full bg-white/5 border border-white/10 rounded-md px-4 py-2.5 text-sm text-white placeholder-white/50 focus:outline-none focus:border-[#c66a3e] focus:ring-1 focus:ring-[#c66a3e] transition-colors" />
               </div>
             )}
             <ResendButton emailVal={email} />
@@ -157,12 +162,12 @@ function LoginForm() {
         )}
         {cbError.action === 'reset' && (
           <Link href="/filmroom/reset-password"
-            className="block w-full text-center py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-semibold text-white transition-colors">
+            className="block w-full text-center py-2.5 rounded-md bg-[#c66a3e] hover:bg-[#db8052] text-sm font-semibold text-[#181917] transition-colors">
             Request new password reset
           </Link>
         )}
         <button onClick={() => router.replace('/filmroom/login')}
-          className="w-full text-xs text-white/40 hover:text-white/60 transition-colors py-1">
+          className="w-full text-xs text-white/60 hover:text-white/60 transition-colors py-1">
           ← Back to sign in
         </button>
       </div>
@@ -173,7 +178,7 @@ function LoginForm() {
   if (unconfirmed) {
     return (
       <div className="space-y-4">
-        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+        <div className="flex items-start gap-3 px-4 py-3 rounded-md bg-amber-500/10 border border-amber-500/20">
           <Mail className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden />
           <div className="space-y-1">
             <p className="text-xs font-semibold text-amber-300">Email not confirmed</p>
@@ -186,7 +191,7 @@ function LoginForm() {
         <SenderGuidance />
         <ResendButton emailVal={email} />
         <button onClick={() => { setUnconfirmed(false); setResendOk(false); setResendError(null) }}
-          className="w-full text-xs text-white/40 hover:text-white/60 transition-colors py-1">
+          className="w-full text-xs text-white/60 hover:text-white/60 transition-colors py-1">
           ← Try a different account
         </button>
       </div>
@@ -195,42 +200,42 @@ function LoginForm() {
 
   // ── Normal sign-in form ──────────────────────────────────────────────────
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label htmlFor="email" className="block text-xs font-medium text-white/60 mb-1.5">Email address</label>
         <input id="email" type="email" autoComplete="email" required value={email}
           onChange={e => setEmail(e.target.value)}
           aria-describedby={error ? 'login-error' : undefined}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 transition-colors"
+          className="w-full bg-white/5 border border-white/10 rounded-md px-4 py-2.5 text-sm text-white placeholder-white/50 focus:outline-none focus:border-[#c66a3e] focus:ring-1 focus:ring-[#c66a3e] transition-colors"
           placeholder="you@example.com" />
       </div>
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <label htmlFor="password" className="block text-xs font-medium text-white/60">Password</label>
-          <Link href="/filmroom/reset-password" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+          <Link href="/filmroom/reset-password" className="text-xs text-[#e79568] hover:text-[#f2b18c] transition-colors">
             Forgot password?
           </Link>
         </div>
         <input id="password" type="password" autoComplete="current-password" required value={password}
           onChange={e => setPassword(e.target.value)}
           aria-describedby={error ? 'login-error' : undefined}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 transition-colors"
+          className="w-full bg-white/5 border border-white/10 rounded-md px-4 py-2.5 text-sm text-white placeholder-white/50 focus:outline-none focus:border-[#c66a3e] focus:ring-1 focus:ring-[#c66a3e] transition-colors"
           placeholder="••••••••" />
       </div>
       {error && (
         <div id="login-error" role="alert"
-          className="flex items-start gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300">
+          className="flex items-start gap-2 px-4 py-3 rounded-md bg-red-500/10 border border-red-500/20 text-xs text-red-300">
           <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden />{error}
         </div>
       )}
       <button type="submit" disabled={loading}
-        className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2">
+        className="w-full py-2.5 rounded-md bg-[#c66a3e] hover:bg-[#db8052] disabled:opacity-50 text-sm font-semibold text-[#181917] transition-colors flex items-center justify-center gap-2">
         {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden />}
         {loading ? 'Signing in…' : 'Sign in'}
       </button>
-      <p className="text-center text-xs text-white/40">
+      <p className="text-center text-xs text-white/60">
         No account?{' '}
-        <Link href="/filmroom/signup" className="text-blue-400 hover:text-blue-300 transition-colors">Create one</Link>
+        <Link href="/filmroom/signup" className="text-[#e79568] hover:text-[#f2b18c] transition-colors">Create one</Link>
       </p>
     </form>
   )
@@ -238,21 +243,13 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="cs min-h-screen flex items-center justify-center p-4" style={{ background: '#181917' }}>
-      <div className="w-full max-w-sm">
-        <div className="flex items-center gap-2.5 justify-center mb-8">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#c66a3e' }}>
-            <Film className="w-4 h-4" style={{ color: '#181917' }} aria-hidden />
-          </div>
-          <h1 className="text-lg font-bold tracking-tight" style={{ color: '#eee9df' }}>Film Room</h1>
-        </div>
-        <div className="bg-white/3 border border-white/8 rounded-2xl p-6">
-          <h2 className="text-sm font-semibold text-white mb-5">Sign in to your library</h2>
-          <Suspense fallback={<div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-white/30" aria-hidden /></div>}>
+    <AuthShell>
+        <div className="w-full">
+          <h2 className="text-3xl font-semibold text-[#eee9df] mb-7">Sign in to your library</h2>
+          <Suspense fallback={<div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-white/60" aria-hidden /></div>}>
             <LoginForm />
           </Suspense>
         </div>
-      </div>
-    </div>
+      </AuthShell>
   )
 }

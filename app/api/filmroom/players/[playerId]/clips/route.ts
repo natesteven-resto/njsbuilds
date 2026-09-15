@@ -34,12 +34,15 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // Also filter: only clips owned by caller (defense against service-client bypass)
+    // Supabase returns relation as plural (clips, games). Normalize to clip+game.
     const clips = (cpRows ?? [])
-      .map((r: Record<string, unknown>) => r.clips)
-      .filter((c): c is Record<string, unknown> =>
-        !!c && typeof c === 'object' && (c as Record<string, unknown>).game_id !== undefined
-      )
+      .map((r: Record<string, unknown>) => {
+        const raw = (Array.isArray(r.clips) ? r.clips[0] : r.clips) as Record<string, unknown> | null
+        if (!raw || !raw.game_id) return null
+        const gameRaw = (Array.isArray(raw.games) ? raw.games[0] : raw.games) as Record<string, unknown> | null
+        return { ...raw, games: undefined, game: gameRaw ?? null }
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== null)
 
     return NextResponse.json({ player, clips })
   } catch (e) {

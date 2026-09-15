@@ -109,14 +109,14 @@ export function DrawingOverlay({ active, onDataChange, initialData }: DrawingOve
   // Redraw whenever shapes change
   useEffect(() => {
     redraw(shapes)
-  }, [shapes, redraw])
+  }, [shapes, redraw, active])
 
   // Notify parent when shapes change
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     onDataChange({ shapes, width: canvas.width, height: canvas.height })
-  }, [shapes, onDataChange])
+  }, [shapes, onDataChange, active])
 
   const getPos = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current!

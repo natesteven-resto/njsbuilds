@@ -17,7 +17,7 @@ export function LogoutButton() {
   return (
     <button
       onClick={handleLogout}
-      className="pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] text-white/40 hover:text-white/70 hover:bg-white/6 transition-all border border-white/8"
+      className="pointer-events-auto flex items-center gap-1.5 min-h-11 px-3 py-2 rounded-md text-xs text-white/65 hover:text-white/70 hover:bg-white/6 transition-all border border-white/8"
       aria-label="Sign out of Film Room"
     >
       <LogOut className="w-3 h-3" aria-hidden />

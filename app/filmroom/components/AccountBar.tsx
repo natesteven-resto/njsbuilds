@@ -26,7 +26,7 @@ export function AccountBar() {
   return (
     <div className="flex items-center gap-2 shrink-0 ml-1">
       <span
-        className="hidden md:block text-[11px] text-white/30 max-w-[160px] truncate"
+        className="hidden md:block text-[11px] text-white/60 max-w-[160px] truncate"
         title={email}
       >
         {email}
