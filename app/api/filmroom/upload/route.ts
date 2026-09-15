@@ -38,7 +38,7 @@ function r2Client() {
   })
 }
 
-async function tryStreamUpload(filename: string, gameId: string, fileSizeBytes?: number): Promise<{ uploadUrl: string; videoId: string }> {
+async function tryStreamUpload(filename: string, gameId: string): Promise<{ uploadUrl: string; videoId: string }> {
   // Cloudflare Stream TUS direct creator upload
   // https://developers.cloudflare.com/stream/uploading-videos/direct-creator-uploads/
   const res = await fetch(
@@ -48,7 +48,7 @@ async function tryStreamUpload(filename: string, gameId: string, fileSizeBytes?:
       headers: {
         'Authorization': `Bearer ${STREAM_TOKEN}`,
         'Tus-Resumable': '1.0.0',
-        'Upload-Length': String(fileSizeBytes ?? 0),
+        'Upload-Length': '0',
         'Upload-Metadata': `name ${Buffer.from(filename).toString('base64')}`,
       },
     }
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     // Try Cloudflare Stream first
     if (ACCOUNT_ID && STREAM_TOKEN) {
       try {
-        const { uploadUrl, videoId } = await tryStreamUpload(filename, gameId, body.fileSizeBytes)
+        const { uploadUrl, videoId } = await tryStreamUpload(filename, gameId)
         return NextResponse.json({ method: 'stream', uploadUrl, videoId })
       } catch (streamErr) {
         console.warn('[upload] Stream failed, falling back to R2:', String(streamErr).slice(0, 200))
