@@ -91,7 +91,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     if (rpcErr) {
       const msg = rpcErr.message ?? ''
       // Map RPC validation errors (membership, unknown IDs, duplicates) to 400
-      const is400 = /not found|mismatch|does not belong|length|duplicate|authenticated/i.test(msg)
+      const is400 = rpcErr.code === 'P0001' || /not found|mismatch|do(?:es)? not belong|length|duplicate/i.test(msg)
       return NextResponse.json({ error: msg }, { status: is400 ? 400 : 500 })
     }
 

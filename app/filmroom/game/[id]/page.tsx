@@ -205,9 +205,12 @@ function StatEntryPanel({
   }
 
   const handleCourtTap = (e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    const y = Math.max(0, Math.min(1, (e.clientY - rect.top)  / rect.height))
+    const svg=e.currentTarget, matrix=svg.getScreenCTM()
+    if(!matrix)return
+    const point=svg.createSVGPoint();point.x=e.clientX;point.y=e.clientY
+    const local=point.matrixTransform(matrix.inverse())
+    const x=Math.max(0,Math.min(1,(local.x-1)/48))
+    const y=Math.max(0,Math.min(1,(local.y-1)/45))
     setStagedShot({ x: parseFloat(x.toFixed(4)), y: parseFloat(y.toFixed(4)) })
   }
 
@@ -393,7 +396,8 @@ function StatEntryPanel({
                 ? <span className="text-[10px] font-semibold" style={{ color: '#c66a3e' }}>✓ Location set</span>
                 : <span className="text-[10px]" style={{ color: 'rgba(238,233,223,0.35)' }}>Optional</span>}
             </div>
-            <svg viewBox="0 0 50 47" role="button" aria-label="Tap to set shot location"
+            <svg viewBox="0 0 50 47" role="button" tabIndex={0} aria-label="Shot location. Click court or use arrow keys to position the shot."
+              onKeyDown={e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter',' '].includes(e.key))return;e.preventDefault();setStagedShot(p=>{const x=p?.x??.5,y=p?.y??.5;return{x:Math.max(0,Math.min(1,x+(e.key==='ArrowRight'?.025:e.key==='ArrowLeft'?-.025:0))),y:Math.max(0,Math.min(1,y+(e.key==='ArrowDown'?.025:e.key==='ArrowUp'?-.025:0)))}})}}
               className="w-full rounded-lg cursor-crosshair"
               style={{ background: '#1a1d23', border: '1px solid rgba(255,255,255,0.08)', maxHeight: 110, display: 'block' }}
               onClick={handleCourtTap}>
