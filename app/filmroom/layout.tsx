@@ -1,15 +1,23 @@
 import type { Metadata } from 'next'
+import { Barlow_Condensed } from 'next/font/google'
 
 export const metadata: Metadata = {
-  title: 'Film Room — NJS Builds',
+  title: 'Courtside Studio — NJS Builds',
   description: 'Basketball film study platform for coaches.',
 }
 
-// Account controls are rendered inline in each page's header via AccountBar.
-// The fixed overlay has been removed to prevent overlapping page controls.
+// Barlow Condensed: real condensed sports heading face, weight 700+900
+// Scoped to filmroom layout only — does not affect the rest of the site.
+const barlowCondensed = Barlow_Condensed({
+  subsets: ['latin'],
+  weight: ['700', '900'],
+  variable: '--font-bc',
+  display: 'swap',
+})
+
 export default function FilmRoomLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#0d0f12] text-white font-sans">
+    <div className={`min-h-screen bg-[#0d0f12] text-white font-sans ${barlowCondensed.variable}`}>
       {children}
     </div>
   )

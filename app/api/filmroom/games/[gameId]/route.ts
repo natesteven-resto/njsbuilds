@@ -4,7 +4,8 @@ import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-se
 type Params = { params: Promise<{ gameId: string }> }
 
 // Explicit allowlist for PATCH — team_id and video fields are immutable/server-only
-const PATCH_FIELDS = ['opponent', 'game_date', 'location', 'notes', 'thumbnail_url'] as const
+// resume_position_ms: writable by owner for playback resume
+const PATCH_FIELDS = ['opponent', 'game_date', 'location', 'notes', 'thumbnail_url', 'resume_position_ms'] as const
 
 function pickPatchFields(raw: Record<string, unknown>) {
   const out: Partial<Record<typeof PATCH_FIELDS[number], unknown>> = {}
@@ -70,6 +71,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: 'opponent must be a non-empty string' }, { status: 400 })
       }
       patch.opponent = patch.opponent.trim()
+    }
+    if (patch.resume_position_ms !== undefined) {
+      const ms = Number(patch.resume_position_ms)
+      if (!Number.isFinite(ms) || ms < 0) {
+        return NextResponse.json({ error: 'resume_position_ms must be a non-negative number' }, { status: 400 })
+      }
+      patch.resume_position_ms = Math.round(ms)
     }
 
     const { data, error } = await svc

@@ -10,11 +10,12 @@ import {
   Plus, Trash2, Loader2, ChevronDown, ChevronUp, Upload,
   ZoomIn, AlertCircle, CheckCircle2, BarChart, Maximize2, Minimize2,
 } from 'lucide-react'
-import type { Game, Clip, Player, ClipCategory, ClipComment } from '@/types/filmroom'
-import { CATEGORY_LABELS, CATEGORY_COLORS } from '@/types/filmroom'
+import type { Game, Clip, Player, ClipCategory, ClipComment, Playlist } from '@/types/filmroom'
+import { CATEGORY_LABELS, CATEGORY_COLORS, PLAY_TYPES, normalizeDrawingData } from '@/types/filmroom'
 import { DrawingOverlay, type DrawingData } from '@/app/filmroom/components/DrawingOverlay'
 import { JogWheel } from '@/app/filmroom/components/JogWheel'
 import { AccountBar } from '@/app/filmroom/components/AccountBar'
+import { PresentationMode, type PresentationClip } from '@/app/filmroom/components/PresentationMode'
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -1269,6 +1270,7 @@ function SaveClipModal({
   const [form, setForm] = useState({
     title: '', category: 'offense' as ClipCategory,
     tags: '', is_highlight: false, player_ids: [] as string[],
+    coaching_note: '', play_type: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -1292,6 +1294,8 @@ function SaveClipModal({
           is_highlight: form.is_highlight,
           player_ids: form.player_ids,
           drawing_data: drawingData ?? null,
+          coaching_note: form.coaching_note.trim() || null,
+          play_type: form.play_type || null,
         }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
@@ -1367,6 +1371,37 @@ function SaveClipModal({
               </div>
             </div>
           )}
+
+          {/* Coaching note */}
+          <div>
+            <label className="block text-xs text-white/50 mb-1">Coaching note <span className="text-white/25">(optional)</span></label>
+            <textarea
+              value={form.coaching_note}
+              onChange={e => setForm(f => ({ ...f, coaching_note: e.target.value }))}
+              placeholder="What to watch for…"
+              rows={2}
+              maxLength={500}
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500/60 placeholder-white/20 resize-none"
+            />
+          </div>
+
+          {/* Play type */}
+          <div>
+            <label className="block text-xs text-white/50 mb-1">Play type</label>
+            <div className="flex flex-wrap gap-1.5">
+              {PLAY_TYPES.map(pt => (
+                <button key={pt} type="button"
+                  onClick={() => setForm(f => ({ ...f, play_type: f.play_type === pt ? '' : pt }))}
+                  className={`px-2 py-1 rounded-lg text-xs transition-all border ${
+                    form.play_type === pt
+                      ? 'border-[rgba(198,106,62,0.5)] bg-[rgba(198,106,62,0.15)] text-[#c66a3e]'
+                      : 'border-white/8 text-white/40 hover:text-white/70'
+                  }`}>
+                  {pt}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <label className="flex items-center gap-2 cursor-pointer">
             <div onClick={() => setForm(f => ({ ...f, is_highlight: !f.is_highlight }))}
@@ -1462,13 +1497,14 @@ function CommentThread({ clipId }: { clipId: string }) {
 // ─── Clip List Item ───────────────────────────────────────────────────────────
 
 function ClipItem({
-  clip, isActive, onSelect, onDelete, onJumpTo,
+  clip, isActive, onSelect, onDelete, onJumpTo, onAddToPlaylist,
 }: {
   clip: Clip
   isActive: boolean
   onSelect: () => void
   onDelete: (id: string) => void
   onJumpTo: (ms: number) => void
+  onAddToPlaylist?: (clipId: string) => void
 }) {
   const [showComments, setShowComments] = useState(false)
 
@@ -1509,6 +1545,14 @@ function ClipItem({
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {onAddToPlaylist && (
+              <button onClick={(e) => { e.stopPropagation(); onAddToPlaylist(clip.id) }}
+                aria-label={`Add ${clip.title} to playlist`}
+                title="Add to playlist"
+                className="p-1 rounded-lg text-white/30 hover:text-white/70 hover:bg-white/6 transition-all">
+                <Plus className="w-3 h-3" aria-hidden />
+              </button>
+            )}
             <button onClick={(e) => { e.stopPropagation(); setShowComments(s => !s) }}
               aria-label={showComments ? 'Hide comments' : 'Show comments'}
               aria-expanded={showComments}
@@ -1571,7 +1615,7 @@ function VideoUrlModal({ gameId, current, onClose, onSave }: {
 
 const FRAME_MS = 33 // ~30fps
 
-type PanelTab = 'clips' | 'stats' | 'roster'
+type PanelTab = 'clips' | 'stats' | 'roster' | 'shot-chart'
 
 export default function GameFilmRoom() {
   const params = useParams()
@@ -1606,6 +1650,14 @@ export default function GameFilmRoom() {
   const [statsFullscreen, setStatsFullscreen] = useState(false)
   const [statEntries, setStatEntries] = useState<StatEntry[]>([])
   const [sessionStatEntries, setSessionStatEntries] = useState<StatEntry[]>([])
+
+  // Courtside additions
+  const [playbackSpeed, setPlaybackSpeed] = useState(1)
+  const [showPresentation, setShowPresentation] = useState(false)
+  const [presentationClips, setPresentationClips] = useState<PresentationClip[]>([])
+  const [playlists, setPlaylists] = useState<Playlist[]>([])
+  const [showAddToPlaylist, setShowAddToPlaylist] = useState<string | null>(null) // clipId
+  const [instantClipPulse, setInstantClipPulse] = useState(false)
 
   // Load data
   useEffect(() => {
@@ -1764,6 +1816,56 @@ export default function GameFilmRoom() {
     setClips(c => c.filter(x => x.id !== id))
   }
 
+  // Playback speed — applied to <video> element
+  useEffect(() => {
+    const v = videoRef.current
+    if (v) v.playbackRate = playbackSpeed
+  }, [playbackSpeed])
+
+  // Instant clip: mark last 10s → now, clamped to 0
+  const instantClip = useCallback(() => {
+    const inMs = Math.max(0, currentMs - 10_000)
+    const outMs = currentMs
+    if (outMs - inMs < 500) return // too short
+    setMarkIn(inMs)
+    setMarkOut(outMs)
+    setInstantClipPulse(true)
+    setTimeout(() => setInstantClipPulse(false), 400)
+  }, [currentMs])
+
+  // Resume persistence: save position every 5s while playing
+  useEffect(() => {
+    if (!game?.id) return
+    const interval = setInterval(() => {
+      const v = videoRef.current
+      if (!v || v.paused || !isPlaying) return
+      const ms = Math.round(v.currentTime * 1000)
+      fetch(`/api/filmroom/games/${game.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resume_position_ms: ms }),
+      }).catch(() => {})
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [game?.id, isPlaying])
+
+  // Fetch playlists lazily when add-to-playlist is opened
+  const fetchPlaylists = useCallback(async () => {
+    if (playlists.length > 0) return
+    const res = await fetch('/api/filmroom/playlists')
+    if (res.ok) setPlaylists(await res.json())
+  }, [playlists.length])
+
+  // Start presentation for all clips in the game
+  const startPresentation = useCallback(async () => {
+    if (clips.length === 0) return
+    const tokenRes = await fetch(`/api/filmroom/video-token?gameId=${encodeURIComponent(gameId)}`)
+    if (!tokenRes.ok) return
+    const { src } = await tokenRes.json()
+    setPresentationClips(clips.map(clip => ({ clip, gameId, src })))
+    setShowPresentation(true)
+  }, [clips, gameId])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1782,11 +1884,16 @@ export default function GameFilmRoom() {
           break
         case 'f': case 'F': setIsFullscreen(f => !f); break
         case 'Escape': setIsFullscreen(false); break
+        // Instant clip: last 10s (Q key) — guard against input elements above
+        case 'q': case 'Q': instantClip(); break
+        // Speed toggles
+        case '-': setPlaybackSpeed(s => Math.max(0.25, parseFloat((s - 0.25).toFixed(2)))); break
+        case '=': setPlaybackSpeed(s => Math.min(2, parseFloat((s + 0.25).toFixed(2)))); break
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel, setIsFullscreen])
+  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel, setIsFullscreen, instantClip])
 
   if (loading) return (
     <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center">
@@ -1851,6 +1958,13 @@ export default function GameFilmRoom() {
 
   return (
     <div className="min-h-screen bg-[#0d0f12] flex flex-col">
+      {/* Presentation mode — full-screen overlay */}
+      {showPresentation && presentationClips.length > 0 && (
+        <PresentationMode
+          clips={presentationClips}
+          onExit={() => setShowPresentation(false)}
+        />
+      )}
       {/* Top bar */}
       <header className="shrink-0 border-b border-white/8 bg-[#0d0f12]/95 backdrop-blur-xl sticky top-0 z-40">
         <div className="px-3 sm:px-4 h-12 flex items-center gap-3">
@@ -2015,9 +2129,10 @@ export default function GameFilmRoom() {
               </div>
             )}
 
-            {/* Drawing toggle — hidden in fullscreen */}
+            {/* Drawing, speed, instant-clip, presentation — hidden in fullscreen */}
             {!isFullscreen && game.video_url && (
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {/* Draw */}
                 <button
                   onClick={() => setDrawingActive(a => !a)}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
@@ -2027,9 +2142,41 @@ export default function GameFilmRoom() {
                   }`}
                 >
                   <Pencil className="w-3.5 h-3.5" />
-                  {drawingActive ? 'Drawing On' : 'Draw on video'}
+                  {drawingActive ? 'Drawing On' : 'Draw'}
                 </button>
 
+                {/* Instant clip: last 10s (Q) */}
+                <button
+                  onClick={instantClip}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border border-white/8 bg-white/3 text-white/40 hover:text-white hover:bg-white/6 ${
+                    instantClipPulse ? 'cs-pulse' : ''
+                  }`}
+                  title="Mark last 10s as clip (Q)"
+                >
+                  <Scissors className="w-3.5 h-3.5" />
+                  Last 10s
+                </button>
+
+                {/* Speed control */}
+                <div className="flex items-center gap-1 px-2 py-1.5 rounded-xl border border-white/8 bg-white/3">
+                  <button onClick={() => setPlaybackSpeed(s => Math.max(0.25, parseFloat((s - 0.25).toFixed(2))))}
+                    className="text-white/40 hover:text-white text-xs px-1" aria-label="Decrease speed">−</button>
+                  <span className="text-xs text-white/60 w-8 text-center tabular-nums">{playbackSpeed}x</span>
+                  <button onClick={() => setPlaybackSpeed(s => Math.min(2, parseFloat((s + 0.25).toFixed(2))))}
+                    className="text-white/40 hover:text-white text-xs px-1" aria-label="Increase speed">+</button>
+                </div>
+
+                {/* Presentation mode */}
+                {clips.length > 0 && (
+                  <button
+                    onClick={startPresentation}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border border-white/8 bg-white/3 text-white/40 hover:text-white hover:bg-white/6 transition-all"
+                    title="Present clips fullscreen"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    Present
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -2042,6 +2189,7 @@ export default function GameFilmRoom() {
             {([
               ['clips', 'Clips', Bookmark],
               ['stats', 'Stats', BarChart2],
+              ['shot-chart', 'Shots', ZoomIn],
               ['roster', 'Roster', Users],
             ] as const).map(([tab, label, Icon]) => (
               <button key={tab} onClick={() => setPanelTab(tab)}
@@ -2084,6 +2232,7 @@ export default function GameFilmRoom() {
                       onSelect={() => setActiveClipId(id => id === clip.id ? null : clip.id)}
                       onDelete={deleteClip}
                       onJumpTo={(ms) => { jumpToClip(ms); setActiveClipId(clip.id) }}
+                      onAddToPlaylist={(clipId) => setShowAddToPlaylist(clipId)}
                     />
                   ))
                 )}
@@ -2141,6 +2290,11 @@ export default function GameFilmRoom() {
               </div>
             )}
 
+            {/* SHOT CHART tab */}
+            {panelTab === 'shot-chart' && (
+              <ShotChartPanel statEntries={statEntries} players={players} onSeek={seekAndPlay} />
+            )}
+
             {/* ROSTER tab */}
             {panelTab === 'roster' && (
               <div className="p-3">
@@ -2192,6 +2346,196 @@ export default function GameFilmRoom() {
           onClose={closeStatPanel}
         />
       )}
+
+      {/* Add to Playlist Modal */}
+      {showAddToPlaylist && (
+        <AddToPlaylistModal
+          clipId={showAddToPlaylist}
+          onClose={() => setShowAddToPlaylist(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Shot Chart Panel ───────────────────────────────────────────────────────
+// Manual shot chart: court SVG + normalized [0,1] coordinates from stat_entries.
+// Clicking a made/miss dot seeks the video to that moment.
+// No automatic tracking claims — coaches place shots during stat entry.
+
+const SHOT_TYPES = new Set(['2M','3M','FTM','2X','3X','FTX'])
+
+function ShotChartPanel({
+  statEntries, players, onSeek,
+}: {
+  statEntries: StatEntry[]
+  players: Player[]
+  onSeek: (ms: number) => void
+}) {
+  const [playerFilter, setPlayerFilter] = useState<string>('all')
+
+  const shotEntries = statEntries.filter(
+    e => SHOT_TYPES.has(e.stat_type) &&
+    typeof (e as StatEntry & { shot_x?: number }).shot_x === 'number'
+  ) as (StatEntry & { shot_x: number; shot_y: number })[]
+
+  const filtered = playerFilter === 'all'
+    ? shotEntries
+    : shotEntries.filter(e => e.player_id === playerFilter)
+
+  const made  = filtered.filter(e => e.stat_type.endsWith('M'))
+  const missed = filtered.filter(e => e.stat_type.endsWith('X'))
+
+  if (shotEntries.length === 0) return (
+    <div className="p-4 text-center py-10">
+      <ZoomIn className="w-7 h-7 mx-auto mb-2 text-white/15" />
+      <p className="text-xs text-white/30">No shot locations yet.</p>
+      <p className="text-xs text-white/20 mt-1">Set shot coordinates when tagging shots in the stat panel.</p>
+    </div>
+  )
+
+  // Half-court SVG viewBox 0 0 50 47 (standard NCAA half-court proportions)
+  return (
+    <div className="p-3 space-y-3">
+      {players.length > 1 && (
+        <select value={playerFilter} onChange={e => setPlayerFilter(e.target.value)}
+          className="w-full px-2 py-1.5 rounded-lg text-xs border outline-none bg-black/20 border-white/10 text-white/70">
+          <option value="all">All players</option>
+          {players.map(p => <option key={p.id} value={p.id}>#{p.number} {p.name}</option>)}
+        </select>
+      )}
+      <svg viewBox="0 0 50 47" className="w-full rounded-lg" style={{ background: '#1a1d23', border: '1px solid rgba(255,255,255,0.08)' }}>
+        {/* Half-court outline */}
+        <rect x="1" y="1" width="48" height="45" rx="1" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
+        {/* Lane */}
+        <rect x="16" y="1" width="18" height="19" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
+        {/* Free-throw circle */}
+        <circle cx="25" cy="20" r="6" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
+        {/* Three-point arc (simplified) */}
+        <path d="M 4 1 Q 4 35 25 38 Q 46 35 46 1" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
+        {/* Basket */}
+        <circle cx="25" cy="5" r="1.2" fill="none" stroke="rgba(255,255,255,0.40)" strokeWidth="0.5" />
+
+        {/* Made shots — orange circles */}
+        {made.map(e => (
+          <circle key={e.id}
+            cx={1 + e.shot_x * 48} cy={1 + e.shot_y * 45}
+            r="1.2" fill="#c66a3e" fillOpacity="0.85" stroke="#e07a4a" strokeWidth="0.3"
+            style={{ cursor: 'pointer' }}
+            onClick={() => onSeek(e.video_time_ms)}
+            role="button" aria-label={`${e.stat_type} at ${Math.round(e.video_time_ms/1000)}s — click to seek`}
+          />
+        ))}
+        {/* Missed shots — white X marks */}
+        {missed.map(e => {
+          const cx = 1 + e.shot_x * 48
+          const cy = 1 + e.shot_y * 45
+          return (
+            <g key={e.id} style={{ cursor: 'pointer' }} onClick={() => onSeek(e.video_time_ms)}
+              role="button" aria-label={`${e.stat_type} miss at ${Math.round(e.video_time_ms/1000)}s — click to seek`}>
+              <line x1={cx-1} y1={cy-1} x2={cx+1} y2={cy+1} stroke="rgba(255,255,255,0.55)" strokeWidth="0.6" strokeLinecap="round" />
+              <line x1={cx+1} y1={cy-1} x2={cx-1} y2={cy+1} stroke="rgba(255,255,255,0.55)" strokeWidth="0.6" strokeLinecap="round" />
+            </g>
+          )
+        })}
+      </svg>
+      <div className="flex items-center gap-4 text-[10px] text-white/40">
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{background:'#c66a3e'}} /> Made ({made.length})</span>
+        <span className="flex items-center gap-1">× Miss ({missed.length})</span>
+        <span className="ml-auto">Tap to seek</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Add to Playlist Modal ────────────────────────────────────────────────────
+function AddToPlaylistModal({ clipId, onClose }: { clipId: string; onClose: () => void }) {
+  const [playlists, setPlaylists] = useState<{ id: string; name: string; clip_count?: number }[]>([])
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState<string | null>(null)
+  const [done, setDone] = useState<Set<string>>(new Set())
+  const [newName, setNewName] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/filmroom/playlists')
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setPlaylists(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const addToPlaylist = async (playlistId: string) => {
+    setAdding(playlistId)
+    await fetch(`/api/filmroom/playlists/${playlistId}/clips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clip_id: clipId }),
+    })
+    setDone(d => new Set([...d, playlistId]))
+    setAdding(null)
+  }
+
+  const createAndAdd = async () => {
+    const name = newName.trim()
+    if (!name) return
+    setCreating(true)
+    const res = await fetch('/api/filmroom/playlists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    if (res.ok) {
+      const pl = await res.json()
+      setPlaylists(prev => [{ ...pl, clip_count: 0 }, ...prev])
+      await addToPlaylist(pl.id)
+      setNewName('')
+    }
+    setCreating(false)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold">Add to Playlist</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-white/60"><X className="w-4 h-4" /></button>
+        </div>
+        {/* New playlist inline */}
+        <div className="flex gap-2 mb-3">
+          <input value={newName} onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && createAndAdd()}
+            placeholder="New playlist name…"
+            maxLength={120}
+            className="flex-1 bg-black/30 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs outline-none focus:border-[#c66a3e]/60 placeholder-white/20" />
+          <button onClick={createAndAdd} disabled={creating || !newName.trim()}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold disabled:opacity-50"
+            style={{ background: '#c66a3e', color: '#181917' }}>
+            {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Create'}
+          </button>
+        </div>
+        {loading ? (
+          <div className="py-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-white/30" /></div>
+        ) : playlists.length === 0 ? (
+          <p className="text-xs text-white/30 text-center py-4">No playlists yet — create one above.</p>
+        ) : (
+          <div className="space-y-1.5 max-h-60 overflow-y-auto">
+            {playlists.map(pl => (
+              <div key={pl.id} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/3 border border-white/6">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate text-white/80">{pl.name}</p>
+                  <p className="text-[10px] text-white/30">{pl.clip_count ?? 0} clips</p>
+                </div>
+                <button onClick={() => !done.has(pl.id) && addToPlaylist(pl.id)}
+                  disabled={adding === pl.id || done.has(pl.id)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                  style={done.has(pl.id) ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80' } : { background: '#c66a3e', color: '#181917' }}>
+                  {adding === pl.id ? <Loader2 className="w-3 h-3 animate-spin" /> : done.has(pl.id) ? <Check className="w-3 h-3" /> : 'Add'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

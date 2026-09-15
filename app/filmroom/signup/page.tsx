@@ -68,13 +68,13 @@ export default function SignupPage() {
 
   if (done) {
     return (
-      <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center p-4">
+      <div className="cs min-h-screen flex items-center justify-center p-4" style={{ background: '#181917' }}>
         <div className="w-full max-w-sm">
           <div className="flex items-center gap-2.5 justify-center mb-8">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-              <Film className="w-4 h-4 text-white" aria-hidden />
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#c66a3e' }}>
+              <Film className="w-4 h-4" style={{ color: '#181917' }} aria-hidden />
             </div>
-            <h1 className="text-lg font-bold text-white tracking-tight">Film Room</h1>
+            <h1 className="text-lg font-bold tracking-tight" style={{ color: '#eee9df' }}>Film Room</h1>
           </div>
 
           <div className="bg-white/3 border border-white/8 rounded-2xl p-6 text-center">
@@ -151,13 +151,13 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center p-4">
+    <div className="cs min-h-screen flex items-center justify-center p-4" style={{ background: '#181917' }}>
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2.5 justify-center mb-8">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-            <Film className="w-4 h-4 text-white" aria-hidden />
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#c66a3e' }}>
+            <Film className="w-4 h-4" style={{ color: '#181917' }} aria-hidden />
           </div>
-          <h1 className="text-lg font-bold text-white tracking-tight">Film Room</h1>
+          <h1 className="text-lg font-bold tracking-tight" style={{ color: '#eee9df' }}>Film Room</h1>
         </div>
 
         <div className="bg-white/3 border border-white/8 rounded-2xl p-6">

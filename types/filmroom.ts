@@ -40,23 +40,68 @@ export interface Game {
   thumbnail_url: string | null
   notes: string | null
   created_at: string
+  // Courtside additions
+  resume_position_ms?: number
 }
 
 export type ClipCategory = 'offense' | 'defense' | 'transition' | 'set_play'
 
-export interface DrawingObject {
-  type: 'arrow' | 'circle' | 'freehand' | 'text'
-  points?: number[]
-  x?: number
-  y?: number
-  radius?: number
-  text?: string
-  color: string
-  strokeWidth?: number
-}
+// Courtside coaching quick-tags (stored in clips.tags text[])
+export const PLAY_TYPES = [
+  'Screening', 'Spacing', 'Closeout', 'Help rotation', 'Box-out',
+  'Transition', 'Pick-and-roll', 'BLOB/SLOB', 'Good execution', 'Needs work',
+  'Offense', 'Defense', 'Other',
+] as const
+export type PlayType = typeof PLAY_TYPES[number]
 
-export interface DrawingData {
-  objects: DrawingObject[]
+// Import the canonical DrawingData/DrawShape from the component so all consumers
+// get the real definition. The local interfaces below that reference DrawingData
+// use this import directly.
+import type { DrawShape as _DrawShape, DrawingData as _DrawingData, DrawTool as _DrawTool } from '@/app/filmroom/components/DrawingOverlay'
+
+// Re-export for convenience so callers can import from '@/types/filmroom'.
+export type { DrawShape, DrawingData, DrawTool } from '@/app/filmroom/components/DrawingOverlay'
+
+// Local alias used by interfaces in this file.
+type DrawingData = _DrawingData
+type DrawShape   = _DrawShape
+type DrawTool    = _DrawTool
+
+/**
+ * Normalize a drawing payload that may be either:
+ *  - Current format: { shapes, width, height }
+ *  - Legacy format:  { objects: [...] }  (old DB rows pre-013)
+ * Returns a valid DrawingData or null.
+ */
+export function normalizeDrawingData(raw: unknown): DrawingData | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+
+  // Current format
+  if (Array.isArray(r.shapes)) {
+    return {
+      shapes: r.shapes as DrawShape[],
+      width:  Number(r.width)  || 1280,
+      height: Number(r.height) || 720,
+    }
+  }
+
+  // Legacy format: { objects: [{type, points, x, y, text, color, strokeWidth}] }
+  if (Array.isArray(r.objects)) {
+    const shapes: DrawShape[] = (r.objects as Record<string, unknown>[]).map((o, i) => ({
+      id:          String(i),
+      tool:        (['arrow','circle','text','line'].includes(String(o.type)) ? o.type : 'freehand') as DrawTool,
+      color:       typeof o.color       === 'string' ? o.color       : '#FF3B30',
+      strokeWidth: typeof o.strokeWidth === 'number' ? o.strokeWidth : 3,
+      points:      Array.isArray(o.points) ? (o.points as number[]) : undefined,
+      x1:          typeof o.x === 'number' ? o.x : undefined,
+      y1:          typeof o.y === 'number' ? o.y : undefined,
+      text:        typeof o.text === 'string' ? o.text : undefined,
+    }))
+    return { shapes, width: 1280, height: 720 }
+  }
+
+  return null
 }
 
 export interface Clip {
@@ -71,6 +116,10 @@ export interface Clip {
   is_highlight: boolean
   drawing_data: DrawingData | null
   created_at: string
+  // Courtside additions
+  coaching_note?: string | null
+  play_type?: string | null
+  primary_player_id?: string | null
   // joined
   players?: Player[]
   comments?: ClipComment[]
@@ -79,6 +128,26 @@ export interface Clip {
 export interface ClipPlayer {
   clip_id: string
   player_id: string
+}
+
+export interface Playlist {
+  id: string
+  owner_id: string
+  name: string
+  created_at: string
+  // joined
+  clip_count?: number
+  clips?: PlaylistClip[]
+}
+
+export interface PlaylistClip {
+  id: string
+  playlist_id: string
+  clip_id: string
+  position: number
+  created_at: string
+  // joined
+  clip?: Clip & { game?: Game }
 }
 
 export interface ClipComment {
@@ -131,3 +200,7 @@ export const CATEGORY_COLORS: Record<ClipCategory, string> = {
   transition: 'bg-green-500/20 text-green-400 border-green-500/30',
   set_play: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
 }
+
+// Shot types that can carry coordinates
+export const SHOT_STAT_TYPES = ['2M', '3M', '2X', '3X', 'FTM', 'FTX'] as const
+export type ShotStatType = typeof SHOT_STAT_TYPES[number]

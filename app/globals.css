@@ -25,6 +25,53 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* ── Courtside Studio design tokens ───────────────────────────────────────── */
+.cs {
+  --cs-bg:      #181917;
+  --cs-surface: #1e1f1d;
+  --cs-card:    #232421;
+  --cs-ivory:   #eee9df;   /* 4.5:1+ on bg for body text */
+  --cs-ivory2:  #b8b2a7;   /* 3.0:1 on bg — icons/secondary only, never small text */
+  --cs-orange:  #c66a3e;   /* accent; use #181917 text on filled orange (WCAG AA) */
+  --cs-orange2: #d97a4e;   /* hover state */
+  --cs-border:  rgba(238,233,223,0.10);
+  --cs-border2: rgba(238,233,223,0.18);
+  /* muted: minimum 0.6 opacity so small ivory text clears 4.5:1 threshold on #181917 */
+  --cs-muted:   rgba(238,233,223,0.60);
+}
+
+/* Condensed headings: Barlow Condensed loaded in filmroom layout */
+.cs-heading {
+  font-family: var(--font-bc), 'Arial Narrow', sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+  text-transform: uppercase;
+  color: var(--cs-ivory);
+}
+
+.cs-heading-orange {
+  color: var(--cs-orange);
+}
+
+/* Orange fill buttons: dark text for contrast (ivory on #c66a3e = 3.14:1, fails AA) */
+.cs-btn-orange {
+  background: var(--cs-orange);
+  color: #181917;
+  font-weight: 700;
+}
+.cs-btn-orange:hover {
+  background: var(--cs-orange2);
+}
+
+/* Clip last-10s button pulse feedback */
+@keyframes cs-pulse {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+.cs-pulse { animation: cs-pulse 0.4s ease; }
+
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }

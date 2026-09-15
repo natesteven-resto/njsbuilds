@@ -54,9 +54,12 @@ export async function POST(request: NextRequest) {
     const title        = typeof raw.title    === 'string' ? raw.title.trim()    : 'Untitled Clip'
     const category     = ['offense','defense','transition','set_play'].includes(raw.category) ? raw.category : 'offense'
     const tags         = Array.isArray(raw.tags) ? raw.tags.filter((t: unknown) => typeof t === 'string') : []
-    const isHighlight  = !!raw.is_highlight
-    const drawingData  = raw.drawing_data ?? null
-    const playerIds    = Array.isArray(raw.player_ids) ? raw.player_ids.filter((p: unknown) => typeof p === 'string') : []
+    const isHighlight     = !!raw.is_highlight
+    const drawingData     = raw.drawing_data ?? null
+    const playerIds       = Array.isArray(raw.player_ids) ? raw.player_ids.filter((p: unknown) => typeof p === 'string') : []
+    const coachingNote    = typeof raw.coaching_note    === 'string' ? raw.coaching_note.trim()    || null : null
+    const playType        = typeof raw.play_type        === 'string' ? raw.play_type.trim()        || null : null
+    const primaryPlayerId = typeof raw.primary_player_id === 'string' ? raw.primary_player_id      : null
 
     if (!gameId)           return NextResponse.json({ error: 'game_id required' }, { status: 400 })
     if (startMs === null)  return NextResponse.json({ error: 'start_time_ms required' }, { status: 400 })
@@ -87,7 +90,7 @@ export async function POST(request: NextRequest) {
       .from('clips')
       .insert({
         game_id: gameId,
-        team_id: game.team_id, // always from server-verified game, never from body
+        team_id: game.team_id,
         start_time_ms: startMs,
         end_time_ms: endMs,
         title,
@@ -95,6 +98,9 @@ export async function POST(request: NextRequest) {
         tags,
         is_highlight: isHighlight,
         drawing_data: drawingData,
+        coaching_note: coachingNote,
+        play_type: playType,
+        ...(primaryPlayerId ? { primary_player_id: primaryPlayerId } : {}),
         owner_id: user.id,
       })
       .select().single()

@@ -5,6 +5,7 @@ const VALID_STAT_TYPES = new Set([
   '2M','2X','3M','3X','FTM','FTX','OREB','DREB','AST','STL','BLK','DEF','TO','FOUL',
   'PTS','REB','FT', // legacy
 ])
+const SHOT_STAT_TYPES = new Set(['2M','2X','3M','3X','FTM','FTX'])
 
 export async function GET(request: NextRequest) {
   try {
@@ -66,10 +67,29 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Forbidden: player not on game team' }, { status: 403 })
     }
 
+    // Shot coordinates: only for shot stat types; both or neither
+    const rawX = raw.shot_x !== undefined && raw.shot_x !== null ? Number(raw.shot_x) : null
+    const rawY = raw.shot_y !== undefined && raw.shot_y !== null ? Number(raw.shot_y) : null
+    let shotX: number | null = null
+    let shotY: number | null = null
+    if (rawX !== null || rawY !== null) {
+      if (rawX === null || rawY === null) {
+        return NextResponse.json({ error: 'shot_x and shot_y must both be provided or both omitted' }, { status: 400 })
+      }
+      if (!SHOT_STAT_TYPES.has(statType)) {
+        return NextResponse.json({ error: `shot coordinates not allowed for stat_type ${statType}` }, { status: 400 })
+      }
+      if (!Number.isFinite(rawX) || rawX < 0 || rawX > 1 || !Number.isFinite(rawY) || rawY < 0 || rawY > 1) {
+        return NextResponse.json({ error: 'shot_x and shot_y must be in [0, 1]' }, { status: 400 })
+      }
+      shotX = rawX
+      shotY = rawY
+    }
+
     const svc = createServiceClient()
     const { data, error } = await svc
       .from('stat_entries')
-      .insert({ game_id: gameId, player_id: playerId, stat_type: statType, video_time_ms: videoTimeMs, owner_id: user.id })
+      .insert({ game_id: gameId, player_id: playerId, stat_type: statType, video_time_ms: videoTimeMs, owner_id: user.id, shot_x: shotX, shot_y: shotY })
       .select('*, players(id, name, number)').single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
