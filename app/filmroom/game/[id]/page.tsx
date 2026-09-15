@@ -14,6 +14,7 @@ import type { Game, Clip, Player, ClipCategory, ClipComment } from '@/types/film
 import { CATEGORY_LABELS, CATEGORY_COLORS } from '@/types/filmroom'
 import { DrawingOverlay, type DrawingData } from '@/app/filmroom/components/DrawingOverlay'
 import { JogWheel } from '@/app/filmroom/components/JogWheel'
+import { AccountBar } from '@/app/filmroom/components/AccountBar'
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -1773,21 +1774,29 @@ export default function GameFilmRoom() {
             </span>
           </div>
           <div className="flex-1" />
-          {game.video_url ? (
-            <button onClick={() => setShowVideoUrl(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-white/50 hover:text-white hover:bg-white/6 transition-all border border-white/8 hover:border-white/15">
-              <Upload className="w-3 h-3" /> Change Video
-            </button>
-          ) : (
-            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-orange-400/80 border border-orange-500/20 bg-orange-500/5">
-              <Upload className="w-3 h-3" /> Drop video below
-            </span>
-          )}
-          {highlights.length > 0 && (
-            <span className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-yellow-500/15 text-yellow-400 text-xs border border-yellow-500/25">
-              <Star className="w-3 h-3 fill-yellow-400" /> {highlights.length} highlight{highlights.length !== 1 ? 's' : ''}
-            </span>
-          )}
+          {/* Video action — grouped with highlights to the left of account controls */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {highlights.length > 0 && (
+              <span className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-xl bg-yellow-500/15 text-yellow-400 text-xs border border-yellow-500/25">
+                <Star className="w-3 h-3 fill-yellow-400" aria-hidden /> {highlights.length} HL
+              </span>
+            )}
+            {game.video_url ? (
+              <button onClick={() => setShowVideoUrl(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs text-white/50 hover:text-white hover:bg-white/6 transition-all border border-white/8 hover:border-white/15"
+                aria-label="Change game video">
+                <Upload className="w-3 h-3" aria-hidden />
+                <span className="hidden sm:inline">Change Video</span>
+              </button>
+            ) : (
+              <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs text-orange-400/80 border border-orange-500/20 bg-orange-500/5">
+                <Upload className="w-3 h-3" aria-hidden />
+                <span className="hidden sm:inline">Drop video below</span>
+              </span>
+            )}
+            {/* Account controls inline — no fixed overlay collision */}
+            <AccountBar />
+          </div>
         </div>
       </header>
 

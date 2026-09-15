@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { AccountBar } from './components/AccountBar'
 import { Film, Plus, Users, ChevronRight, Video, X, Loader2, Star, AlertCircle, RefreshCw } from 'lucide-react'
 import type { Game } from '@/types/filmroom'
 
@@ -132,6 +133,8 @@ export default function FilmRoomHome() {
   const [games, setGames] = useState<Game[]>([])
   const [teamId, setTeamId] = useState<string | null>(null)
   const [teamName, setTeamName] = useState('My Library')
+  const [totalClips, setTotalClips] = useState(0)
+  const [totalHighlights, setTotalHighlights] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -143,7 +146,23 @@ export default function FilmRoomHome() {
       const gRes = await fetch('/api/filmroom/games')
       if (gRes.status === 401) { router.push('/filmroom/login?next=/filmroom'); return }
       if (!gRes.ok) { setError('Failed to load library'); setLoading(false); return }
-      setGames(await gRes.json())
+      const loadedGames: Game[] = await gRes.json()
+      setGames(loadedGames)
+
+      // Load aggregate clip counts across all games for the stats ticker
+      let clipCount = 0, highlightCount = 0
+      await Promise.all(loadedGames.filter(g => g.video_url).map(async g => {
+        try {
+          const cr = await fetch(`/api/filmroom/clips?game_id=${g.id}`)
+          if (cr.ok) {
+            const clips = await cr.json() as Array<{ is_highlight: boolean }>
+            clipCount += clips.length
+            highlightCount += clips.filter(c => c.is_highlight).length
+          }
+        } catch { /* skip — counts are cosmetic */ }
+      }))
+      setTotalClips(clipCount)
+      setTotalHighlights(highlightCount)
 
       // Provision or fetch default team
       const tRes = await fetch('/api/filmroom/teams')
@@ -174,10 +193,10 @@ export default function FilmRoomHome() {
   )
 
   const statsRow = [
-    { label: 'Games', value: games.length },
-    { label: 'With Film', value: games.filter(g => g.video_url).length },
-    { label: 'Highlights', value: 0 },
-    { label: 'Clips', value: 0 },
+    { label: 'Games',      value: games.length },
+    { label: 'With Film',  value: games.filter(g => g.video_url).length },
+    { label: 'Clips',      value: totalClips },
+    { label: 'Highlights', value: totalHighlights },
   ]
 
   return (
@@ -202,6 +221,7 @@ export default function FilmRoomHome() {
               <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#2563EB] hover:bg-[#1d4ed8] text-xs font-semibold text-white transition-colors">
                 <Plus className="w-3.5 h-3.5" aria-hidden /><span>Add Game</span>
               </button>
+              <AccountBar />
             </div>
           </div>
           {!loading && !error && (
