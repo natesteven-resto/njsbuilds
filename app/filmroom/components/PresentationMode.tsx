@@ -133,7 +133,7 @@ export function PresentationMode({ clips, initialIdx = 0, onExit }: Presentation
       if (refreshing || cancelled) return
       refreshing = true
       const position = preserve ? v.currentTime : clip.start_time_ms / 1000
-      const shouldPlay = preserve ? !v.paused : !clip.drawing_data
+      const shouldPlay = preserve ? !v.paused : !(clip.drawing_data && normalizeDrawingData(clip.drawing_data)?.shapes.length)
       try {
         const r = await fetch(`/api/filmroom/video-token?gameId=${encodeURIComponent(current.gameId)}`, {signal:controller.signal})
         const data = await r.json()

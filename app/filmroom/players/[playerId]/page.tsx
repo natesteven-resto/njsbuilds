@@ -21,26 +21,30 @@ export default function PlayerDetailPage() {
   const [player, setPlayer] = useState<Player | null>(null)
   const [clips, setClips] = useState<ClipWithGame[]>([])
   const [loading, setLoading] = useState(true)
+  const [pageError,setPageError]=useState<string|null>(null)
+  const [retry,setRetry]=useState(0)
   const [notFound, setNotFound] = useState(false)
   const [filter, setFilter] = useState<'all' | 'highlight'>('all')
   const [tagFilter, setTagFilter] = useState<string>('')
 
   useEffect(() => {
-    setLoading(true); setNotFound(false)
-    fetch(`/api/filmroom/players/${playerId}/clips`)
+    const ctrl=new AbortController()
+    setLoading(true); setNotFound(false);setPageError(null);setPlayer(null);setClips([])
+    fetch(`/api/filmroom/players/${playerId}/clips`,{signal:ctrl.signal})
       .then(r => {
         if (r.status === 401) { router.replace('/filmroom/login'); return null }
         if (r.status === 403 || r.status === 404) { setNotFound(true); setLoading(false); return null }
-        return r.ok ? r.json() : null
+        if(!r.ok)throw Error('Unable to load player clips. Please try again.');return r.json()
       })
       .then(d => {
-        if (!d) return
+        if (!d || ctrl.signal.aborted) return
         setPlayer(d.player)
         setClips(Array.isArray(d.clips) ? d.clips : [])
         setLoading(false)
       })
-      .catch(() => { setNotFound(true); setLoading(false) })
-  }, [playerId, router])
+      .catch((e:Error) => {if(!ctrl.signal.aborted){setPageError(e.message);setLoading(false)}})
+    return()=>ctrl.abort()
+  }, [playerId, router,retry])
 
   const allTags = Array.from(new Set(clips.flatMap(c => c.tags ?? []))).sort()
   const visible = clips.filter(c => {
@@ -55,6 +59,7 @@ export default function PlayerDetailPage() {
     </div>
   )
 
+  if(pageError)return <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center"><p role="alert">{pageError}</p><button onClick={()=>setRetry(n=>n+1)} className="px-5 py-3 bg-[#c66a3e] text-[#181917] rounded-md font-semibold">Try again</button><Link href="/filmroom/players">Back to players</Link></main>
   if (notFound) return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: '#181917', color: '#eee9df' }}>
       <Film className="w-10 h-10" style={{ color: 'rgba(238,233,223,0.20)' }} />

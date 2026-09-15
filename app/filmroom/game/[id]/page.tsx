@@ -186,6 +186,7 @@ function StatEntryPanel({
 }) {
   const [selectedStat, setSelectedStat] = useState<StatType | null>(null)
   const [logging, setLogging] = useState(false)
+  const [logError,setLogError]=useState<string|null>(null)
   const [redoStack, setRedoStack] = useState<StatEntry[]>([])
   // Staged shot location: set by tapping the court SVG, cleared after player tap
   const [stagedShot, setStagedShot] = useState<{ x: number; y: number } | null>(null)
@@ -212,7 +213,7 @@ function StatEntryPanel({
 
   const handlePlayerTap = async (player: Player) => {
     if (!selectedStat || logging) return
-    setLogging(true)
+    setLogging(true);setLogError(null)
     try {
       const body: Record<string, unknown> = {
         game_id: gameId,
@@ -240,7 +241,7 @@ function StatEntryPanel({
       setRedoStack([])
       setStagedShot(null) // clear after commit; keep stat selected for rapid entry
     } catch {
-      // silently ignore — entry was not saved
+      setLogError('The stat was not saved. Please try again.')
     } finally {
       setLogging(false)
     }
@@ -314,6 +315,7 @@ function StatEntryPanel({
           </div>
         </div>
 
+        {logError && <p role="alert" className="px-4 py-2 text-sm text-red-300">{logError}</p>}
         {/* ── Stat grid ── */}
         <div className="shrink-0 px-4 pt-3 pb-2">
           <div className="grid grid-cols-3 gap-2 items-start">
@@ -1920,10 +1922,8 @@ export default function GameFilmRoom() {
   // Start presentation for all clips in the game
   const startPresentation = useCallback(async () => {
     if (clips.length === 0) return
-    const tokenRes = await fetch(`/api/filmroom/video-token?gameId=${encodeURIComponent(gameId)}`)
-    if (!tokenRes.ok) return
-    const { src } = await tokenRes.json()
-    setPresentationClips(clips.map(clip => ({ clip, gameId, src })))
+    videoRef.current?.pause();setIsPlaying(false)
+    setPresentationClips(clips.map(clip => ({ clip, gameId, src:'' })))
     setShowPresentation(true)
   }, [clips, gameId])
 

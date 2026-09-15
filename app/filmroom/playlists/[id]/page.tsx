@@ -8,6 +8,7 @@ import {
   ChevronUp, ChevronDown, Trash2, Loader2, Film, AlertCircle, RefreshCw,
 } from 'lucide-react'
 import { AccountBar } from '@/app/filmroom/components/AccountBar'
+import { PresentationMode } from '@/app/filmroom/components/PresentationMode'
 import type { Playlist, PlaylistClip, Clip, Game } from '@/types/filmroom'
 
 function msToDisplay(ms: number) {
@@ -33,7 +34,6 @@ function ClipList({ clips, activeIdx, onSelect, onRemove, onReorder, reorderErro
     const ids = clips.map(c => c.id)
     ;[ids[from], ids[to]] = [ids[to], ids[from]]
     await onReorder(ids)
-    onSelect(to)
   }
 
   const applyDrop = (from: number, to: number) => {
@@ -80,38 +80,38 @@ function ClipList({ clips, activeIdx, onSelect, onRemove, onReorder, reorderErro
             {/* Up / down — keyboard- and touch-accessible reorder controls */}
             <div className="flex flex-col shrink-0" onClick={e => e.stopPropagation()}>
               <button onClick={() => move(i, -1)} disabled={i === 0}
-                className="p-0.5 rounded disabled:opacity-20 transition-opacity"
-                style={{ color: 'rgba(238,233,223,0.45)' }}
+                className="min-w-9 min-h-8 rounded disabled:opacity-20 transition-opacity"
+                style={{ color: 'rgba(238,233,223,0.65)' }}
                 aria-label={`Move "${clip?.title ?? 'clip'}" up`}>
                 <ChevronUp className="w-3 h-3" />
               </button>
               <button onClick={() => move(i, 1)} disabled={i === clips.length - 1}
-                className="p-0.5 rounded disabled:opacity-20 transition-opacity"
-                style={{ color: 'rgba(238,233,223,0.45)' }}
+                className="min-w-9 min-h-8 rounded disabled:opacity-20 transition-opacity"
+                style={{ color: 'rgba(238,233,223,0.65)' }}
                 aria-label={`Move "${clip?.title ?? 'clip'}" down`}>
                 <ChevronDown className="w-3 h-3" />
               </button>
             </div>
 
             <span className="w-4 text-center text-xs tabular-nums shrink-0 ml-0.5"
-              style={{ color: 'rgba(238,233,223,0.40)' }}>{i + 1}</span>
+              style={{ color: 'rgba(238,233,223,0.65)' }}>{i + 1}</span>
 
             <div className="flex-1 min-w-0 ml-1">
               <p className="text-xs font-medium truncate" style={{ color: '#eee9df' }}>
                 {clip?.title ?? 'Untitled'}
               </p>
-              <p className="text-[10px]" style={{ color: 'rgba(238,233,223,0.48)' }}>
+              <p className="text-[10px]" style={{ color: 'rgba(238,233,223,0.65)' }}>
                 {clip?.game?.opponent ? `vs ${clip.game.opponent}` : ''}
                 {clip ? ` · ${msToDisplay(clip.start_time_ms)}` : ''}
               </p>
             </div>
 
             <button onClick={e => { e.stopPropagation(); onRemove(pc.id) }}
-              className="p-1 rounded shrink-0 ml-1 transition-colors"
-              style={{ color: 'rgba(238,233,223,0.30)' }}
+              className="min-w-10 min-h-11 grid place-items-center rounded shrink-0 ml-1 transition-colors"
+              style={{ color: 'rgba(238,233,223,0.65)' }}
               aria-label={`Remove "${clip?.title ?? 'clip'}" from playlist`}
               onPointerEnter={e => (e.currentTarget.style.color = '#f87171')}
-              onPointerLeave={e => (e.currentTarget.style.color = 'rgba(238,233,223,0.30)')}>
+              onPointerLeave={e => (e.currentTarget.style.color = 'rgba(238,233,223,0.65)')}>
               <Trash2 className="w-3 h-3" />
             </button>
           </div>
@@ -128,119 +128,54 @@ function ClipList({ clips, activeIdx, onSelect, onRemove, onReorder, reorderErro
 function ClipPlayer({ gameId, startMs, endMs, onEnded }: {
   gameId: string; startMs: number; endMs: number; onEnded: () => void
 }) {
-  const videoRef      = useRef<HTMLVideoElement>(null)
-  const [src, setSrc] = useState<string | null>(null)
-  const [playing, setPlaying]   = useState(false)
-  const [currentMs, setCurrentMs] = useState(startMs)
-  const endFiredRef   = useRef(false)
-  const refreshTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    endFiredRef.current = false
-
-    async function loadToken() {
+  const videoRef=useRef<HTMLVideoElement>(null)
+  const fired=useRef(false)
+  const [playing,setPlaying]=useState(false)
+  const [loading,setLoading]=useState(true)
+  const [error,setError]=useState<string|null>(null)
+  const [retry,setRetry]=useState(0)
+  const [currentMs,setCurrentMs]=useState(startMs)
+  useEffect(()=>{
+    const video=videoRef.current
+    if(!video)return
+    const abort=new AbortController()
+    let cancelled=false,busy=false,retried=false,meta:(()=>void)|null=null
+    fired.current=false;setLoading(true);setError(null);setCurrentMs(startMs)
+    const load=async(preserve:boolean)=>{
+      if(busy||cancelled)return
+      busy=true
+      const time=preserve?video.currentTime:startMs/1000,play=preserve?!video.paused:true
       try {
-        const res = await fetch(`/api/filmroom/video-token?gameId=${encodeURIComponent(gameId)}`)
-        if (!res.ok || cancelled) return
-        const { src: s, refreshAfterSeconds } = await res.json() as { src: string; refreshAfterSeconds?: number }
-        if (cancelled) return
-        setSrc(s)
-
-        if (refreshAfterSeconds && refreshAfterSeconds > 30) {
-          refreshTimer.current = setTimeout(async () => {
-            if (cancelled) return
-            const v = videoRef.current
-            const savedTime = v ? v.currentTime : startMs / 1000
-            const wasPaused = v ? v.paused : true
-            try {
-              const r = await fetch(`/api/filmroom/video-token?gameId=${encodeURIComponent(gameId)}`)
-              if (!r.ok || cancelled) return
-              const { src: newSrc } = await r.json() as { src: string }
-              if (cancelled) return
-              setSrc(newSrc)
-              if (v) {
-                const restore = () => {
-                  v.currentTime = savedTime
-                  if (!wasPaused) v.play().catch(() => {})
-                  v.removeEventListener('loadedmetadata', restore)
-                }
-                v.addEventListener('loadedmetadata', restore)
-                v.src = newSrc; v.load()
-              }
-            } catch { /* keep playing on refresh failure */ }
-          }, (refreshAfterSeconds - 20) * 1000)
-        }
-      } catch { /* stays on spinner */ }
+        const response=await fetch(`/api/filmroom/video-token?gameId=${encodeURIComponent(gameId)}`,{signal:abort.signal})
+        const data=await response.json()
+        if(!response.ok||typeof data.src!=='string')throw Error('Unable to load this clip. Please try again.')
+        if(cancelled)return
+        if(meta)video.removeEventListener('loadedmetadata',meta)
+        meta=()=>{video.currentTime=Math.max(startMs/1000,Math.min(time,endMs/1000));setLoading(false);setError(null);if(play)video.play().catch(()=>setPlaying(false))}
+        video.addEventListener('loadedmetadata',meta,{once:true})
+        video.src=data.src;video.load()
+      }catch(e){if(!cancelled){setLoading(false);setError(e instanceof Error?e.message:'Unable to load film.')}}finally{busy=false}
     }
-    loadToken()
-    return () => { cancelled = true; if (refreshTimer.current) clearTimeout(refreshTimer.current) }
-  }, [gameId, startMs, endMs])
-
-  useEffect(() => {
-    const v = videoRef.current
-    if (!v || !src) return
-    v.src = src; v.load()
-    const onMeta = () => {
-      v.currentTime = startMs / 1000
-      v.play().then(() => setPlaying(true)).catch(() => {})
-    }
-    v.addEventListener('loadedmetadata', onMeta)
-    return () => v.removeEventListener('loadedmetadata', onMeta)
-  }, [src, startMs])
-
-  // Stable fireEnd — deduplicated via ref
-  const fireEnd = useCallback(() => {
-    if (endFiredRef.current) return
-    endFiredRef.current = true
-    videoRef.current?.pause()
-    setPlaying(false)
-    onEnded()
-  }, [onEnded])
-
-  const handleTimeUpdate = useCallback(() => {
-    const v = videoRef.current; if (!v) return
-    const ms = v.currentTime * 1000
-    setCurrentMs(ms)
-    if (ms >= endMs - 80) fireEnd()
-  }, [endMs, fireEnd])
-
-  const playPause = () => {
-    const v = videoRef.current; if (!v) return
-    if (v.paused) { v.play(); setPlaying(true) } else { v.pause(); setPlaying(false) }
-  }
-
-  const pct = endMs > startMs
-    ? Math.min(1, Math.max(0, (currentMs - startMs) / (endMs - startMs))) : 0
-
-  return (
-    <div>
-      {!src
-        ? <div className="aspect-video flex items-center justify-center" style={{ background: '#111' }}>
-            <Loader2 className="w-6 h-6 animate-spin" style={{ color: '#c66a3e' }} />
-          </div>
-        : <video ref={videoRef} className="w-full aspect-video object-contain bg-black"
-            onTimeUpdate={handleTimeUpdate} onEnded={fireEnd}
-            playsInline controls={false} />
-      }
-      <div className="px-3 py-2 flex items-center gap-3"
-        style={{ background: '#181917', borderTop: '1px solid rgba(238,233,223,0.08)' }}>
-        <button onClick={playPause}
-          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-          style={{ background: '#c66a3e', color: '#181917' }}
-          aria-label={playing ? 'Pause' : 'Play'}>
-          {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-        </button>
-        <div className="flex-1 h-1 rounded-full" style={{ background: 'rgba(238,233,223,0.10)' }}>
-          <div className="h-full rounded-full transition-none"
-            style={{ width: `${pct * 100}%`, background: '#c66a3e' }} />
-        </div>
-        <span className="text-xs tabular-nums shrink-0" style={{ color: 'rgba(238,233,223,0.50)' }}>
-          {msToDisplay(Math.max(0, currentMs - startMs))} / {msToDisplay(endMs - startMs)}
-        </span>
-      </div>
+    const mediaError=()=>{if(!retried){retried=true;void load(true)}else{setLoading(false);setError('Playback was interrupted. Try again.')}}
+    video.addEventListener('error',mediaError)
+    void load(false)
+    const interval=setInterval(()=>void load(true),12*60*1000)
+    return()=>{cancelled=true;abort.abort();clearInterval(interval);video.removeEventListener('error',mediaError);if(meta)video.removeEventListener('loadedmetadata',meta);video.pause();video.removeAttribute('src');video.load()}
+  },[gameId,startMs,endMs,retry])
+  const finish=()=>{if(fired.current)return;fired.current=true;videoRef.current?.pause();setPlaying(false);onEnded()}
+  const toggle=()=>{const video=videoRef.current;if(!video||loading||error)return;if(video.paused){if(fired.current||video.currentTime*1000>=endMs-80){video.currentTime=startMs/1000;fired.current=false}video.play().catch(()=>setPlaying(false))}else video.pause()}
+  return <div>
+    <div className="relative aspect-video bg-black">
+      <video ref={videoRef} playsInline className="w-full h-full object-contain" onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onEnded={finish} onTimeUpdate={()=>{const ms=(videoRef.current?.currentTime??0)*1000;setCurrentMs(ms);if(ms>=endMs-80)finish()}} onClick={toggle}/>
+      {loading&&!error&&<div className="absolute inset-0 grid place-items-center pointer-events-none"><Loader2 className="animate-spin text-[#c66a3e]" aria-label="Loading clip"/></div>}
+      {error&&<div role="alert" className="absolute inset-0 flex flex-col justify-center items-center gap-3 px-5 text-center bg-black/80 text-sm"><p>{error}</p><button className="px-4 py-3 rounded-md bg-[#c66a3e] text-[#181917] font-semibold" onClick={()=>setRetry(n=>n+1)}>Try again</button></div>}
     </div>
-  )
+    <div className="flex items-center gap-3 px-4 py-3 bg-[#181917] border-t border-white/10">
+      <button aria-label={playing?'Pause':'Play'} onClick={toggle} disabled={loading||!!error} className="p-3 rounded-full bg-[#c66a3e] text-[#181917] disabled:opacity-40">{playing?<Pause size={18}/>:<Play size={18}/>}</button>
+      <input aria-label="Clip position" type="range" min={startMs} max={endMs} step={50} value={Math.max(startMs,Math.min(currentMs,endMs))} className="flex-1 min-w-0 accent-[#c66a3e]" onChange={e=>{const ms=Number(e.target.value);if(videoRef.current)videoRef.current.currentTime=ms/1000;fired.current=false;setCurrentMs(ms)}}/>
+      <span className="text-xs text-white/65 tabular-nums">{msToDisplay(Math.max(0,currentMs-startMs))} / {msToDisplay(endMs-startMs)}</span>
+    </div>
+  </div>
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -248,6 +183,8 @@ export default function PlaylistDetailPage() {
   const { id } = useParams() as { id: string }
   const router  = useRouter()
 
+  const [presenting,setPresenting]=useState(false)
+  const mutationBusy=useRef(false)
   const [playlist,      setPlaylist]      = useState<Playlist | null>(null)
   const [clips,         setClips]         = useState<PlaylistClip[]>([])
   const [loading,       setLoading]       = useState(true)
@@ -285,6 +222,7 @@ export default function PlaylistDetailPage() {
   // Keyboard navigation — guard input elements
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
+      if (presenting) return
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'L')
         setActiveIdx(i => Math.min(clips.length - 1, i + 1))
@@ -293,24 +231,22 @@ export default function PlaylistDetailPage() {
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [clips.length])
+  }, [clips.length,presenting])
 
-  const removeClip = async (entryId: string) => {
-    const res = await fetch(
-      `/api/filmroom/playlists/${id}/clips?entry_id=${entryId}`,
-      { method: 'DELETE' }
-    )
-    if (res.ok || res.status === 204) {
-      setClips(prev => {
-        const next = prev.filter(c => c.id !== entryId)
-        setActiveIdx(cur => Math.min(cur, Math.max(0, next.length - 1)))
-        return next
-      })
-    }
+  const removeClip = async (entryId:string) => {
+    if(mutationBusy.current)return
+    mutationBusy.current=true;setReorderError(null)
+    try {
+      const res=await fetch(`/api/filmroom/playlists/${id}/clips?entry_id=${entryId}`,{method:'DELETE'})
+      if(!res.ok)throw Error('Unable to remove clip. Please try again.')
+      setClips(prev=>{const next=prev.filter(c=>c.id!==entryId);setActiveIdx(cur=>Math.min(cur,Math.max(0,next.length-1)));return next})
+    }catch(e){setReorderError(e instanceof Error?e.message:'Unable to remove clip.')}finally{mutationBusy.current=false}
   }
 
   // Reorder with optimistic update + rollback
   const reorder = useCallback(async (orderedIds: string[]) => {
+    if(mutationBusy.current)return
+    mutationBusy.current=true
     const snapshot  = clips
     const activeId  = clips[activeIdx]?.id
     const map       = new Map(clips.map(c => [c.id, c]))
@@ -322,6 +258,7 @@ export default function PlaylistDetailPage() {
     if (activeId) setActiveIdx(reordered.findIndex(c => c.id === activeId))
     setReorderError(null)
 
+    try {
     const res = await fetch(`/api/filmroom/playlists/${id}/clips`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -333,8 +270,9 @@ export default function PlaylistDetailPage() {
       if (activeId) setActiveIdx(snapshot.findIndex(c => c.id === activeId))
       const msg = err.error ?? 'Reorder failed — rolled back'
       setReorderError(msg)
-      setTimeout(() => setReorderError(null), 5000)
+
     }
+    }catch{setClips(snapshot);if(activeId)setActiveIdx(snapshot.findIndex(c=>c.id===activeId));setReorderError('Unable to save order. Please try again.')}finally{mutationBusy.current=false}
   }, [clips, activeIdx, id])
 
   // Auto-advance: last clip stays (no loop), dedup handled inside ClipPlayer
@@ -375,6 +313,7 @@ export default function PlaylistDetailPage() {
 
   return (
     <div className="cs min-h-screen" style={{ background: '#181917', color: '#eee9df' }}>
+      {presenting && <PresentationMode clips={clips.flatMap(pc=>pc.clip?[{clip:pc.clip,gameId:pc.clip.game_id,src:''}]:[])} initialIdx={activeIdx} onExit={()=>setPresenting(false)}/>}
       <header className="sticky top-0 z-40 border-b"
         style={{ background: 'rgba(24,25,23,0.95)', backdropFilter: 'blur(12px)', borderColor: 'rgba(238,233,223,0.10)' }}>
         <div className="px-4 h-12 flex items-center gap-3">
@@ -387,11 +326,12 @@ export default function PlaylistDetailPage() {
             {playlist?.name ?? 'Playlist'}
           </span>
           <div className="flex-1" />
+          {!!clips.length && <button onClick={()=>{document.querySelectorAll('video').forEach(v=>v.pause());setPresenting(true)}} className="px-3 min-h-11 text-sm font-semibold text-[#e79568]">Present</button>}
           <AccountBar />
         </div>
       </header>
 
-      <div className="flex" style={{ height: 'calc(100vh - 48px)' }}>
+      <div className="flex flex-col md:flex-row min-h-[calc(100vh-48px)]">
         {/* Player column */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {clips.length === 0 ? (
@@ -440,7 +380,7 @@ export default function PlaylistDetailPage() {
                   style={{ color: '#eee9df' }} aria-label="Previous clip">
                   <SkipBack className="w-5 h-5" />
                 </button>
-                <span className="text-xs tabular-nums" style={{ color: 'rgba(238,233,223,0.50)' }}>
+                <span className="text-xs tabular-nums" style={{ color: 'rgba(238,233,223,0.65)' }}>
                   {activeIdx + 1} / {clips.length}
                 </span>
                 <button onClick={() => setActiveIdx(i => Math.min(clips.length - 1, i + 1))}
@@ -451,7 +391,7 @@ export default function PlaylistDetailPage() {
                 </button>
               </div>
               <p className="text-center text-[10px] shrink-0 pb-2"
-                style={{ color: 'rgba(238,233,223,0.30)' }}>
+                style={{ color: 'rgba(238,233,223,0.65)' }}>
                 ← → or J / L to navigate
               </p>
             </div>
@@ -459,10 +399,10 @@ export default function PlaylistDetailPage() {
         </div>
 
         {/* Clip list sidebar */}
-        <div className="w-72 shrink-0 border-l flex flex-col overflow-hidden"
+        <div className="w-full md:w-80 shrink-0 border-t md:border-t-0 md:border-l flex flex-col overflow-hidden"
           style={{ borderColor: 'rgba(238,233,223,0.08)' }}>
           <div className="px-3 py-2 border-b text-xs font-semibold uppercase tracking-widest shrink-0"
-            style={{ borderColor: 'rgba(238,233,223,0.08)', color: 'rgba(238,233,223,0.50)' }}>
+            style={{ borderColor: 'rgba(238,233,223,0.08)', color: 'rgba(238,233,223,0.65)' }}>
             {clips.length} clip{clips.length !== 1 ? 's' : ''}
           </div>
           <div className="flex-1 overflow-y-auto p-2">
