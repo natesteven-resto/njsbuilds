@@ -81,6 +81,7 @@ export function normalizeDrawingData(raw: unknown): DrawingData | null {
   if (Array.isArray(r.shapes)) {
     return {
       shapes: r.shapes as DrawShape[],
+      time_ms: typeof r.time_ms === 'number' && Number.isFinite(r.time_ms) ? r.time_ms : undefined,
       width:  Number(r.width)  || 1280,
       height: Number(r.height) || 720,
     }

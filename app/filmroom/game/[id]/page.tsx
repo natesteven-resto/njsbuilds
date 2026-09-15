@@ -13,6 +13,7 @@ import {
 import type { Game, Clip, Player, ClipCategory, ClipComment, Playlist } from '@/types/filmroom'
 import { CATEGORY_LABELS, CATEGORY_COLORS, PLAY_TYPES, normalizeDrawingData } from '@/types/filmroom'
 import { DrawingOverlay, type DrawingData } from '@/app/filmroom/components/DrawingOverlay'
+import { EventTimeline } from '@/app/filmroom/components/EventTimeline'
 import { JogWheel } from '@/app/filmroom/components/JogWheel'
 import { AccountBar } from '@/app/filmroom/components/AccountBar'
 import { PresentationMode, type PresentationClip } from '@/app/filmroom/components/PresentationMode'
@@ -1323,7 +1324,7 @@ function TransportBar({
 // ─── Save Clip Modal ──────────────────────────────────────────────────────────
 
 function SaveClipModal({
-  gameId, teamId, startMs, endMs, players, drawingData,
+  gameId, teamId, startMs, endMs, players, drawingData, videoDurationMs,
   onClose, onSave,
 }: {
   gameId: string
@@ -1332,9 +1333,11 @@ function SaveClipModal({
   endMs: number
   players: Player[]
   drawingData?: DrawingData | null
+  videoDurationMs:number
   onClose: () => void
   onSave: (clip: Clip) => void
 }) {
+  const [range,setRange]=useState({start:startMs/1000,end:endMs/1000})
   const [form, setForm] = useState({
     title: '', category: 'offense' as ClipCategory,
     tags: '', is_highlight: false, player_ids: [] as string[],
@@ -1345,6 +1348,7 @@ function SaveClipModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if(!Number.isFinite(range.start)||!Number.isFinite(range.end)||range.start<0||range.end<=range.start||(videoDurationMs>0&&range.end*1000>videoDurationMs)){setError('Choose a valid start and end within the video.');return}
     setLoading(true)
     setError('')
     try {
@@ -1354,9 +1358,9 @@ function SaveClipModal({
         body: JSON.stringify({
           game_id: gameId,
           team_id: teamId,
-          start_time_ms: startMs,
-          end_time_ms: endMs,
-          title: form.title || `${msToTimecode(startMs)} – ${msToTimecode(endMs)}`,
+          start_time_ms: Math.round(range.start*1000),
+          end_time_ms: Math.round(range.end*1000),
+          title: form.title || `${msToTimecode(range.start*1000)} – ${msToTimecode(range.end*1000)}`,
           tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
           category: form.category,
           is_highlight: form.is_highlight,
@@ -1388,11 +1392,11 @@ function SaveClipModal({
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+      <div className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm max-h-[90dvh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-sm font-semibold">Save Clip</h2>
-            <p className="text-xs text-white/40 mt-0.5">{msToTimecode(startMs)} → {msToTimecode(endMs)} ({formatDuration(startMs, endMs)})</p>
+            <p className="text-xs text-white/40 mt-0.5">{msToTimecode(range.start*1000)} → {msToTimecode(range.end*1000)} ({formatDuration(range.start*1000, range.end*1000)})</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-white/60 hover:text-white">
             <X className="w-4 h-4" />
@@ -1400,6 +1404,7 @@ function SaveClipModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">{(['start','end'] as const).map(k=><label key={k} className="text-xs text-white/65">{k==='start'?'Clip start (seconds)':'Clip end (seconds)'}<input type="number" min={0} step={.01} required value={range[k]} onChange={e=>setRange(r=>({...r,[k]:Number(e.target.value)}))} className="block w-full bg-black/30 border border-white/15 rounded-md p-2 mt-1 text-[#eee9df]"/></label>)}</div>
           <div>
             <label className="block text-xs text-white/50 mb-1">Clip Title</label>
             <input type="text" placeholder="e.g. Pick and roll coverage"
@@ -1459,7 +1464,7 @@ function SaveClipModal({
             <div className="flex flex-wrap gap-1.5">
               {PLAY_TYPES.map(pt => (
                 <button key={pt} type="button"
-                  onClick={() => setForm(f => ({ ...f, play_type: f.play_type === pt ? '' : pt }))}
+                  onClick={() => setForm(f => {const next=f.play_type===pt?'':pt;return{...f,play_type:next,tags:Array.from(new Set([...f.tags.split(',').map(t=>t.trim()).filter(t=>t&&t!==f.play_type),...(next?[next]:[])])).join(', ')}})}
                   className={`px-2 py-1 rounded-lg text-xs transition-all border ${
                     form.play_type === pt
                       ? 'border-[rgba(198,106,62,0.5)] bg-[rgba(198,106,62,0.15)] text-[#c66a3e]'
@@ -1691,8 +1696,12 @@ export default function GameFilmRoom() {
 
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
+  const onDrawingChange=useCallback((data:DrawingData)=>setDrawingData({...data,time_ms:Math.round((videoRef.current?.currentTime??0)*1000)}),[])
   const [game, setGame] = useState<Game | null>(null)
   const [clips, setClips] = useState<Clip[]>([])
+  const [clipTag,setClipTag]=useState('')
+  const [clipCategory,setClipCategory]=useState('')
+  const [clipPlayer,setClipPlayer]=useState('')
   const [players, setPlayers] = useState<Player[]>([])
   const [loading, setLoading] = useState(true)
   const [gameError, setGameError] = useState<'not_found' | 'error' | null>(null)
@@ -1897,6 +1906,7 @@ export default function GameFilmRoom() {
     if (outMs - inMs < 500) return // too short
     setMarkIn(inMs)
     setMarkOut(outMs)
+    videoRef.current?.pause();setIsPlaying(false);setShowSaveClip(true)
     setInstantClipPulse(true)
     setTimeout(() => setInstantClipPulse(false), 400)
   }, [currentMs])
@@ -1969,7 +1979,7 @@ export default function GameFilmRoom() {
 
   // 'unauthorized' variant removed — 401 redirects immediately in the effect
   if (gameError === 'not_found') return (
-    <div className="min-h-screen bg-[#0d0f12] flex flex-col items-center justify-center gap-4 text-center px-6">
+    <div className="cs min-h-screen bg-[#181917] text-[#eee9df] flex flex-col items-center justify-center gap-4 text-center px-6">
       <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-1">
         <AlertCircle className="w-6 h-6 text-white/30" />
       </div>
@@ -1987,7 +1997,7 @@ export default function GameFilmRoom() {
   )
 
   if (gameError === 'error') return (
-    <div className="min-h-screen bg-[#0d0f12] flex flex-col items-center justify-center gap-4 text-center px-6">
+    <div className="cs min-h-screen bg-[#181917] text-[#eee9df] flex flex-col items-center justify-center gap-4 text-center px-6">
       <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-1">
         <AlertCircle className="w-6 h-6 text-red-400/60" />
       </div>
@@ -2018,12 +2028,14 @@ export default function GameFilmRoom() {
     </div>
   )
 
+  const clipTags=Array.from(new Set(clips.flatMap(c=>[...(c.tags??[]),...(c.play_type?[c.play_type]:[])]))).sort()
+  const filteredClips=clips.filter(c=>(!clipTag||(c.tags??[]).includes(clipTag)||c.play_type===clipTag)&&(!clipCategory||c.category===clipCategory)&&(!clipPlayer||c.primary_player_id===clipPlayer||c.players?.some(p=>p.id===clipPlayer)))
   const highlights = clips.filter(c => c.is_highlight)
   const canSave = markIn !== null && markOut !== null && markOut > markIn
   const videoLoaded = !!game.video_url
 
   return (
-    <div className="min-h-screen bg-[#0d0f12] flex flex-col">
+    <div className="cs min-h-screen bg-[#181917] text-[#eee9df] flex flex-col">
       {/* Presentation mode — full-screen overlay */}
       {showPresentation && presentationClips.length > 0 && (
         <PresentationMode
@@ -2032,7 +2044,7 @@ export default function GameFilmRoom() {
         />
       )}
       {/* Top bar */}
-      <header className="shrink-0 border-b border-white/8 bg-[#0d0f12]/95 backdrop-blur-xl sticky top-0 z-40">
+      <header className="shrink-0 border-b border-white/8 bg-[#181917] sticky top-0 z-40">
         <div className="px-3 sm:px-4 h-12 flex items-center gap-3">
           <Link href="/filmroom" className="p-1.5 rounded-lg hover:bg-white/8 text-white/60 hover:text-white transition-all">
             <ChevronLeft className="w-4 h-4" />
@@ -2079,7 +2091,7 @@ export default function GameFilmRoom() {
       </header>
 
       {/* Main layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row">
         {/* Left: Video + transport */}
         <div className={`flex-1 flex flex-col min-w-0 overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 bg-black' : ''}`}>
           <div className={`flex flex-col h-full ${isFullscreen ? 'p-0' : 'p-3 sm:p-4'}`}>
@@ -2113,7 +2125,7 @@ export default function GameFilmRoom() {
                 />
                 <DrawingOverlay
                   active={drawingActive}
-                  onDataChange={setDrawingData}
+                  onDataChange={onDrawingChange}
                   initialData={null}
                 />
 
@@ -2167,6 +2179,7 @@ export default function GameFilmRoom() {
               isFullscreen={isFullscreen}
               onStatTap={videoLoaded ? openStatPanel : undefined}
             />}
+            {!isFullscreen&&<EventTimeline clips={clips} stats={statEntries} durationMs={durationMs} currentMs={currentMs} selectedId={activeClipId} onSeek={seekAndPlay} onClip={c=>{setActiveClipId(c.id);jumpToClip(c.start_time_ms)}}/>}
             {/* Upload success banner — hidden in fullscreen */}
             {!isFullscreen && uploadDone && (
               <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
@@ -2249,7 +2262,7 @@ export default function GameFilmRoom() {
         </div>
 
         {/* Right: Clip panel */}
-        <div className="w-80 xl:w-96 shrink-0 border-l border-white/8 flex flex-col">
+        <div className="w-full lg:w-80 xl:w-96 shrink-0 border-t lg:border-t-0 lg:border-l border-white/8 flex flex-col">
           {/* Panel tabs */}
           <div className="shrink-0 border-b border-white/8 flex">
             {([
@@ -2270,6 +2283,12 @@ export default function GameFilmRoom() {
             {/* CLIPS tab */}
             {panelTab === 'clips' && (
               <div className="p-3 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <select aria-label="Filter clips by tag" value={clipTag} onChange={e=>setClipTag(e.target.value)} className="min-h-11 bg-[#252621] border border-white/10 rounded-md px-2 text-xs"><option value="">All tags</option>{clipTags.map(t=><option key={t}>{t}</option>)}</select>
+                  <select aria-label="Filter clips by category" value={clipCategory} onChange={e=>setClipCategory(e.target.value)} className="min-h-11 bg-[#252621] border border-white/10 rounded-md px-2 text-xs"><option value="">All categories</option>{Object.entries(CATEGORY_LABELS).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select>
+                  <select aria-label="Filter clips by player" value={clipPlayer} onChange={e=>setClipPlayer(e.target.value)} className="col-span-2 min-h-11 bg-[#252621] border border-white/10 rounded-md px-2 text-xs"><option value="">All players</option>{players.map(p=><option key={p.id} value={p.id}>#{p.number} {p.name}</option>)}</select>
+                </div>
+                {!!clips.length&&!filteredClips.length&&<p className="py-4 text-sm text-white/65">No clips match these filters.</p>}
                 {/* Filter chips */}
                 <div className="flex flex-wrap gap-1.5 pb-1">
                   <span className="text-xs text-white/30">{clips.length} clip{clips.length !== 1 ? 's' : ''}</span>
@@ -2290,7 +2309,7 @@ export default function GameFilmRoom() {
                     </p>
                   </div>
                 ) : (
-                  clips.map(clip => (
+                  filteredClips.map(clip => (
                     <ClipItem
                       key={clip.id}
                       clip={clip}
@@ -2380,6 +2399,7 @@ export default function GameFilmRoom() {
           endMs={markOut}
           players={players}
           drawingData={drawingData}
+          videoDurationMs={durationMs}
           onClose={() => setShowSaveClip(false)}
           onSave={(clip) => {
             setClips(c => [...c, clip])
@@ -2561,7 +2581,7 @@ function AddToPlaylistModal({ clipId, onClose }: { clipId: string; onClose: () =
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+      <div className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm max-h-[90dvh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold">Add to Playlist</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-white/60"><X className="w-4 h-4" /></button>

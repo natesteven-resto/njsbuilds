@@ -19,6 +19,7 @@ export interface DrawShape {
 }
 
 export interface DrawingData {
+  time_ms?: number
   shapes: DrawShape[]
   width: number   // canvas natural width at save time (for scaling)
   height: number
