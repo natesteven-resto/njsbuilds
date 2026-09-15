@@ -178,3 +178,76 @@ After disabling: `pub-9fa275ba678642e488776c297174f037.r2.dev` URLs return 403. 
 - No Film Room staging Supabase project exists — second project (`uepvtwsfcvvsviyckbje`) is Hoop Pilot, unrelated
 - `natesteven@gmail.com` already confirmed in this project — do **not** sign up again, sign in directly after migration 010
 - Corrected SMTP limit from ROLLOUT item 1: **2/hr**, not 4/hr
+
+---
+
+## Decision: Option A — Dedicated Film Room Supabase Project
+
+Nate chose a dedicated Supabase project for Film Room, completely separate from RestoReports.
+
+### Cost
+- **Supabase Free tier**: $0/month — includes 500 MB DB, 1 GB file storage, 50k MAU, unlimited API requests
+- Film Room needs: 1 project, ~10 users to start, no storage (videos in R2) → **free tier sufficient**
+- No paid resources needed to set up
+
+### Step 0 — Create the new Supabase project (one-time, before anything else)
+1. Go to supabase.com → New project
+2. Name: `Film Room` (or similar — does not affect existing projects)
+3. Region: **East US (Ohio)** — matches R2 bucket region
+4. Database password: generate strong, save it securely
+5. Wait for project to provision (~2 min)
+6. Note the project URL (`https://<ref>.supabase.co`) and anon key (Settings → API)
+7. Note the service role key (Settings → API → service_role — keep secret)
+
+### New environment variables required
+Add to `.env.local` (local dev) and Vercel (production):
+
+```
+NEXT_PUBLIC_FILMROOM_SUPABASE_URL=https://<new-ref>.supabase.co
+NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY=<anon key>
+FILMROOM_SUPABASE_SERVICE_ROLE_KEY=<service role key>
+```
+
+See `.env.filmroom.example` in the worktree for the template.
+
+**The guard in `lib/filmroom-config.ts` will hard-error if you accidentally set these to the RestoReports project URL (`suhfyckmuenjskitrzlq`).** RestoReports is untouched.
+
+### Supabase Auth settings on new project (no global settings affected)
+On the NEW project only:
+- Authentication → Settings → Site URL: `https://www.njsbuilds.com`
+- Redirect URLs: add `https://www.njsbuilds.com/filmroom/auth/callback`
+- Email provider: enabled by default ✓
+- SMTP: configure custom (Resend/SendGrid/Postmark) — 2/hr built-in limit applies here too
+
+### Updated migration sequence for Option A
+Step 1: Create new Supabase project (above)
+Step 2: Run migrations 009 → 011 → 012 on the new project SQL editor (010 is manual, later)
+Step 3: Add the three new env vars to Vercel — do NOT remove or change RestoReports vars
+Step 4: Deploy filmroom-auth branch — Film Room auth now uses new project, RestoReports unchanged
+Step 5: Nate signs up at `/filmroom/signup` with natesteven@gmail.com on the NEW project
+Step 6: Confirm email on new project
+Step 7: Run migration 010 — assigns existing Film Room data (games, clips, 9GB video) to Nate's new account
+         (Migration 010 checks auth.users on the NEW project — Nate must be confirmed there first)
+Step 8: Verify library: all games/players/clips/9GB video visible and playable
+Step 9: Two-user integration test (see scripts/test-filmroom-auth.ts — requires FILMROOM_TEST_PROJECT_HOST set to the new project's host)
+Step 10: CDN cutover and private delivery verification (separate decision)
+
+### What is NOT migrated to the new project
+- RestoReports users (91 existing) — stay on original project, completely untouched
+- RestoReports database — untouched
+- Film Room DB data (games, clips, players) — already in the shared Postgres DB (`suhfyckmuenjskitrzlq`). The Film Room tables live there and will continue to. Only AUTH moves to the new project. The `SUPABASE_SERVICE_ROLE_KEY` for DB access remains the RestoReports project key — we're only changing the auth project. ⚠️ See note below.
+
+### ⚠️ Important: Auth vs Database separation
+The Film Room database tables (games, clips, players etc.) are in `suhfyckmuenjskitrzlq` (shared Postgres). The new project only handles **authentication**. This means:
+- `NEXT_PUBLIC_FILMROOM_SUPABASE_URL` / `NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY` → new project (auth)
+- `SUPABASE_SERVICE_ROLE_KEY` for DB queries → still the original project (data)
+
+The filmroom-supabase-server.ts `createServiceClient()` uses `FILMROOM_SUPABASE_SERVICE_ROLE_KEY` for the service role client. This needs to point to the **original** project for DB access. The `getVerifiedUser()` auth client uses the new project for session verification.
+
+**This creates a split-project architecture**: auth verification on new project, DB reads/writes on original. RLS policies on the DB tables use `auth.uid()` — but `auth.uid()` is from the JWT issued by the auth project. The two projects' JWTs are not compatible.
+
+**Full separation options**:
+- **Option A1 (recommended)**: Migrate Film Room DB tables to the new project too. Requires exporting data from original project and importing to new. Migration 010 then runs on the new project entirely.
+- **Option A2**: Use the new project for auth JWT only, pass user ID explicitly to all service role queries (no RLS reliance, ownership enforced in code only — less safe but no data migration needed).
+
+**Hold deployment until this is clarified.** Option A1 gives full isolation and clean RLS. Option A2 is faster but weaker.
