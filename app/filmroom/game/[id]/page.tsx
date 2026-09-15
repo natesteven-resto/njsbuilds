@@ -283,8 +283,8 @@ function StatEntryPanel({
       <div className="absolute inset-0" onClick={onClose} />
 
       <div
-        className="relative w-full max-w-3xl rounded-t-2xl flex flex-col"
-        style={{ backgroundColor: '#15181f', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '85vh' }}
+        className="relative w-full max-w-3xl rounded-t-2xl flex flex-col overflow-y-auto overscroll-contain"
+        style={{ backgroundColor: '#15181f', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '90dvh' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ── */}
@@ -441,7 +441,8 @@ function StatEntryPanel({
                 return (
                   <button
                     key={p.id}
-                    onPointerDown={(e) => { e.preventDefault(); if (enabled) handlePlayerTap(p) }}
+                    onClick={() => { if (enabled) handlePlayerTap(p) }}
+                    disabled={!enabled}
                     style={{ touchAction: 'manipulation', opacity: enabled ? 1 : 0.4 }}
                     className={`flex flex-col items-center justify-center py-3 rounded-xl border min-h-[70px] ${
                       enabled
