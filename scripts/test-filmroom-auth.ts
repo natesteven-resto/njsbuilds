@@ -22,6 +22,16 @@
 
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+
+// Load .env.local without overriding keys already in shell env.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const dotenv = require('dotenv') as { config: (o: object) => void }
+  const envPath = path.resolve(__dirname, '..', '.env.local')
+  if (fs.existsSync(envPath)) dotenv.config({ path: envPath, override: false })
+} catch { /* dotenv optional */ }
 
 const BASE_URL     = process.env.BASE_URL ?? 'http://localhost:3002'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_FILMROOM_SUPABASE_URL!

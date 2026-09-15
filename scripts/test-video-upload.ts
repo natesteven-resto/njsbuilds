@@ -28,6 +28,16 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import * as fs from 'node:fs'
+import * as path from 'node:path'
+
+// Load .env.local without overriding keys already in shell env.
+// Provides R2 credentials when coordinator only injected Film Room Supabase keys.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const dotenv = require('dotenv') as { config: (o: object) => void }
+  const envPath = path.resolve(__dirname, '..', '.env.local')
+  if (fs.existsSync(envPath)) dotenv.config({ path: envPath, override: false })
+} catch { /* dotenv optional */ }
 
 const BASE_URL      = process.env.BASE_URL ?? 'http://localhost:3004'
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_FILMROOM_SUPABASE_URL
