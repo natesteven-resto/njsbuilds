@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { getSupabaseBrowser } from '@/lib/supabase-browser'
+import { getSupabaseBrowser } from '@/lib/filmroom-supabase-browser'
 import { LogOut } from 'lucide-react'
 
 export function LogoutButton() {

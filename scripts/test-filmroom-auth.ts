@@ -10,25 +10,30 @@
  *
  * Usage:
  *   BASE_URL=http://localhost:3000 \
- *   NEXT_PUBLIC_SUPABASE_URL=https://YOUR-STAGING-PROJECT.supabase.co \
- *   NEXT_PUBLIC_SUPABASE_ANON_KEY=... \
- *   SUPABASE_SERVICE_ROLE_KEY=... \
+ *   NEXT_PUBLIC_FILMROOM_SUPABASE_URL=https://YOUR-STAGING-PROJECT.supabase.co \
+ *   NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY=... \
+ *   FILMROOM_SUPABASE_SERVICE_ROLE_KEY=... \
  *   npx ts-node scripts/test-filmroom-auth.ts
  */
 
 import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
 
 const BASE_URL     = process.env.BASE_URL ?? 'http://localhost:3000'
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const ANON_KEY     = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const SUPABASE_URL = process.env.NEXT_PUBLIC_FILMROOM_SUPABASE_URL!
+const ANON_KEY     = process.env.NEXT_PUBLIC_FILMROOM_SUPABASE_ANON_KEY!
+const SERVICE_KEY  = process.env.FILMROOM_SUPABASE_SERVICE_ROLE_KEY!
 
 // ── Production guard ──────────────────────────────────────────────────────────
 const PRODUCTION_URL = 'https://suhfyckmuenjskitrzlq.supabase.co'
-if (SUPABASE_URL === PRODUCTION_URL) {
+if (!SUPABASE_URL || new URL(SUPABASE_URL).hostname === new URL(PRODUCTION_URL).hostname) {
   console.error('ABORT: refusing to run test user creation against production Supabase project.')
-  console.error('Set NEXT_PUBLIC_SUPABASE_URL to a staging project.')
+  console.error('Set NEXT_PUBLIC_FILMROOM_SUPABASE_URL to a staging project.')
   process.exit(1)
+}
+
+if (!process.env.FILMROOM_TEST_PROJECT_HOST || new URL(SUPABASE_URL).hostname !== process.env.FILMROOM_TEST_PROJECT_HOST) {
+  throw new Error('Set FILMROOM_TEST_PROJECT_HOST to the explicitly approved disposable test database host')
 }
 
 const svc = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
@@ -46,23 +51,17 @@ function assert(label: string, condition: boolean, detail?: string) {
  * We use the raw fetch flow to capture Set-Cookie headers.
  */
 async function signInGetCookie(email: string, password: string): Promise<string> {
-  const projectRef = new URL(SUPABASE_URL).hostname.split('.')[0]
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
-    body: JSON.stringify({ email, password }),
+  const jar = new Map<string, string>()
+  const client = createServerClient(SUPABASE_URL, ANON_KEY, {
+    cookies: {
+      getAll: () => [...jar].map(([name, value]) => ({ name, value })),
+      setAll: (cookies) => { for (const { name, value } of cookies) jar.set(name, value) },
+    },
   })
-  if (!res.ok) throw new Error(`Sign-in failed for ${email}: ${res.status}`)
-  const { access_token, refresh_token } = await res.json()
-  if (!access_token) throw new Error(`No access_token for ${email}`)
+  const { error } = await client.auth.signInWithPassword({ email, password })
+  if (error) throw new Error('Test account sign-in failed')
+  return [...jar].map(([name, value]) => `${name}=${encodeURIComponent(value)}`).join('; ')
 
-  // Encode as @supabase/ssr expects: JSON stringified, chunked if needed
-  const session = JSON.stringify({ access_token, refresh_token, token_type: 'bearer' })
-  const cookieName = `sb-${projectRef}-auth-token`
-
-  // For chunks > 3500 chars, @supabase/ssr splits into .0, .1 etc.
-  // For test purposes sessions fit in one cookie.
-  return `${cookieName}=${encodeURIComponent(session)}`
 }
 
 async function apiAs(cookie: string, method: string, path: string, body?: unknown) {

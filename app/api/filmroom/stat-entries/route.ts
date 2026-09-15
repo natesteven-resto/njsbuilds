@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getVerifiedUser, createServiceClient } from '@/lib/supabase-server'
+import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-server'
 
 const VALID_STAT_TYPES = new Set([
   '2M','2X','3M','3X','FTM','FTX','OREB','DREB','AST','STL','BLK','DEF','TO','FOUL',

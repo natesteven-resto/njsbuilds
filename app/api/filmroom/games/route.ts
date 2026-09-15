@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getVerifiedUser, createServiceClient } from '@/lib/supabase-server'
+import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-server'
 
 // Explicit allowlist of client-writable game fields.
 // video_url, video_id, owner_id, team_id, created_at are server-only.

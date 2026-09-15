@@ -9,14 +9,12 @@
  * - createAuthClient() uses anon key + cookie session — subject to RLS.
  */
 
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+import { getFilmRoomConfig } from './filmroom-config'
 
 /**
  * Server Component / Route Handler client with cookie-based session.
@@ -25,7 +23,8 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
  */
 export async function createAuthClient() {
   const cookieStore = await cookies()
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  const { url, anonKey } = getFilmRoomConfig()
+  return createServerClient(url, anonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll()
@@ -51,7 +50,8 @@ export function createRouteHandlerClient(
   request: NextRequest,
   response: NextResponse
 ) {
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  const { url, anonKey } = getFilmRoomConfig()
+  return createServerClient(url, anonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll()
@@ -72,7 +72,10 @@ export function createRouteHandlerClient(
  * Never expose to client or use for user-scoped queries.
  */
 export function createServiceClient() {
-  return createClient(supabaseUrl, supabaseServiceKey, {
+  const { url } = getFilmRoomConfig()
+  const serviceKey = process.env.FILMROOM_SUPABASE_SERVICE_ROLE_KEY
+  if (!serviceKey) throw new Error('Film Room server credentials are not configured')
+  return createClient(url, serviceKey, {
     auth: { persistSession: false },
   })
 }

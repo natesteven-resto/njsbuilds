@@ -25,8 +25,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const SUPABASE_URL      = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+import { getFilmRoomConfig } from './lib/filmroom-config'
 
 const FILMROOM_BYPASS = new Set([
   '/filmroom/login',
@@ -77,7 +76,17 @@ export async function middleware(request: NextRequest) {
   //    receives all refreshed cookies via the mutated request object.
   let supabaseResponse = NextResponse.next({ request })
 
-  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  let filmRoomConfig: ReturnType<typeof getFilmRoomConfig>
+  try {
+    filmRoomConfig = getFilmRoomConfig()
+  } catch {
+    return isFilmroomApi
+      ? NextResponse.json({ error: 'Film Room account service is not configured' }, { status: 503 })
+      : new NextResponse('Film Room is being set up. Please try again later.', {
+          status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        })
+  }
+  const supabase = createServerClient(filmRoomConfig.url, filmRoomConfig.anonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll()

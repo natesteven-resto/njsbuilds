@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { getSupabaseBrowser } from '@/lib/supabase-browser'
+import { getSupabaseBrowser } from '@/lib/filmroom-supabase-browser'
 import { Loader2, Film, CheckCircle2 } from 'lucide-react'
 
 export default function SignupPage() {

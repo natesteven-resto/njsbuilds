@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getVerifiedUser, createServiceClient } from '@/lib/supabase-server'
+import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-server'
 
 const STAT_FIELDS = ['pts','reb','ast','stl','blk','turnovers','fg2m','fg2a','fg3m','fg3a','ftm','fta'] as const
 

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { createAuthClient } from '@/lib/supabase-server'
+import { createAuthClient } from '@/lib/filmroom-supabase-server'
 import { LogoutButton } from './components/LogoutButton'
 
 export const metadata: Metadata = {

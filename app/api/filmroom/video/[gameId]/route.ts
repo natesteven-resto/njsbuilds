@@ -12,7 +12,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
-import { getVerifiedUser, createServiceClient } from '@/lib/supabase-server'
+import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-server'
 
 type Params = { params: Promise<{ gameId: string }> }
 

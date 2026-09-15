@@ -9,7 +9,7 @@
  * GET ?videoId=xxx: Stub — returns not-configured (Stream disabled).
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { getVerifiedUser, createServiceClient } from '@/lib/supabase-server'
+import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-server'
 
 export async function POST(request: NextRequest) {
   try {

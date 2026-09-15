@@ -3,7 +3,7 @@
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { getSupabaseBrowser } from '@/lib/supabase-browser'
+import { getSupabaseBrowser } from '@/lib/filmroom-supabase-browser'
 import { Loader2, Film } from 'lucide-react'
 
 function safeNext(raw: string | null): string {

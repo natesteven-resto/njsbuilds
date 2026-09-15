@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getVerifiedUser, createServiceClient, assertOwner } from '@/lib/supabase-server'
+import { getVerifiedUser, createServiceClient, assertOwner } from '@/lib/filmroom-supabase-server'
 
 type Params = { params: Promise<{ playerId: string }> }
 
