@@ -1,26 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { getVerifiedUser, createServiceClient, assertOwner } from '@/lib/supabase-server'
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ playerId: string }> }) {
-  const { playerId } = await params
-  const supabase = createServiceClient()
-  const body = await req.json()
+type Params = { params: Promise<{ playerId: string }> }
 
-  const { data, error } = await supabase
-    .from('players')
-    .update(body)
-    .eq('id', playerId)
-    .select()
-    .single()
+export async function DELETE(request: NextRequest, { params }: Params) {
+  try {
+    const { user } = await getVerifiedUser(request)
+    const { playerId } = await params
+    const supabase = createServiceClient()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
-}
+    const { data: player } = await supabase
+      .from('players').select('owner_id').eq('id', playerId).single()
+    assertOwner(player?.owner_id ?? null, user.id)
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ playerId: string }> }) {
-  const { playerId } = await params
-  const supabase = createServiceClient()
-  const { error } = await supabase.from('players').delete().eq('id', playerId)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
+    const { error } = await supabase
+      .from('players').delete().eq('id', playerId).eq('owner_id', user.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    if (e instanceof NextResponse) return e
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
 }
