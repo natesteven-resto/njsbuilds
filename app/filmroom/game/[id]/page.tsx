@@ -1421,7 +1421,7 @@ function TransportBar({
   const outPct = (markOut != null && durationMs > 0) ? (markOut / durationMs) * 100 : null
 
   return (
-    <div className={`space-y-3 px-4 py-3 bg-[#13161b] border-t border-white/8 ${isFullscreen ? '' : 'rounded-b-xl border border-t-0 border-white/8'}`}>
+    <div className={`shrink-0 space-y-3 px-4 py-3 bg-[#13161b] border-t border-white/8 ${isFullscreen ? '' : 'rounded-b-xl border border-t-0 border-white/8'}`}>
       {/* Scrubber */}
       <div className="relative group">
         <div className="relative h-1.5 bg-white/10 rounded-full cursor-pointer"
@@ -2089,6 +2089,26 @@ export default function GameFilmRoom() {
   const [panelTab, setPanelTab] = useState<PanelTab>('clips')
   const [uploadDone, setUploadDone] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const fullscreenRootRef = useRef<HTMLDivElement>(null)
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null)
+  const toggleFullscreen = useCallback(async () => {
+    const root = fullscreenRootRef.current
+    if (!root) return
+    setFullscreenError(null)
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen()
+      else if (root.requestFullscreen) await root.requestFullscreen()
+      else setFullscreenError('This browser does not support fullscreen with coaching controls.')
+    } catch {
+      setFullscreenError('Could not enter fullscreen. Please try the fullscreen button again.')
+    }
+  }, [])
+  useEffect(() => {
+    const sync = () => setIsFullscreen(document.fullscreenElement === fullscreenRootRef.current)
+    document.addEventListener('fullscreenchange', sync)
+    return () => document.removeEventListener('fullscreenchange', sync)
+  }, [])
+
   const [drawingActive, setDrawingActive] = useState(false)
   const [drawingData, setDrawingData] = useState<DrawingData | null>(null)
 
@@ -2582,8 +2602,8 @@ export default function GameFilmRoom() {
         case 's': case 'S':
           if (markIn !== null && markOut !== null && markOut > markIn) setShowSaveClip(true)
           break
-        case 'f': case 'F': setIsFullscreen(f => !f); break
-        case 'Escape': setIsFullscreen(false); break
+        case 'f': case 'F': void toggleFullscreen(); break
+        case 'Escape': if (document.fullscreenElement) void document.exitFullscreen(); break
         // Instant clip: last 10s (Q key) — guard against input elements above
         case 'q': case 'Q': instantClip(); break
         // Speed toggles
@@ -2593,7 +2613,7 @@ export default function GameFilmRoom() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel, setIsFullscreen, instantClip])
+  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel, toggleFullscreen, instantClip])
 
   if (loading) return (
     <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center">
@@ -2659,7 +2679,7 @@ export default function GameFilmRoom() {
   const videoLoaded = !!game.video_url
 
   return (
-    <div className="cs min-h-screen bg-[#181917] text-[#eee9df] flex flex-col">
+    <div ref={fullscreenRootRef} className="cs min-h-screen bg-[#181917] text-[#eee9df] flex flex-col">
       {/* Presentation mode — full-screen overlay */}
       {showPresentation && presentationClips.length > 0 && (
         <PresentationMode
@@ -2779,7 +2799,7 @@ export default function GameFilmRoom() {
 
                 {/* Fullscreen toggle */}
                 <button
-                  onClick={() => setIsFullscreen(f => !f)}
+                  onClick={() => void toggleFullscreen()}
                   className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 hover:bg-black/80 text-white/70 hover:text-white transition-all z-20"
                   title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen (F)'}
                 >
@@ -2787,6 +2807,7 @@ export default function GameFilmRoom() {
                 </button>
               </div>
             )}
+            {fullscreenError && <p role="alert" className="shrink-0 px-4 py-2 text-sm text-red-300">{fullscreenError}</p>}
             {/* Transport — only active with video */}
             {game.video_url && <TransportBar
               isPlaying={isPlaying}
@@ -2802,7 +2823,7 @@ export default function GameFilmRoom() {
               onMarkOut={() => setMarkOut(currentMs)}
               isFullscreen={isFullscreen}
               onStatTap={videoLoaded ? openStatPanel : undefined}
-              coachingTools={!isFullscreen ? <div className="flex flex-wrap items-center gap-1">
+              coachingTools={<div className="flex flex-wrap items-center gap-1">
                 <button onClick={() => setAddingBookmark(a => !a)} disabled={bookmarkPending}
                   aria-label="Add bookmark at current position" title="Add bookmark at current position"
                   className="flex items-center gap-1 px-2 py-2 text-xs text-yellow-400/80 rounded-lg hover:bg-white/6 disabled:opacity-40">
@@ -2842,9 +2863,10 @@ export default function GameFilmRoom() {
                     className="text-white/40 hover:text-white text-xs px-1" aria-label="Increase speed">+</button>
                 </div>
 
-              </div> : null}
+              </div>}
             />}
-            {!isFullscreen && game.video_url && (
+            {game.video_url && (
+              <div className="shrink-0 max-h-32 overflow-y-auto">
               <BookmarkBar
                 adding={addingBookmark}
                 setAdding={setAddingBookmark}
@@ -2857,6 +2879,7 @@ export default function GameFilmRoom() {
                 onAdd={handleAddBookmark}
                 onDelete={handleDeleteBookmark}
               />
+              </div>
             )}
             {!isFullscreen&&<EventTimeline clips={clips} stats={statEntries} durationMs={durationMs} currentMs={currentMs} selectedId={activeClipId} onSeek={seekAndPlay} onClip={c=>{setActiveClipId(c.id);jumpToClip(c.start_time_ms)}}/>}
             {/* Upload success banner — hidden in fullscreen */}
@@ -2868,7 +2891,7 @@ export default function GameFilmRoom() {
             )}
 
             {/* Save clip CTA — hidden in fullscreen (use keyboard shortcuts instead) */}
-            {!isFullscreen && canSave && (
+            {canSave && (
               <div className="mt-3 flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-500/10 border border-blue-500/25">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-blue-300">Clip marked</p>
