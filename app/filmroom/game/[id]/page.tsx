@@ -2842,17 +2842,6 @@ export default function GameFilmRoom() {
                     className="text-white/40 hover:text-white text-xs px-1" aria-label="Increase speed">+</button>
                 </div>
 
-                {/* Presentation mode */}
-                {clips.length > 0 && (
-                  <button
-                    onClick={startPresentation}
-                    className="flex items-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium border border-white/8 bg-white/3 text-white/40 hover:text-white hover:bg-white/6 transition-all"
-                    title="Present clips fullscreen"
-                  >
-                    <Maximize2 className="w-3.5 h-3.5" />
-                    Present
-                  </button>
-                )}
               </div> : null}
             />}
             {!isFullscreen && game.video_url && (
@@ -2938,6 +2927,17 @@ export default function GameFilmRoom() {
                   <select aria-label="Filter clips by player" value={clipPlayer} onChange={e=>setClipPlayer(e.target.value)} className="col-span-2 min-h-11 bg-[#252621] border border-white/10 rounded-md px-2 text-xs"><option value="">All players</option>{players.map(p=><option key={p.id} value={p.id}>#{p.number} {p.name}</option>)}</select>
                 </div>
                 {!!clips.length&&!filteredClips.length&&<p className="py-4 text-sm text-white/65">No clips match these filters.</p>}
+                {/* Presentation mode */}
+                {clips.length > 0 && (
+                  <button
+                    onClick={startPresentation}
+                    className="flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-xl text-xs font-medium border border-white/8 bg-white/3 text-white/75 hover:text-white hover:bg-white/6 transition-all"
+                    title="Play all saved clips in presentation mode"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    Present clips
+                  </button>
+                )}
                 {/* Filter chips */}
                 <div className="flex flex-wrap gap-1.5 pb-1">
                   <span className="text-xs text-white/30">{clips.length} clip{clips.length !== 1 ? 's' : ''}</span>
