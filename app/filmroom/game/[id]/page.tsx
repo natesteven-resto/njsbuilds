@@ -2445,7 +2445,7 @@ export default function GameFilmRoom() {
     const onPause = () => flushResumePosition()
     v.addEventListener('pause', onPause)
     return () => v.removeEventListener('pause', onPause)
-  }, [flushResumePosition, game?.id])
+  }, [flushResumePosition, game?.id, durationMs])
 
   // Initial seek: clip param > resume_position_ms > 0
   // Fires once on loadedmetadata after the video element gets its src.
@@ -2468,7 +2468,7 @@ export default function GameFilmRoom() {
           return
         }
       }
-      if (resumeMs > 0) { // ignore sub-second positions (likely a cold open)
+      if (resumeMs > 0) {
         v.currentTime = Math.min(resumeMs / 1000, Math.max(0,v.duration-.01))
         setCurrentMs(Math.round(v.currentTime*1000))
       }
@@ -2486,7 +2486,7 @@ export default function GameFilmRoom() {
     }
   // clips changes when section retry re-fetches; searchParams is stable
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game?.id, game?.resume_position_ms, searchParams, clips])
+  }, [game?.id, game?.resume_position_ms, searchParams, clips, durationMs])
 
   // Retry individual sections without full page reload
   const retrySection = useCallback(async (section: 'clips' | 'players' | 'stats') => {
