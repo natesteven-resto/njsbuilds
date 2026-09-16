@@ -2811,47 +2811,6 @@ export default function GameFilmRoom() {
               isFullscreen={isFullscreen}
               onStatTap={videoLoaded ? openStatPanel : undefined}
             />}
-            {!isFullscreen&&<EventTimeline clips={clips} stats={statEntries} durationMs={durationMs} currentMs={currentMs} selectedId={activeClipId} onSeek={seekAndPlay} onClip={c=>{setActiveClipId(c.id);jumpToClip(c.start_time_ms)}}/>}
-            {!isFullscreen && game.video_url && (
-              <BookmarkBar
-                bookmarks={bookmarks}
-                currentMs={currentMs}
-                durationMs={durationMs}
-                pending={bookmarkPending}
-                error={bookmarkError}
-                onSeek={seek}
-                onAdd={handleAddBookmark}
-                onDelete={handleDeleteBookmark}
-              />
-            )}
-            {/* Upload success banner — hidden in fullscreen */}
-            {!isFullscreen && uploadDone && (
-              <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <p className="text-xs text-emerald-300">Video uploaded and ready — use the controls above to start marking clips.</p>
-              </div>
-            )}
-
-            {/* Save clip CTA — hidden in fullscreen (use keyboard shortcuts instead) */}
-            {!isFullscreen && canSave && (
-              <div className="mt-3 flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-500/10 border border-blue-500/25">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-300">Clip marked</p>
-                  <p className="text-xs text-blue-400/60">
-                    {msToTimecode(markIn!)} → {msToTimecode(markOut!)} ({formatDuration(markIn!, markOut!)})
-                  </p>
-                </div>
-                <button onClick={() => { setMarkIn(null); setMarkOut(null) }}
-                  className="px-3 py-1.5 rounded-lg text-xs text-white/40 hover:text-white/70 transition-colors">
-                  Clear
-                </button>
-                <button onClick={() => setShowSaveClip(true)}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-medium transition-colors">
-                  <Scissors className="w-3.5 h-3.5" /> Save Clip <kbd className="font-mono opacity-60 ml-1">S</kbd>
-                </button>
-              </div>
-            )}
-
             {/* Drawing, speed, instant-clip, presentation — hidden in fullscreen */}
             {!isFullscreen && game.video_url && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -2902,6 +2861,48 @@ export default function GameFilmRoom() {
                 )}
               </div>
             )}
+            {!isFullscreen && game.video_url && (
+              <BookmarkBar
+                bookmarks={bookmarks}
+                currentMs={currentMs}
+                durationMs={durationMs}
+                pending={bookmarkPending}
+                error={bookmarkError}
+                onSeek={seek}
+                onAdd={handleAddBookmark}
+                onDelete={handleDeleteBookmark}
+              />
+            )}
+            {!isFullscreen&&<EventTimeline clips={clips} stats={statEntries} durationMs={durationMs} currentMs={currentMs} selectedId={activeClipId} onSeek={seekAndPlay} onClip={c=>{setActiveClipId(c.id);jumpToClip(c.start_time_ms)}}/>}
+            {/* Upload success banner — hidden in fullscreen */}
+            {!isFullscreen && uploadDone && (
+              <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <p className="text-xs text-emerald-300">Video uploaded and ready — use the controls above to start marking clips.</p>
+              </div>
+            )}
+
+            {/* Save clip CTA — hidden in fullscreen (use keyboard shortcuts instead) */}
+            {!isFullscreen && canSave && (
+              <div className="mt-3 flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-500/10 border border-blue-500/25">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-300">Clip marked</p>
+                  <p className="text-xs text-blue-400/60">
+                    {msToTimecode(markIn!)} → {msToTimecode(markOut!)} ({formatDuration(markIn!, markOut!)})
+                  </p>
+                </div>
+                <button onClick={() => { setMarkIn(null); setMarkOut(null) }}
+                  className="px-3 py-1.5 rounded-lg text-xs text-white/40 hover:text-white/70 transition-colors">
+                  Clear
+                </button>
+                <button onClick={() => setShowSaveClip(true)}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-medium transition-colors">
+                  <Scissors className="w-3.5 h-3.5" /> Save Clip <kbd className="font-mono opacity-60 ml-1">S</kbd>
+                </button>
+              </div>
+            )}
+
+
           </div>
         </div>
 
