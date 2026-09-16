@@ -634,8 +634,8 @@ function calcBoxRow(entries: StatEntry[]): BoxRow {
   const ftm   = countStat(entries, 'FTM')
   const ftx   = countStat(entries, 'FTX')
   return {
-    fg:      `${twoM}-${twoM + twoX}`,
-    fgPct:   pct(twoM, twoM + twoX),
+    fg:      `${twoM + threeM}-${twoM + twoX + threeM + threeX}`,
+    fgPct:   pct(twoM + threeM, twoM + twoX + threeM + threeX),
     threePt: `${threeM}-${threeM + threeX}`,
     threePct: pct(threeM, threeM + threeX),
     ft:      `${ftm}-${ftm + ftx}`,
@@ -670,7 +670,7 @@ function renderBoxRow(row: BoxRow, highlight = false) {
         <span className={`${
           isPts ? 'font-bold text-sm' : 'text-xs'
         } ${
-          isZero ? 'text-white/20' : highlight ? 'text-white' : 'text-white/85'
+          isZero ? 'text-white/55' : highlight ? 'text-white' : 'text-white/85'
         }`}>{String(v)}</span>
       </td>
     )
@@ -770,13 +770,13 @@ function BoxScorePanel({
   return (
     <>
       {/* ── Desktop table (md+) ── */}
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr className="border-b border-white/10">
-              <th className="text-left text-white/40 font-medium pb-2 pr-4 min-w-[110px]">Player</th>
+              <th className="text-left text-white/65 font-medium pb-2 pr-4 min-w-[110px]">Player</th>
               {BOX_HEADERS.map(h => (
-                <th key={h} className="text-center text-white/35 font-medium pb-2 px-1 whitespace-nowrap">{h}</th>
+                <th key={h} className="text-center text-white/65 font-medium pb-2 px-1 whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -789,6 +789,9 @@ function BoxScorePanel({
                 <React.Fragment key={row.id}>
                   <tr
                     onClick={() => canExpand && setExpandedPlayerId(isExpanded ? null : row.id)}
+                    tabIndex={canExpand?0:undefined}
+                    aria-expanded={canExpand?isExpanded:undefined}
+                    onKeyDown={e=>{if(canExpand&&(e.key==='Enter'||e.key===' ')){e.preventDefault();setExpandedPlayerId(isExpanded?null:row.id)}}}
                     className={`transition-colors ${canExpand ? 'cursor-pointer hover:bg-white/3' : ''} ${row.isTotal ? 'border-t-2 border-white/12' : ''} ${row.isOpp ? 'bg-red-950/10' : ''}`}
                   >
                     <td className="py-2 pr-4">
@@ -822,7 +825,7 @@ function BoxScorePanel({
       </div>
 
       {/* ── Phone: grouped player cards (< md) ── */}
-      <div className="md:hidden space-y-2">
+      <div className="lg:hidden space-y-2">
         {allRows.map(row => {
           const box = calcBoxRow(row.entries)
           const isExpanded = expandedPlayerId === row.id
@@ -835,20 +838,23 @@ function BoxScorePanel({
               items: [
                 { key: 'PTS', val: box.pts },
                 { key: 'FG', val: box.fg, dim: box.fg === '0-0' },
+                { key: 'FG%', val: box.fgPct },
                 { key: '3PT', val: box.threePt, dim: box.threePt === '0-0' },
+                { key: '3PT%', val: box.threePct },
                 { key: 'FT', val: box.ft, dim: box.ft === '0-0' },
+                { key: 'FT%', val: box.ftPct },
               ],
             },
             {
               label: 'Other',
               items: [
-                { key: 'REB', val: box.oreb + box.dreb, dim: box.oreb + box.dreb === 0 },
+                { key: 'OREB', val: box.oreb }, { key: 'DREB', val: box.dreb }, { key: 'DEF', val: box.def },
                 { key: 'AST', val: box.ast, dim: box.ast === 0 },
                 { key: 'STL', val: box.stl, dim: box.stl === 0 },
                 { key: 'BLK', val: box.blk, dim: box.blk === 0 },
                 { key: 'TO', val: box.to, dim: box.to === 0 },
                 { key: 'FOUL', val: box.foul, dim: box.foul === 0 },
-              ].filter(i => !i.dim || (typeof i.val === 'number' && i.val > 0)),
+              ],
             },
           ]
 
@@ -875,11 +881,11 @@ function BoxScorePanel({
               <div className="mt-2 space-y-1.5">
                 {groups.map(g => (
                   <div key={g.label} className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[9px] text-white/25 uppercase tracking-widest w-12 shrink-0">{g.label}</span>
+                    <span className="text-[10px] text-white/60 uppercase tracking-widest w-12 shrink-0">{g.label}</span>
                     {g.items.map(item => (
                       <span key={item.key}
-                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${item.dim ? 'text-white/20' : 'bg-white/6 text-white/70'}`}>
-                        <span className="text-white/35">{item.key}</span>
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${item.dim ? 'text-white/60' : 'bg-white/6 text-white/80'}`}>
+                        <span className="text-white/65">{item.key}</span>
                         <span className={item.dim ? '' : 'font-semibold'}>{item.val}</span>
                       </span>
                     ))}
@@ -3039,30 +3045,6 @@ export default function GameFilmRoom() {
               </div>
             )}
 
-            {/* Desktop full-width stats panel — appears below video when Stats tab active */}
-            {panelTab === 'stats' && !statsFullscreen && (
-              <div className="hidden lg:block mt-3 rounded-xl border border-white/8 bg-[#13161b] p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-white/50 uppercase tracking-wider">Box Score — vs {game.opponent}</p>
-                  {statsError && (
-                    <button onClick={() => retrySection('stats')} className="text-xs text-red-400 underline underline-offset-2">Retry</button>
-                  )}
-                  <button
-                    onClick={() => setStatsFullscreen(true)}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-white/40 hover:text-white border border-white/8 hover:border-white/20 transition-all"
-                  >
-                    <Maximize2 className="w-3 h-3" /> Expand
-                  </button>
-                </div>
-                <BoxScorePanel
-                  players={players}
-                  statEntries={statEntries}
-                  onSeek={seekAndPlay}
-                  onDeleteEntry={handleDeleteEntry}
-                />
-              </div>
-            )}
-
             {/* SHOT CHART tab */}
             {panelTab === 'shot-chart' && (
               <ShotChartPanel statEntries={statEntries} players={players} onSeek={seekAndPlay} />
@@ -3085,6 +3067,31 @@ export default function GameFilmRoom() {
           </div>
         </div>
       </div>
+
+            {/* Desktop full-width stats panel — appears below video when Stats tab active */}
+            {panelTab === 'stats' && !statsFullscreen && (
+              <div className="hidden lg:block mx-4 mb-4 mt-3 rounded-xl border border-white/8 bg-[#20211e] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-white/50 uppercase tracking-wider">Box Score — vs {game.opponent}</p>
+                  {statsError && (
+                    <button onClick={() => retrySection('stats')} className="text-xs text-red-400 underline underline-offset-2">Retry</button>
+                  )}
+                  <button
+                    onClick={() => setStatsFullscreen(true)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-white/40 hover:text-white border border-white/8 hover:border-white/20 transition-all"
+                  >
+                    <Maximize2 className="w-3 h-3" /> Expand
+                  </button>
+                </div>
+                <BoxScorePanel
+                  players={players}
+                  statEntries={statEntries}
+                  onSeek={seekAndPlay}
+                  onDeleteEntry={handleDeleteEntry}
+                />
+              </div>
+            )}
+
 
       {/* Modals */}
       {showSaveClip && markIn !== null && markOut !== null && (
