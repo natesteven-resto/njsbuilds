@@ -1399,7 +1399,7 @@ function TransportBar({
   isPlaying, currentMs, durationMs,
   onPlayPause, onSeek, onSkip, onFrameStep,
   markIn, markOut, onMarkIn, onMarkOut,
-  isFullscreen, onStatTap,
+  isFullscreen, onStatTap, coachingTools,
 }: {
   isPlaying: boolean
   currentMs: number
@@ -1414,6 +1414,7 @@ function TransportBar({
   onMarkOut: () => void
   isFullscreen?: boolean
   onStatTap?: () => void
+  coachingTools?: React.ReactNode
 }) {
   const pct = durationMs > 0 ? (currentMs / durationMs) * 100 : 0
   const inPct = (markIn != null && durationMs > 0) ? (markIn / durationMs) * 100 : null
@@ -1455,16 +1456,16 @@ function TransportBar({
       </div>
 
       {/* Controls row */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1">
         {/* Frame back */}
         <button onClick={() => onFrameStep(-1)}
-          className="p-3 min-w-11 min-h-11 text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Previous frame (← arrow)">
+          className="p-2 min-w-9 min-h-11 text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Previous frame (← arrow)">
           <SkipBack className="w-3.5 h-3.5" />
         </button>
 
         {/* Skip -5s */}
         <button onClick={() => onSkip(-5000)}
-          className="px-3 py-3 min-w-11 min-h-11 text-xs text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Back 5s (J)">
+          className="px-2 py-3 min-w-9 min-h-11 text-xs text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Back 5s (J)">
           -5s
         </button>
 
@@ -1476,16 +1477,17 @@ function TransportBar({
 
         {/* Skip +5s */}
         <button onClick={() => onSkip(5000)}
-          className="px-3 py-3 min-w-11 min-h-11 text-xs text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Forward 5s (L)">
+          className="px-2 py-3 min-w-9 min-h-11 text-xs text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Forward 5s (L)">
           +5s
         </button>
 
         {/* Frame fwd */}
         <button onClick={() => onFrameStep(1)}
-          className="p-3 min-w-11 min-h-11 text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Next frame (→ arrow)">
+          className="p-2 min-w-9 min-h-11 text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Next frame (→ arrow)">
           <SkipForward className="w-3.5 h-3.5" />
         </button>
 
+        {coachingTools}
         <div className="hidden sm:block flex-1" />
 
         {/* Timecode */}
@@ -1496,19 +1498,19 @@ function TransportBar({
         {/* Mark In / Out */}
         <div className="flex w-full sm:w-auto items-center justify-between sm:justify-start gap-1 sm:ml-2">
           <button onClick={onMarkIn}
-            className={`flex items-center gap-1 px-3 py-3 rounded-lg text-xs font-medium transition-all ${markIn != null ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-white/40 hover:text-white hover:bg-white/6'}`}
+            className={`flex items-center gap-1 px-2 py-3 rounded-lg text-xs font-medium transition-all ${markIn != null ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-white/40 hover:text-white hover:bg-white/6'}`}
             title="Mark In point (I)">
             <Scissors className="w-3 h-3" /> IN
           </button>
           <button onClick={onMarkOut}
-            className={`flex items-center gap-1 px-3 py-3 rounded-lg text-xs font-medium transition-all ${markOut != null ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'text-white/40 hover:text-white hover:bg-white/6'}`}
+            className={`flex items-center gap-1 px-2 py-3 rounded-lg text-xs font-medium transition-all ${markOut != null ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'text-white/40 hover:text-white hover:bg-white/6'}`}
             title="Mark Out point (O)">
             OUT <Scissors className="w-3 h-3" />
           </button>
           {onStatTap && (
             <button
               onClick={onStatTap}
-              className="flex items-center gap-1.5 px-3 py-3 rounded-lg active:scale-95 text-xs font-semibold transition-all ml-1 border"
+              className="flex items-center gap-1.5 px-2 py-3 rounded-lg active:scale-95 text-xs font-semibold transition-all ml-1 border"
               style={{ touchAction: 'manipulation', background: '#c66a3e', color: '#181917', borderColor: 'rgba(198,106,62,0.5)' }}
             >
               <BarChart className="w-3 h-3" /> Tag Stat
@@ -1924,8 +1926,10 @@ function BookmarkBar({
   error,
   onSeek,
   onAdd,
-  onDelete,
+  onDelete, adding, setAdding,
 }: {
+  adding: boolean
+  setAdding: (value: boolean) => void
   bookmarks: GameBookmark[]
   currentMs: number
   durationMs: number
@@ -1935,7 +1939,6 @@ function BookmarkBar({
   onAdd: (bm: GameBookmark) => void
   onDelete: (id: string) => void
 }) {
-  const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ label: '', period: 'Q1' as typeof PERIODS[number], clock: '' })
 
   // Disable add while a mutation is in flight
@@ -2009,18 +2012,6 @@ function BookmarkBar({
             </button>
           </div>
         ))}
-
-        {/* Add bookmark button */}
-        {!adding && (
-          <button
-            onClick={() => { if (canAdd) setAdding(true) }}
-            disabled={!canAdd}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-yellow-500/25 text-yellow-500/50 hover:text-yellow-400 hover:border-yellow-500/50 text-[11px] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Add bookmark at current position"
-          >
-            <Bookmark className="w-3 h-3" aria-hidden /> Add
-          </button>
-        )}
 
         {/* Inline add form */}
         {adding && (
@@ -2109,6 +2100,7 @@ export default function GameFilmRoom() {
 
   // Courtside additions
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
+  const [addingBookmark, setAddingBookmark] = useState(false)
   const [showPresentation, setShowPresentation] = useState(false)
   const [presentationClips, setPresentationClips] = useState<PresentationClip[]>([])
   const [playlists, setPlaylists] = useState<Playlist[]>([])
@@ -2810,14 +2802,16 @@ export default function GameFilmRoom() {
               onMarkOut={() => setMarkOut(currentMs)}
               isFullscreen={isFullscreen}
               onStatTap={videoLoaded ? openStatPanel : undefined}
-            />}
-            {/* Drawing, speed, instant-clip, presentation — hidden in fullscreen */}
-            {!isFullscreen && game.video_url && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              coachingTools={!isFullscreen ? <div className="flex flex-wrap items-center gap-1">
+                <button onClick={() => setAddingBookmark(a => !a)} disabled={bookmarkPending}
+                  aria-label="Add bookmark at current position" title="Add bookmark at current position"
+                  className="flex items-center gap-1 px-2 py-2 text-xs text-yellow-400/80 rounded-lg hover:bg-white/6 disabled:opacity-40">
+                  <Bookmark className="w-3 h-3" /> Add
+                </button>
                 {/* Draw */}
                 <button
                   onClick={() => setDrawingActive(a => !a)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
+                  className={`flex items-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium transition-all border ${
                     drawingActive
                       ? 'bg-orange-500/15 border-orange-500/30 text-orange-300'
                       : 'border-white/8 bg-white/3 text-white/40 hover:text-white hover:bg-white/6'
@@ -2830,7 +2824,7 @@ export default function GameFilmRoom() {
                 {/* Instant clip: last 10s (Q) */}
                 <button
                   onClick={instantClip}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border border-white/8 bg-white/3 text-white/40 hover:text-white hover:bg-white/6 ${
+                  className={`flex items-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium transition-all border border-white/8 bg-white/3 text-white/40 hover:text-white hover:bg-white/6 ${
                     instantClipPulse ? 'cs-pulse' : ''
                   }`}
                   title="Mark last 10s as clip (Q)"
@@ -2852,17 +2846,19 @@ export default function GameFilmRoom() {
                 {clips.length > 0 && (
                   <button
                     onClick={startPresentation}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border border-white/8 bg-white/3 text-white/40 hover:text-white hover:bg-white/6 transition-all"
+                    className="flex items-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium border border-white/8 bg-white/3 text-white/40 hover:text-white hover:bg-white/6 transition-all"
                     title="Present clips fullscreen"
                   >
                     <Maximize2 className="w-3.5 h-3.5" />
                     Present
                   </button>
                 )}
-              </div>
-            )}
+              </div> : null}
+            />}
             {!isFullscreen && game.video_url && (
               <BookmarkBar
+                adding={addingBookmark}
+                setAdding={setAddingBookmark}
                 bookmarks={bookmarks}
                 currentMs={currentMs}
                 durationMs={durationMs}
