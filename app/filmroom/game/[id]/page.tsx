@@ -14,6 +14,7 @@ import {
 import type { Game, Clip, Player, ClipCategory, ClipComment, Playlist } from '@/types/filmroom'
 import { CATEGORY_LABELS, CATEGORY_COLORS, PLAY_TYPES, normalizeDrawingData } from '@/types/filmroom'
 import { DrawingOverlay, type DrawingData } from '@/app/filmroom/components/DrawingOverlay'
+import { STAT_NAMES, statMoment, reviewMoment, statDescription } from '@/lib/filmroom-events'
 import { EventTimeline } from '@/app/filmroom/components/EventTimeline'
 import { JogWheel } from '@/app/filmroom/components/JogWheel'
 import { AccountBar } from '@/app/filmroom/components/AccountBar'
@@ -279,7 +280,7 @@ function StatEntryPanel({
         game_id: gameId,
         player_id: player.id === OPP_ID ? null : player.id,
         stat_type: selectedStat,
-        video_time_ms: currentMs,
+        video_time_ms: statMoment(currentMs),
       }
       // Include staged shot coords only for shot stat types
       if (stagedShot && SHOT_TYPES_SET.has(selectedStat)) {
@@ -2121,6 +2122,13 @@ export default function GameFilmRoom() {
   // Courtside additions
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [addingBookmark, setAddingBookmark] = useState(false)
+  const [showEventSettings,setShowEventSettings]=useState(false)
+  const [eventLabels,setEventLabels]=useState(true)
+  const [eventPlayer,setEventPlayer]=useState('')
+  const [eventType,setEventType]=useState('')
+  const [eventLead,setEventLead]=useState(5)
+  const [reviewEventId,setReviewEventId]=useState<string|null>(null)
+
   const [showPresentation, setShowPresentation] = useState(false)
   const [presentationClips, setPresentationClips] = useState<PresentationClip[]>([])
   const [playlists, setPlaylists] = useState<Playlist[]>([])
@@ -2677,6 +2685,15 @@ export default function GameFilmRoom() {
   const highlights = clips.filter(c => c.is_highlight)
   const canSave = markIn !== null && markOut !== null && markOut > markIn
   const videoLoaded = !!game.video_url
+  const matchingStats=statEntries.filter(s=>(!eventPlayer||(eventPlayer==='opponent'?!s.player_id:s.player_id===eventPlayer))&&(!eventType||s.stat_type===eventType))
+  const matchingClips=eventType||eventPlayer==='opponent'?[]:clips.filter(c=>!eventPlayer||c.primary_player_id===eventPlayer||c.players?.some(p=>p.id===eventPlayer))
+  const reviewEvents=[...matchingStats.map(s=>({id:s.id,at:s.video_time_ms,clip:null as Clip|null})),...matchingClips.map(c=>({id:c.id,at:c.start_time_ms,clip:c}))].sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id))
+  const cursor=reviewEvents.findIndex(e=>e.id===reviewEventId&&currentMs>=reviewMoment(e.at,eventLead)-1000&&currentMs<=e.at+8000)
+  const previousEvent=cursor>=0?reviewEvents[cursor-1]:[...reviewEvents].reverse().find(e=>e.at<currentMs-500)
+  const nextEvent=cursor>=0?reviewEvents[cursor+1]:reviewEvents.find(e=>e.at>currentMs+500)
+  const reviewAt=(at:number,id?:string)=>{setReviewEventId(id??matchingStats.find(s=>s.video_time_ms===at)?.id??null);seekAndPlay(reviewMoment(at,eventLead))}
+  const visibleEvents=matchingStats.filter(s=>currentMs>=s.video_time_ms&&currentMs<s.video_time_ms+3500)
+
 
   return (
     <div ref={fullscreenRootRef} className="cs min-h-screen bg-[#181917] text-[#eee9df] flex flex-col">
@@ -2767,6 +2784,10 @@ export default function GameFilmRoom() {
                   playerRef={videoRef}
                   isFullscreen={isFullscreen}
                 />
+                {eventLabels && !drawingActive && visibleEvents.length>0 && <div className="absolute top-3 left-3 z-30 max-w-[75%] pointer-events-none space-y-1" aria-label="Current film events">
+                  {visibleEvents.slice(0,3).map(e=><div key={e.id} className="rounded-md border border-white/15 bg-black/80 px-3 py-2 text-sm text-white shadow">{statDescription(e)}</div>)}
+                  {visibleEvents.length>3&&<div className="text-xs text-white bg-black/80 px-3 py-1">+{visibleEvents.length-3} more events</div>}
+                </div>}
                 <DrawingOverlay
                   active={drawingActive}
                   onDataChange={onDrawingChange}
@@ -2824,6 +2845,7 @@ export default function GameFilmRoom() {
               isFullscreen={isFullscreen}
               onStatTap={videoLoaded ? openStatPanel : undefined}
               coachingTools={<div className="flex flex-wrap items-center gap-1">
+                <button aria-expanded={showEventSettings} onClick={()=>setShowEventSettings(v=>!v)} className="px-2 py-2 rounded-lg text-xs border border-white/15 text-white/80">Events</button>
                 <button onClick={() => setAddingBookmark(a => !a)} disabled={bookmarkPending}
                   aria-label="Add bookmark at current position" title="Add bookmark at current position"
                   className="flex items-center gap-1 px-2 py-2 text-xs text-yellow-400/80 rounded-lg hover:bg-white/6 disabled:opacity-40">
@@ -2865,6 +2887,16 @@ export default function GameFilmRoom() {
 
               </div>}
             />}
+            {showEventSettings && <section aria-label="Event display settings" className="shrink-0 max-h-48 overflow-y-auto bg-[#20211e] border-t border-white/10 p-3 flex flex-wrap items-center gap-3 text-xs">
+                <button aria-label="Previous event" title="Previous matching event" disabled={!previousEvent} onClick={()=>previousEvent&&reviewAt(previousEvent.at,previousEvent.id)} className="px-2 py-2 text-xs disabled:opacity-30">‹ Event</button>
+                <button aria-label="Next event" title="Next matching event" disabled={!nextEvent} onClick={()=>nextEvent&&reviewAt(nextEvent.at,nextEvent.id)} className="px-2 py-2 text-xs disabled:opacity-30">Event ›</button>
+
+              <label className="flex items-center gap-2 min-h-9"><input type="checkbox" checked={eventLabels} onChange={e=>setEventLabels(e.target.checked)}/>Show event labels on video</label>
+              <select aria-label="Filter events by player" value={eventPlayer} onChange={e=>{setEventPlayer(e.target.value);setReviewEventId(null)}} className="bg-[#181917] border border-white/20 rounded p-2"><option value="">All players</option><option value="opponent">Opponent</option>{players.map(p=><option key={p.id} value={p.id}>#{p.number} {p.name}</option>)}</select>
+              <select aria-label="Filter events by stat" value={eventType} onChange={e=>{setEventType(e.target.value);setReviewEventId(null)}} className="bg-[#181917] border border-white/20 rounded p-2"><option value="">All stats and clips</option>{Object.entries(STAT_NAMES).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
+              <label>Review lead-in <select aria-label="Review lead-in" value={eventLead} onChange={e=>setEventLead(Number(e.target.value))} className="ml-2 bg-[#181917] border border-white/20 rounded p-2">{[3,5,10].map(n=><option key={n} value={n}>{n} seconds</option>)}</select></label>
+              <span className="text-white/60">New stats save 2 seconds before the tagging position.</span>
+            </section>}
             {game.video_url && (
               <div className="shrink-0 max-h-32 overflow-y-auto">
               <BookmarkBar
@@ -2881,7 +2913,7 @@ export default function GameFilmRoom() {
               />
               </div>
             )}
-            {!isFullscreen&&<EventTimeline clips={clips} stats={statEntries} durationMs={durationMs} currentMs={currentMs} selectedId={activeClipId} onSeek={seekAndPlay} onClip={c=>{setActiveClipId(c.id);jumpToClip(c.start_time_ms)}}/>}
+            {!isFullscreen&&<EventTimeline clips={matchingClips} stats={matchingStats} durationMs={durationMs} currentMs={currentMs} selectedId={activeClipId} leadIn={eventLead} onSeek={at=>reviewAt(at)} onClip={c=>{setActiveClipId(c.id);reviewAt(c.start_time_ms,c.id)}}/>}
             {/* Upload success banner — hidden in fullscreen */}
             {!isFullscreen && uploadDone && (
               <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
