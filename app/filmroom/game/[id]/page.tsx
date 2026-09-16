@@ -1,7 +1,8 @@
 'use client'
+import { CustomClipTags } from '@/app/filmroom/components/CustomClipTags'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Play, Pause, SkipBack, SkipForward, ChevronLeft,
@@ -162,6 +163,29 @@ function rawToEntry(raw: RawStatEntry): StatEntry {
   }
 }
 
+// Quick-stat preference helpers — user-scoped localStorage key
+// Key is filmroom:quickStatPrefs:<userId>. No fallback to global key (avoids cross-user leakage).
+
+function quickStatPrefsKey(userId: string): string {
+  return `filmroom:quickStatPrefs:${userId}`
+}
+
+function readQuickStatPrefs(userId: string): StatType[] | null {
+  if (!userId) return null
+  try {
+    const v = localStorage.getItem(quickStatPrefsKey(userId))
+    if (!v) return null
+    const parsed = JSON.parse(v)
+    if (!Array.isArray(parsed)) return null
+    return parsed.filter((s): s is StatType => (STAT_TYPES as readonly string[]).includes(s))
+  } catch { return null }
+}
+
+function writeQuickStatPrefs(userId: string, prefs: StatType[]): void {
+  if (!userId) return
+  try { localStorage.setItem(quickStatPrefsKey(userId), JSON.stringify(prefs)) } catch {}
+}
+
 // Opponent pseudo-player constant
 const OPP_ID = '__opp__'
 const OPP_PLAYER: Player = { id: OPP_ID, name: 'Opponent', number: null, position: null, team_id: '', parent_email: null, created_at: '' }
@@ -173,25 +197,57 @@ function StatEntryPanel({
   players,
   currentMs,
   sessionEntries,
+  userId,
   onLog,
   onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
+  undoPending,
+  redoPending,
+  undoError,
+  redoError,
   onClose,
 }: {
   gameId: string
   players: Player[]
   currentMs: number
   sessionEntries: StatEntry[]
+  userId: string
   onLog: (entry: StatEntry) => void
   onUndo: () => void
+  onRedo: () => void
+  canUndo: boolean
+  canRedo: boolean
+  undoPending: boolean
+  redoPending: boolean
+  undoError: string | null
+  redoError: string | null
   onClose: () => void
 }) {
   const [selectedStat, setSelectedStat] = useState<StatType | null>(null)
   const [logging, setLogging] = useState(false)
   const [logError,setLogError]=useState<string|null>(null)
-  const [redoStack, setRedoStack] = useState<StatEntry[]>([])
   // Staged shot location: set by tapping the court SVG, cleared after player tap
   const [stagedShot, setStagedShot] = useState<{ x: number; y: number } | null>(null)
   const [showCourtCapture, setShowCourtCapture] = useState(false)
+  // Quick-stat preferences — start empty, load from localStorage once userId is known
+  const [quickPrefs, setQuickPrefs] = useState<StatType[]>([])
+  const [editingPrefs, setEditingPrefs] = useState(false)
+
+  useEffect(() => {
+    if (!userId) return
+    const saved = readQuickStatPrefs(userId)
+    if (saved) setQuickPrefs(saved)
+  }, [userId])
+
+  const togglePref = (stat: StatType) => {
+    setQuickPrefs(prev => {
+      const next = prev.includes(stat) ? prev.filter(s => s !== stat) : [...prev, stat]
+      writeQuickStatPrefs(userId, next)
+      return next
+    })
+  }
 
   const SHOT_TYPES_SET = new Set(['2M','3M','FTM','2X','3X','FTX'])
 
@@ -242,7 +298,6 @@ function StatEntryPanel({
         ? { ...rawToEntry(raw), player_id: OPP_ID, player_name: 'Opponent', player_number: 'OPP' }
         : rawToEntry(raw)
       onLog(entry)
-      setRedoStack([])
       setStagedShot(null) // clear after commit; keep stat selected for rapid entry
     } catch {
       setLogError('The stat was not saved. Please try again.')
@@ -251,12 +306,8 @@ function StatEntryPanel({
     }
   }
 
-  const handleUndo = async () => {
-    const last = sessionEntries[sessionEntries.length - 1]
-    if (!last) return
-    setRedoStack(r => [...r, last])
-    onUndo()
-  }
+  const handleUndo = () => { if (canUndo) onUndo() }
+  const handleRedo = () => { if (canRedo) onRedo() }
 
   const made   = STAT_DEFS.filter(d => d.col === 'made')
   const miss   = STAT_DEFS.filter(d => d.col === 'miss')
@@ -298,17 +349,19 @@ function StatEntryPanel({
           <div className="flex items-center gap-2">
             <button
               onClick={handleUndo}
-              disabled={sessionEntries.length === 0}
+              disabled={!canUndo || undoPending}
               className="px-3 py-1.5 rounded-xl text-xs font-medium text-white/50 hover:text-white border border-white/10 hover:border-white/20 disabled:opacity-30 transition-all"
+              title="Undo last stat entry"
             >
-              Undo
+              {undoPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Undo'}
             </button>
             <button
-              disabled
-              className="px-3 py-1.5 rounded-xl text-xs font-medium text-white/20 border border-white/6 disabled:opacity-30 cursor-not-allowed"
-              title="Redo (coming soon)"
+              onClick={handleRedo}
+              disabled={!canRedo || redoPending}
+              className="px-3 py-1.5 rounded-xl text-xs font-medium text-white/50 hover:text-white border border-white/10 hover:border-white/20 disabled:opacity-30 transition-all"
+              title="Redo last undone entry"
             >
-              Redo
+              {redoPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Redo'}
             </button>
             <button
               onClick={onClose}
@@ -319,7 +372,76 @@ function StatEntryPanel({
           </div>
         </div>
 
+        {(undoError || redoError) && (
+          <p role="alert" className="px-4 py-1.5 text-xs text-red-300 border-b border-red-500/15">
+            {undoError ?? redoError}
+          </p>
+        )}
         {logError && <p role="alert" className="px-4 py-2 text-sm text-red-300">{logError}</p>}
+
+        {/* ── Quick-stat pinned row + preference toggle ── */}
+        {quickPrefs.length > 0 && !editingPrefs && (
+          <div className="shrink-0 px-4 pt-2 pb-1 border-b border-white/6">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[9px] font-semibold text-white/25 uppercase tracking-widest mr-1">Quick</span>
+              {quickPrefs.map(stat => {
+                const def = STAT_DEFS.find(d => d.key === stat)
+                if (!def) return null
+                return (
+                  <button key={stat}
+                    onClick={() => handleStatTap(stat)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
+                      selectedStat === stat
+                        ? 'bg-blue-500 text-white border-blue-400/50'
+                        : def.col === 'miss' ? 'border-red-500/25 text-red-300 bg-red-950/20'
+                        : def.redTint ? 'border-red-500/20 text-red-300/70 bg-red-950/15'
+                        : 'border-white/12 text-white/80 bg-white/6'
+                    }`}
+                    style={{ touchAction: 'manipulation' }}>
+                    {def.label}
+                  </button>
+                )
+              })}
+              <button onClick={() => setEditingPrefs(true)}
+                className="ml-auto text-[9px] text-white/25 hover:text-white/50 border border-white/8 rounded px-1.5 py-1 transition-all">
+                Edit
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Pref editor: toggle which stats appear in quick bar ── */}
+        {editingPrefs && (
+          <div className="shrink-0 px-4 pt-2 pb-2 border-b border-white/6">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Quick-stat pins</span>
+              <button onClick={() => setEditingPrefs(false)}
+                className="text-[10px] text-[#c66a3e] hover:text-[#e07a4a] font-medium">Done</button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {STAT_DEFS.map(def => (
+                <button key={def.key}
+                  onClick={() => togglePref(def.key)}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-medium border transition-all ${
+                    quickPrefs.includes(def.key)
+                      ? 'bg-[rgba(198,106,62,0.18)] border-[rgba(198,106,62,0.40)] text-[#c66a3e]'
+                      : 'border-white/10 text-white/40 hover:text-white/70'
+                  }`}
+                  style={{ touchAction: 'manipulation' }}>
+                  {def.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(!quickPrefs.length && !editingPrefs) && (
+          <div className="shrink-0 px-4 pt-2 flex justify-end">
+            <button onClick={() => setEditingPrefs(true)}
+              className="text-[9px] text-white/20 hover:text-white/40 underline underline-offset-2">Pin quick stats</button>
+          </div>
+        )}
+
         {/* ── Stat grid ── */}
         <div className="shrink-0 px-4 pt-3 pb-2">
           <div className="grid grid-cols-3 gap-2 items-start">
@@ -555,29 +677,69 @@ function renderBoxRow(row: BoxRow, highlight = false) {
   })
 }
 
+// ─── Stats Event List ────────────────────────────────────────────────────────
+// Expandable per-player event list with seek + delete
+function PlayerEventList({
+  entries,
+  onSeek,
+  onDeleteEntry,
+}: {
+  entries: StatEntry[]
+  onSeek: (ms: number) => void
+  onDeleteEntry: (id: string) => void
+}) {
+  if (entries.length === 0) return null
+  const sorted = [...entries].sort((a, b) => a.video_time_ms - b.video_time_ms)
+  return (
+    <div className="space-y-0.5 mt-1">
+      {sorted.map((entry) => (
+        <div key={entry.id} className="flex items-center gap-2 px-2 py-1 rounded-lg group hover:bg-[rgba(198,106,62,0.08)]">
+          <button
+            onClick={() => onSeek(entry.video_time_ms)}
+            className="flex items-center gap-2 flex-1 text-left min-w-0"
+            aria-label={`Seek to ${STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type} at ${msToDisplay(entry.video_time_ms)}`}
+          >
+            <Play className="w-3 h-3 text-white/30 group-hover:text-[#c66a3e] shrink-0" aria-hidden />
+            <span className="font-mono text-white/40 tabular-nums text-[11px] shrink-0 w-10">{msToDisplay(entry.video_time_ms)}</span>
+            <span className="text-[11px] font-semibold truncate" style={{ color: '#c66a3e' }}>
+              {STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type}
+            </span>
+          </button>
+          <button
+            onClick={() => onDeleteEntry(entry.id)}
+            aria-label={`Delete ${STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type} at ${msToDisplay(entry.video_time_ms)}`}
+            className="p-1 rounded text-white/20 hover:text-red-400 shrink-0 transition-colors"
+            style={{ touchAction: 'manipulation' }}
+          >
+            <X className="w-3 h-3" aria-hidden />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Stats Panel: desktop table + phone grouped cards ─────────────────────────
+// Desktop (md+): sticky-player-column table, full stat columns, no horizontal scroll.
+// Phone: stacked player cards with grouped stat pill counts, expandable event list.
 function BoxScorePanel({
-  gameId,
   players,
   statEntries,
   onSeek,
   onDeleteEntry,
-  onFullscreen,
 }: {
-  gameId: string
   players: Player[]
   statEntries: StatEntry[]
   onSeek: (ms: number) => void
   onDeleteEntry: (id: string) => void
-  onFullscreen?: () => void
 }) {
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
 
   if (players.length === 0) {
     return (
       <div className="text-center py-8 text-white/30 text-sm">
         <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-        Add players to your roster first.
+        <p>Add players to your roster first.</p>
       </div>
     )
   }
@@ -587,114 +749,155 @@ function BoxScorePanel({
       <div className="text-center py-8">
         <BarChart className="w-8 h-8 mx-auto text-white/15 mb-2" />
         <p className="text-xs text-white/30">No stats yet.</p>
-        <p className="text-xs text-white/50 mt-1">Tap the stat button below the video to start tagging.</p>
+        <p className="text-xs text-white/50 mt-1">Tap <strong className="text-white/40">Tag Stat</strong> below the video to start tagging.</p>
       </div>
     )
   }
 
   const totals: Record<string, StatEntry[]> = {}
   for (const player of players) {
-    totals[player.id] = statEntries.filter((e) => e.player_id === player.id)
+    totals[player.id] = statEntries.filter(e => e.player_id === player.id)
   }
+  const teamEntries = statEntries.filter(e => e.player_id !== null && e.player_id !== OPP_ID)
+  const oppEntries  = statEntries.filter(e => e.player_id === null || e.player_id === OPP_ID)
 
-  // Team totals: only named player events (player_id is non-null and not the synthetic OPP id).
-  // Null player_id means an opponent/untagged event — must NOT count toward the Team row.
-  const teamTotals = statEntries.filter(
-    e => e.player_id !== null && e.player_id !== OPP_ID
-  )
+  const allRows: Array<{ id: string; label: string; entries: StatEntry[]; isTotal?: boolean; isOpp?: boolean; player?: Player }> = [
+    ...players.map(p => ({ id: p.id, label: `#${p.number ?? '?'} ${p.name.split(' ')[0]}`, entries: totals[p.id] ?? [], player: p })),
+    { id: '__team__', label: 'Team', entries: teamEntries, isTotal: true },
+    ...(oppEntries.length > 0 ? [{ id: '__opp__', label: 'OPP', entries: oppEntries, isOpp: true }] : []),
+  ]
 
   return (
-    <div className="space-y-2">
-      {/* Box score table */}
-      <div className="overflow-x-auto -mx-3 px-3">
-        <table className="text-xs" style={{ minWidth: 680 }}>
+    <>
+      {/* ── Desktop table (md+) ── */}
+      <div className="hidden md:block">
+        <table className="w-full text-xs border-collapse">
           <thead>
-            <tr className="border-b border-white/8">
-              <th className="text-left text-white/40 font-medium pb-2 pr-3 sticky left-0 bg-[#13161b] min-w-[90px]">Player</th>
+            <tr className="border-b border-white/10">
+              <th className="text-left text-white/40 font-medium pb-2 pr-4 min-w-[110px]">Player</th>
               {BOX_HEADERS.map(h => (
-                <th key={h} className="text-center text-white/35 font-medium pb-2 px-1.5 min-w-[36px] whitespace-nowrap">{h}</th>
+                <th key={h} className="text-center text-white/35 font-medium pb-2 px-1 whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-white/4">
-            {players.map((player) => {
-              const playerEntries = totals[player.id] ?? []
-              const isExpanded = expandedPlayerId === player.id
-              const box = calcBoxRow(playerEntries)
+            {allRows.map(row => {
+              const box = calcBoxRow(row.entries)
+              const isExpanded = expandedPlayerId === row.id
+              const canExpand = !row.isTotal && !row.isOpp && row.entries.length > 0
               return (
-                <>
+                <React.Fragment key={row.id}>
                   <tr
-                    key={player.id}
-                    onClick={() => setExpandedPlayerId(isExpanded ? null : player.id)}
-                    className="hover:bg-white/3 transition-colors cursor-pointer"
+                    onClick={() => canExpand && setExpandedPlayerId(isExpanded ? null : row.id)}
+                    className={`transition-colors ${canExpand ? 'cursor-pointer hover:bg-white/3' : ''} ${row.isTotal ? 'border-t-2 border-white/12' : ''} ${row.isOpp ? 'bg-red-950/10' : ''}`}
                   >
-                    <td className="py-2 pr-3 sticky left-0 bg-[#13161b]">
-                      <div className="flex items-center gap-1">
-                        {isExpanded ? <ChevronUp className="w-3 h-3 text-white/30 shrink-0" /> : <ChevronDown className="w-3 h-3 text-white/20 shrink-0" />}
-                        <span className="font-medium text-white/80 truncate">#{player.number} {player.name.split(' ')[0]}</span>
+                    <td className="py-2 pr-4">
+                      <div className="flex items-center gap-1 min-w-0">
+                        {canExpand && (isExpanded
+                          ? <ChevronUp className="w-3 h-3 text-white/30 shrink-0" />
+                          : <ChevronDown className="w-3 h-3 text-white/20 shrink-0" />
+                        )}
+                        <span className={`font-medium truncate text-[11px] ${row.isOpp ? 'text-red-400/80' : row.isTotal ? 'text-white/60 uppercase tracking-wide' : 'text-white/80'}`}>
+                          {row.label}
+                        </span>
                       </div>
                     </td>
-                    {renderBoxRow(box)}
+                    {renderBoxRow(box, row.isOpp)}
                   </tr>
-                  {isExpanded && playerEntries.length > 0 && (
-                    <tr key={`${player.id}-exp`}>
-                      <td colSpan={BOX_HEADERS.length + 1} className="pb-2 pt-0">
-                        <div className="ml-4 space-y-0.5">
-                          {playerEntries.slice().sort((a, b) => a.video_time_ms - b.video_time_ms).map((entry) => (
-                            <button key={entry.id}
-                              onClick={(e) => { e.stopPropagation(); onSeek(entry.video_time_ms) }}
-                              className="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-[rgba(198,106,62,0.12)] border border-transparent text-left group"
-                            >
-                              <Play className="w-3 h-3 text-white/40 group-hover:text-[#c66a3e] shrink-0" />
-                              <span className="font-mono text-white/40 tabular-nums text-[11px] w-10 shrink-0">{msToDisplay(entry.video_time_ms)}</span>
-                              <span className="font-bold text-[11px] flex-1" style={{color:"#c66a3e"}}>{STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type}</span>
-                              <button onClick={(e) => { e.stopPropagation(); onDeleteEntry(entry.id) }}
-                                style={{ touchAction: 'manipulation' }}
-                                aria-label={`Delete ${STAT_DEFS.find(d => d.key === entry.stat_type)?.label ?? entry.stat_type} entry`}
-                                className="p-1 rounded text-white/20 hover:text-red-400 shrink-0">
-                                <X className="w-3 h-3" aria-hidden />
-                              </button>
-                            </button>
-                          ))}
-                        </div>
+                  {isExpanded && row.entries.length > 0 && (
+                    <tr>
+                      <td colSpan={BOX_HEADERS.length + 1} className="pb-2 pt-0 pl-4">
+                        <PlayerEventList entries={row.entries} onSeek={onSeek} onDeleteEntry={onDeleteEntry} />
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               )
             })}
-
-            {/* Team totals row */}
-            <tr className="border-t-2 border-white/12">
-              <td className="py-2 pr-3 sticky left-0 bg-[#13161b]">
-                <span className="font-semibold text-white/60 text-[11px] uppercase tracking-wide">Team</span>
-              </td>
-              {renderBoxRow(calcBoxRow(teamTotals))}
-            </tr>
-
-            {/* Opponent totals row */}
-            {(() => {
-              // OPP entries: player_id is null in DB (opponent events) or synthetic OPP_ID in memory
-              const oppEntries = statEntries.filter(e => e.player_id === null || e.player_id === OPP_ID)
-              if (oppEntries.length === 0) return null
-              const oppBox = calcBoxRow(oppEntries)
-              return (
-                <tr className="border-t border-red-500/20 bg-red-950/10">
-                  <td className="py-2 pr-3 sticky left-0 bg-[#13161b]">
-                    <span className="font-semibold text-red-400/70 text-[11px] uppercase tracking-wide">OPP</span>
-                  </td>
-                  {renderBoxRow(oppBox, true)}
-                </tr>
-              )
-            })()}
           </tbody>
         </table>
+        <p className="text-[10px] text-white/20 pt-2">
+          Click a player row to expand their event timeline. Click a timestamp to jump to that moment.
+        </p>
       </div>
 
-      <p className="text-[10px] text-white/20 pt-1">
-        Tap a player row to expand their timeline. Tap a timestamp to jump to that moment in the film.
-      </p>
-    </div>
+      {/* ── Phone: grouped player cards (< md) ── */}
+      <div className="md:hidden space-y-2">
+        {allRows.map(row => {
+          const box = calcBoxRow(row.entries)
+          const isExpanded = expandedPlayerId === row.id
+          const canExpand = !row.isTotal && !row.isOpp && row.entries.length > 0
+
+          // Grouped stat pills: shooting, rebounds, playmaking, negative
+          const groups: Array<{ label: string; items: Array<{ key: string; val: string | number; dim?: boolean }> }> = [
+            {
+              label: 'Shooting',
+              items: [
+                { key: 'PTS', val: box.pts },
+                { key: 'FG', val: box.fg, dim: box.fg === '0-0' },
+                { key: '3PT', val: box.threePt, dim: box.threePt === '0-0' },
+                { key: 'FT', val: box.ft, dim: box.ft === '0-0' },
+              ],
+            },
+            {
+              label: 'Other',
+              items: [
+                { key: 'REB', val: box.oreb + box.dreb, dim: box.oreb + box.dreb === 0 },
+                { key: 'AST', val: box.ast, dim: box.ast === 0 },
+                { key: 'STL', val: box.stl, dim: box.stl === 0 },
+                { key: 'BLK', val: box.blk, dim: box.blk === 0 },
+                { key: 'TO', val: box.to, dim: box.to === 0 },
+                { key: 'FOUL', val: box.foul, dim: box.foul === 0 },
+              ].filter(i => !i.dim || (typeof i.val === 'number' && i.val > 0)),
+            },
+          ]
+
+          return (
+            <div key={row.id}
+              className={`rounded-xl border px-3 py-2.5 ${row.isOpp ? 'border-red-500/20 bg-red-950/10' : row.isTotal ? 'border-white/12 bg-white/3' : 'border-white/8 bg-white/2'}`}>
+              <button
+                className="w-full flex items-center gap-2 text-left"
+                onClick={() => canExpand && setExpandedPlayerId(isExpanded ? null : row.id)}
+                aria-expanded={canExpand ? isExpanded : undefined}
+                disabled={!canExpand}
+              >
+                <span className={`font-semibold text-sm flex-1 min-w-0 truncate ${row.isOpp ? 'text-red-400' : row.isTotal ? 'text-white/60' : 'text-white/90'}`}>
+                  {row.label}
+                </span>
+                <span className="font-black text-lg text-white tabular-nums">{box.pts}</span>
+                <span className="text-[10px] text-white/30">PTS</span>
+                {canExpand && (
+                  <span className="ml-1 text-white/30">{isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</span>
+                )}
+              </button>
+
+              {/* Stat groups */}
+              <div className="mt-2 space-y-1.5">
+                {groups.map(g => (
+                  <div key={g.label} className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] text-white/25 uppercase tracking-widest w-12 shrink-0">{g.label}</span>
+                    {g.items.map(item => (
+                      <span key={item.key}
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${item.dim ? 'text-white/20' : 'bg-white/6 text-white/70'}`}>
+                        <span className="text-white/35">{item.key}</span>
+                        <span className={item.dim ? '' : 'font-semibold'}>{item.val}</span>
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+
+              {/* Expanded event list */}
+              {isExpanded && (
+                <div className="mt-2 border-t border-white/6 pt-1">
+                  <PlayerEventList entries={row.entries} onSeek={onSeek} onDeleteEntry={onDeleteEntry} />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </>
   )
 }
 
@@ -1476,11 +1679,20 @@ function SaveClipModal({
             </div>
           </div>
 
+          <CustomClipTags selected={form.tags.split(',').map(t=>t.trim())} toggle={tag=>setForm(f=>{const tags=f.tags.split(',').map(t=>t.trim()).filter(Boolean);return {...f,tags:(tags.includes(tag)?tags.filter(t=>t!==tag):[...tags,tag]).join(', ')}})}/>
           <label className="flex items-center gap-2 cursor-pointer">
-            <div onClick={() => setForm(f => ({ ...f, is_highlight: !f.is_highlight }))}
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={form.is_highlight}
+              onChange={e => setForm(f => ({ ...f, is_highlight: e.target.checked }))}
+              aria-label="Mark as highlight"
+            />
+            <span
+              aria-hidden
               className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${form.is_highlight ? 'bg-yellow-500 border-yellow-500' : 'border-white/20'}`}>
-              {form.is_highlight && <Star className="w-2.5 h-2.5 text-black fill-black" />}
-            </div>
+              {form.is_highlight && <Star className="w-2.5 h-2.5 text-black fill-black" aria-hidden />}
+            </span>
             <span className="text-xs text-white/60">Mark as highlight</span>
           </label>
 
@@ -1684,6 +1896,164 @@ function VideoUrlModal({ gameId, current, onClose, onSave }: {
   )
 }
 
+// ─── Bookmark Bar ─────────────────────────────────────────────────────────────
+// Quarter/game-clock bookmarks. UI + local state only; persistence goes via
+// root's PATCH /api/filmroom/games/:id with body { review_meta: { bookmarks } }.
+
+type GameBookmark = {
+  id: string
+  label: string
+  period: string
+  clock: string
+  position_ms: number
+}
+
+const PERIODS = ['Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'OT', 'OT2'] as const
+
+function BookmarkBar({
+  bookmarks,
+  currentMs,
+  durationMs,
+  pending,
+  error,
+  onSeek,
+  onAdd,
+  onDelete,
+}: {
+  bookmarks: GameBookmark[]
+  currentMs: number
+  durationMs: number
+  pending: boolean
+  error: string | null
+  onSeek: (ms: number) => void
+  onAdd: (bm: GameBookmark) => void
+  onDelete: (id: string) => void
+}) {
+  const [adding, setAdding] = useState(false)
+  const [form, setForm] = useState({ label: '', period: 'Q1' as typeof PERIODS[number], clock: '' })
+
+  // Disable add while a mutation is in flight
+  const canAdd = !pending
+
+  const commit = () => {
+    if (!canAdd) return
+    const label = form.label.trim() || `${form.period}${form.clock ? ` ${form.clock}` : ''}`
+    const bm: GameBookmark = {
+      id: Math.random().toString(36).slice(2),
+      label,
+      period: form.period,
+      clock: form.clock.trim(),
+      position_ms: currentMs,
+    }
+    onAdd(bm)
+    setForm({ label: '', period: 'Q1', clock: '' })
+    setAdding(false)
+  }
+
+  return (
+    <div className="mt-2 px-1">
+      {/* Pending / error feedback */}
+      {pending && (
+        <p className="text-[9px] text-white/30 flex items-center gap-1 mb-1">
+          <Loader2 className="w-2.5 h-2.5 animate-spin" aria-hidden /> Saving…
+        </p>
+      )}
+      {error && !pending && (
+        <p role="alert" className="text-[10px] text-red-400 mb-1">{error}</p>
+      )}
+      {/* Scrubber bookmark markers */}
+      {durationMs > 0 && bookmarks.length > 0 && (
+        <div className="relative h-1 mb-2">
+          {bookmarks.map(bm => {
+            const pct = Math.min(100, (bm.position_ms / durationMs) * 100)
+            return (
+              <button
+                key={bm.id}
+                onClick={() => onSeek(bm.position_ms)}
+                title={`${bm.label} — ${msToDisplay(bm.position_ms)}`}
+                aria-label={`Seek to bookmark: ${bm.label}`}
+                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-4 rounded-sm bg-yellow-400/80 hover:bg-yellow-300 transition-colors z-10"
+                style={{ left: `${pct}%` }}
+              />
+            )
+          })}
+        </div>
+      )}
+
+      {/* Bookmark chips */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {bookmarks.map(bm => (
+          <div key={bm.id}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/20 group">
+            <button
+              onClick={() => onSeek(bm.position_ms)}
+              className="text-[11px] text-yellow-300/90 hover:text-yellow-200 font-medium"
+              aria-label={`Jump to ${bm.label} at ${msToDisplay(bm.position_ms)}`}
+            >
+              {bm.period && <span className="text-yellow-500/70 mr-0.5">{bm.period}</span>}
+              {bm.clock && <span className="font-mono mr-0.5">{bm.clock}</span>}
+              {bm.label}
+            </button>
+            <button
+              onClick={() => onDelete(bm.id)}
+              aria-label={`Delete bookmark: ${bm.label}`}
+              className="min-h-9 min-w-9 text-yellow-500/70 hover:text-red-400 transition-all"
+            >
+              <X className="w-2.5 h-2.5" aria-hidden />
+            </button>
+          </div>
+        ))}
+
+        {/* Add bookmark button */}
+        {!adding && (
+          <button
+            onClick={() => { if (canAdd) setAdding(true) }}
+            disabled={!canAdd}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-yellow-500/25 text-yellow-500/50 hover:text-yellow-400 hover:border-yellow-500/50 text-[11px] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Add bookmark at current position"
+          >
+            <Bookmark className="w-3 h-3" aria-hidden /> Add
+          </button>
+        )}
+
+        {/* Inline add form */}
+        {adding && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <select
+              value={form.period}
+              onChange={e => setForm(f => ({ ...f, period: e.target.value as typeof PERIODS[number] }))}
+              className="bg-black/40 border border-white/10 rounded text-[11px] px-1.5 py-1 text-white/70 outline-none focus:border-yellow-500/40"
+              aria-label="Period"
+            >
+              {PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <input
+              value={form.clock}
+              onChange={e => setForm(f => ({ ...f, clock: e.target.value }))}
+              placeholder="4:32"
+              aria-label="Game clock (optional)"
+              className="w-14 bg-black/40 border border-white/10 rounded text-[11px] px-1.5 py-1 text-white/70 placeholder-white/20 outline-none focus:border-yellow-500/40 font-mono"
+            />
+            <input
+              value={form.label}
+              onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setAdding(false) }}
+              placeholder="Note (optional)"
+              aria-label="Bookmark label" maxLength={120}
+              className="w-28 bg-black/40 border border-white/10 rounded text-[11px] px-1.5 py-1 text-white/70 placeholder-white/20 outline-none focus:border-yellow-500/40"
+            />
+            <button onClick={commit}
+              className="px-2 py-1 rounded text-[11px] font-semibold"
+              style={{ background: '#c66a3e', color: '#181917' }}>Save</button>
+            <button onClick={() => setAdding(false)}
+              className="px-2 py-1 rounded text-[11px] text-white/40 hover:text-white/70 border border-white/8">Cancel</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const FRAME_MS = 33 // ~30fps
@@ -1693,9 +2063,12 @@ type PanelTab = 'clips' | 'stats' | 'roster' | 'shot-chart'
 export default function GameFilmRoom() {
   const params = useParams()
   const gameId = params.id as string
+  const searchParams = useSearchParams()
 
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
+  // Initial seek: one-shot ref so token refreshes / retries don't re-seek
+  const initialSeekDoneRef = useRef(false)
   const onDrawingChange=useCallback((data:DrawingData)=>setDrawingData({...data,time_ms:Math.round((videoRef.current?.currentTime??0)*1000)}),[])
   const [game, setGame] = useState<Game | null>(null)
   const [clips, setClips] = useState<Clip[]>([])
@@ -1736,6 +2109,44 @@ export default function GameFilmRoom() {
   const [showAddToPlaylist, setShowAddToPlaylist] = useState<string | null>(null) // clipId
   const [instantClipPulse, setInstantClipPulse] = useState(false)
 
+  // Section-level error states for retry without full page reload
+  const [clipsError, setClipsError] = useState(false)
+  const [playersError, setPlayersError] = useState(false)
+  const [statsError, setStatsError] = useState(false)
+  const [sectionRetryKey, setSectionRetryKey] = useState(0)
+
+  // Bookmarks (from game.review_meta — read on load, mutations queued to root API)
+  type GameBookmark = NonNullable<NonNullable<Game['review_meta']>['bookmarks'][number]>
+  const [bookmarks, setBookmarks] = useState<GameBookmark[]>([])
+  const [showBookmarkBar, setShowBookmarkBar] = useState(false)
+
+  // Undo/Redo stacks (lifted from StatEntryPanel so Redo can re-POST)
+  const undoStack = useRef<StatEntry[]>([])
+  const redoStack = useRef<StatEntry[]>([])
+  const undoRedoInFlight = useRef(false) // prevents double-click races
+  const [undoPending, setUndoPending] = useState(false)
+  const [redoPending, setRedoPending] = useState(false)
+  const [undoError, setUndoError] = useState<string | null>(null)
+  const [redoError, setRedoError] = useState<string | null>(null)
+
+  // Authenticated user ID — loaded once on mount for per-user localStorage scoping
+  const [userId, setUserId] = useState('')
+
+  // Load authenticated user ID once on mount (for per-user localStorage key scoping)
+  useEffect(() => {
+    import('@/lib/filmroom-supabase-browser').then(({ getSupabaseBrowser }) => {
+      getSupabaseBrowser().auth.getUser().then(({ data }) => {
+        if (data?.user?.id) setUserId(data.user.id)
+      })
+    })
+  }, [])
+
+  // Bookmark optimistic state — serialize mutations to avoid lost-update races
+  const [bookmarkPending, setBookmarkPending] = useState(false)
+  const [bookmarkError, setBookmarkError] = useState<string | null>(null)
+  // Serialization ref: latest committed bookmark list from a successful PATCH
+  const lastCommittedBookmarks = useRef<GameBookmark[]>([])
+
   // Load data
   useEffect(() => {
     // Reset state for new game/retry so stale data never renders
@@ -1745,6 +2156,10 @@ export default function GameFilmRoom() {
     setStatEntries([])
     setLoading(true)
     setGameError(null)
+    setClipsError(false)
+    setPlayersError(false)
+    setStatsError(false)
+    initialSeekDoneRef.current = false
 
     const controller = new AbortController()
     const { signal } = controller
@@ -1771,14 +2186,29 @@ export default function GameFilmRoom() {
           return
         }
 
-        const [c, p, se] = await Promise.all([
-          fetch(`/api/filmroom/clips?game_id=${gameId}`, { signal }).then(r => r.ok ? r.json() : []),
-          fetch(`/api/filmroom/players`, { signal }).then(r => r.ok ? r.json() : []),
-          fetch(`/api/filmroom/stat-entries?game_id=${gameId}`, { signal }).then(r => r.ok ? r.json() : []),
+        // Fetch sections independently so one failure doesn't blank everything
+        const [cRes, pRes, seRes] = await Promise.all([
+          fetch(`/api/filmroom/clips?game_id=${gameId}`, { signal }),
+          fetch(`/api/filmroom/players`, { signal }),
+          fetch(`/api/filmroom/stat-entries?game_id=${gameId}`, { signal }),
         ])
 
         if (signal.aborted) return
+
+        const c = cRes.ok ? await cRes.json() : null
+        const p = pRes.ok ? await pRes.json() : null
+        const se = seRes.ok ? await seRes.json() : null
+
+        if (!cRes.ok) setClipsError(true)
+        if (!pRes.ok) setPlayersError(true)
+        if (!seRes.ok) setStatsError(true)
+
         setGame(g)
+        // Seed bookmarks from review_meta
+        if (g.review_meta?.bookmarks) {
+          setBookmarks(g.review_meta.bookmarks)
+          lastCommittedBookmarks.current = g.review_meta.bookmarks
+        }
         setClips(Array.isArray(c) ? c : [])
         setPlayers(Array.isArray(p) ? p : [])
         if (Array.isArray(se)) {
@@ -1850,24 +2280,75 @@ export default function GameFilmRoom() {
     }
   }, [isPlaying])
 
-  // Log a stat entry
+  // Log a stat entry — push to undo stack, clear redo stack
   const handleLogEntry = useCallback((entry: StatEntry) => {
     setStatEntries(prev => [...prev, entry])
     setSessionStatEntries(prev => [...prev, entry])
+    undoStack.current.push(entry)
+    redoStack.current = []
   }, [])
 
-  // Undo last session entry
+  // Undo last session entry — delete from DB, push to redo stack.
+  // In-flight ref prevents double-click races.
   const handleUndo = useCallback(async () => {
-    const last = sessionStatEntries[sessionStatEntries.length - 1]
+    if (undoRedoInFlight.current) return
+    const last = undoStack.current[undoStack.current.length - 1]
     if (!last) return
+    undoRedoInFlight.current = true
+    setUndoPending(true)
+    setUndoError(null)
     try {
-      await fetch(`/api/filmroom/stat-entries?id=${last.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/filmroom/stat-entries?id=${last.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`)
       setStatEntries(prev => prev.filter(e => e.id !== last.id))
-      setSessionStatEntries(prev => prev.slice(0, -1))
-    } catch {
-      // ignore
+      setSessionStatEntries(prev => prev.filter(e => e.id !== last.id))
+      undoStack.current.pop()
+      redoStack.current.push(last)
+    } catch (e) {
+      setUndoError(e instanceof Error ? e.message : 'Undo failed — try again')
+    } finally {
+      setUndoPending(false)
+      undoRedoInFlight.current = false
     }
-  }, [sessionStatEntries])
+  }, [])
+
+  // Redo: re-POST the last undone entry. In-flight ref prevents races.
+  const handleRedo = useCallback(async () => {
+    if (undoRedoInFlight.current) return
+    const entry = redoStack.current[redoStack.current.length - 1]
+    if (!entry) return
+    undoRedoInFlight.current = true
+    setRedoPending(true)
+    setRedoError(null)
+    try {
+      const res = await fetch('/api/filmroom/stat-entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          game_id: entry.game_id,
+          player_id: entry.player_id === OPP_ID ? null : entry.player_id,
+          stat_type: entry.stat_type,
+          video_time_ms: entry.video_time_ms,
+          shot_x: entry.shot_x ?? undefined,
+          shot_y: entry.shot_y ?? undefined,
+        }),
+      })
+      if (!res.ok) throw new Error(`Redo failed (${res.status})`)
+      const raw: RawStatEntry = await res.json()
+      const newEntry: StatEntry = entry.player_id === OPP_ID
+        ? { ...rawToEntry(raw), player_id: OPP_ID, player_name: 'Opponent', player_number: 'OPP' }
+        : rawToEntry(raw)
+      setStatEntries(prev => [...prev, newEntry])
+      setSessionStatEntries(prev => [...prev, newEntry])
+      redoStack.current.pop()
+      undoStack.current.push(newEntry)
+    } catch (e) {
+      setRedoError(e instanceof Error ? e.message : 'Redo failed — try again')
+    } finally {
+      setRedoPending(false)
+      undoRedoInFlight.current = false
+    }
+  }, [])
 
   const handleDeleteEntry = useCallback(async (id: string) => {
     try {
@@ -1911,21 +2392,121 @@ export default function GameFilmRoom() {
     setTimeout(() => setInstantClipPulse(false), 400)
   }, [currentMs])
 
-  // Resume persistence: save position every 5s while playing
+  // Helper: persist current video position via PATCH keepalive.
+  // Skips flush if the initial seek hasn't fired yet (avoids writing position=0
+  // over a stored resume position before the video has even started).
+  const flushResumePosition = useCallback(() => {
+    if (!initialSeekDoneRef.current) return // skip — initial seek not yet applied
+    const gid = game?.id
+    if (!gid) return
+    const v = videoRef.current
+    if (!v || v.duration <= 0) return
+    const ms = Math.round(v.currentTime * 1000)
+    if (ms <= 0) return
+    // keepalive: survives tab close and client-side navigation (sendBeacon is POST-only)
+    fetch(`/api/filmroom/games/${gid}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resume_position_ms: ms }),
+      keepalive: true,
+    }).catch(() => {})
+  }, [game?.id])
+
+  // Resume persistence: every 5s while playing + flush on pause + pagehide + unmount
   useEffect(() => {
     if (!game?.id) return
     const interval = setInterval(() => {
       const v = videoRef.current
       if (!v || v.paused || !isPlaying) return
-      const ms = Math.round(v.currentTime * 1000)
-      fetch(`/api/filmroom/games/${game.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resume_position_ms: ms }),
-      }).catch(() => {})
+      flushResumePosition()
     }, 5000)
-    return () => clearInterval(interval)
-  }, [game?.id, isPlaying])
+    const onUnload = () => flushResumePosition()
+    window.addEventListener('beforeunload', onUnload)
+    window.addEventListener('pagehide', onUnload)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('beforeunload', onUnload)
+      window.removeEventListener('pagehide', onUnload)
+      // Flush on client-side unmount (Next.js route navigation)
+      flushResumePosition()
+    }
+  }, [game?.id, isPlaying, flushResumePosition])
+
+  // Flush on video pause event
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+    const onPause = () => flushResumePosition()
+    v.addEventListener('pause', onPause)
+    return () => v.removeEventListener('pause', onPause)
+  }, [flushResumePosition, game?.id])
+
+  // Initial seek: clip param > resume_position_ms > 0
+  // Fires once on loadedmetadata after the video element gets its src.
+  // initialSeekDoneRef prevents re-seek on token refresh / src swap.
+  useEffect(() => {
+    if (!game) return
+    const clipParam = searchParams?.get('clip')
+    const resumeMs = game.resume_position_ms ?? 0
+
+    const doSeek = (v: HTMLVideoElement) => {
+      if (initialSeekDoneRef.current) return
+      initialSeekDoneRef.current = true
+      if (clipParam) {
+        // Find the clip matching the param and seek to its start
+        const target = clips.find(c => c.id === clipParam)
+        if (target && target.start_time_ms >= 0) {
+          v.currentTime = Math.min(target.start_time_ms / 1000, Math.max(0,v.duration-.01))
+          setCurrentMs(Math.round(v.currentTime*1000))
+          setActiveClipId(target.id)
+          return
+        }
+      }
+      if (resumeMs > 0) { // ignore sub-second positions (likely a cold open)
+        v.currentTime = Math.min(resumeMs / 1000, Math.max(0,v.duration-.01))
+        setCurrentMs(Math.round(v.currentTime*1000))
+      }
+    }
+
+    const v = videoRef.current
+    if (!v) return
+    if (v.readyState >= 1) {
+      // Metadata already loaded (e.g. src was already set before this effect ran)
+      doSeek(v)
+    } else {
+      const onMeta = () => { doSeek(v); v.removeEventListener('loadedmetadata', onMeta) }
+      v.addEventListener('loadedmetadata', onMeta)
+      return () => v.removeEventListener('loadedmetadata', onMeta)
+    }
+  // clips changes when section retry re-fetches; searchParams is stable
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.id, game?.resume_position_ms, searchParams, clips])
+
+  // Retry individual sections without full page reload
+  const retrySection = useCallback(async (section: 'clips' | 'players' | 'stats') => {
+    try {
+    if (section === 'clips') {
+      setClipsError(false)
+      const res = await fetch(`/api/filmroom/clips?game_id=${gameId}`)
+      if (res.ok) { const d = await res.json(); setClips(Array.isArray(d) ? d : []) }
+      else setClipsError(true)
+    }
+    if (section === 'players') {
+      setPlayersError(false)
+      const res = await fetch('/api/filmroom/players')
+      if (res.ok) { const d = await res.json(); setPlayers(Array.isArray(d) ? d : []) }
+      else setPlayersError(true)
+    }
+    if (section === 'stats') {
+      setStatsError(false)
+      const res = await fetch(`/api/filmroom/stat-entries?game_id=${gameId}`)
+      if (res.ok) {
+        const d = await res.json()
+        if (Array.isArray(d)) setStatEntries(d.map((raw: RawStatEntry) => rawToEntry(raw)))
+      } else setStatsError(true)
+    }
+    } catch { if(section==='clips')setClipsError(true);if(section==='players')setPlayersError(true);if(section==='stats')setStatsError(true) }
+  }, [gameId])
 
   // Fetch playlists lazily when add-to-playlist is opened
   const fetchPlaylists = useCallback(async () => {
@@ -1942,11 +2523,56 @@ export default function GameFilmRoom() {
     setShowPresentation(true)
   }, [clips, gameId])
 
+  // Bookmark persistence helper — serialized, checks HTTP success, no setState side effects
+  const persistBookmarks = useCallback(async (next: GameBookmark[]) => {
+    const gid = game?.id
+    if (!gid) return
+    setBookmarkPending(true)
+    setBookmarkError(null)
+    try {
+      const res = await fetch(`/api/filmroom/games/${gid}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ review_meta: { bookmarks: next } }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.error ?? `Save failed (${res.status})`)
+      }
+      lastCommittedBookmarks.current = next
+    } catch (e) {
+      // Roll back optimistic update to last committed state
+      setBookmarks(lastCommittedBookmarks.current)
+      setBookmarkError(e instanceof Error ? e.message : 'Failed to save bookmark')
+    } finally {
+      setBookmarkPending(false)
+    }
+  }, [game?.id])
+
+  const handleAddBookmark = useCallback((bm: GameBookmark) => {
+    if (bookmarkPending) return // prevent overlapping lost updates
+    const next = [...bookmarks, bm]
+    setBookmarks(next)           // optimistic
+    persistBookmarks(next)
+  }, [bookmarkPending, bookmarks, persistBookmarks])
+
+  const handleDeleteBookmark = useCallback((id: string) => {
+    if (bookmarkPending) return // prevent overlapping lost updates
+    const next = bookmarks.filter(b => b.id !== id)
+    setBookmarks(next)           // optimistic
+    persistBookmarks(next)
+  }, [bookmarkPending, bookmarks, persistBookmarks])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (showStatPanel) return
+      // Ignore when focus is in any interactive form element or a modal is open
+      if (e.target instanceof HTMLInputElement) return
+      if (e.target instanceof HTMLTextAreaElement) return
+      if (e.target instanceof HTMLButtonElement) return
+      if (e.target instanceof HTMLSelectElement) return
+      if (e.target instanceof HTMLAnchorElement) return
+      if (showStatPanel || showSaveClip || showVideoUrl || showAddToPlaylist) return
       switch (e.key) {
         case ' ': e.preventDefault(); playPause(); break
         case 'ArrowLeft': e.preventDefault(); frameStep(-1); break
@@ -2180,6 +2806,18 @@ export default function GameFilmRoom() {
               onStatTap={videoLoaded ? openStatPanel : undefined}
             />}
             {!isFullscreen&&<EventTimeline clips={clips} stats={statEntries} durationMs={durationMs} currentMs={currentMs} selectedId={activeClipId} onSeek={seekAndPlay} onClip={c=>{setActiveClipId(c.id);jumpToClip(c.start_time_ms)}}/>}
+            {!isFullscreen && game.video_url && (
+              <BookmarkBar
+                bookmarks={bookmarks}
+                currentMs={currentMs}
+                durationMs={durationMs}
+                pending={bookmarkPending}
+                error={bookmarkError}
+                onSeek={seek}
+                onAdd={handleAddBookmark}
+                onDelete={handleDeleteBookmark}
+              />
+            )}
             {/* Upload success banner — hidden in fullscreen */}
             {!isFullscreen && uploadDone && (
               <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
@@ -2283,6 +2921,14 @@ export default function GameFilmRoom() {
             {/* CLIPS tab */}
             {panelTab === 'clips' && (
               <div className="p-3 space-y-2">
+                {clipsError && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
+                    <span className="text-xs text-red-300 flex-1">Failed to load clips.</span>
+                    <button onClick={() => retrySection('clips')}
+                      className="text-xs text-red-400 hover:text-red-300 font-medium underline underline-offset-2">Retry</button>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <select aria-label="Filter clips by tag" value={clipTag} onChange={e=>setClipTag(e.target.value)} className="min-h-11 bg-[#252621] border border-white/10 rounded-md px-2 text-xs"><option value="">All tags</option>{clipTags.map(t=><option key={t}>{t}</option>)}</select>
                   <select aria-label="Filter clips by category" value={clipCategory} onChange={e=>setClipCategory(e.target.value)} className="min-h-11 bg-[#252621] border border-white/10 rounded-md px-2 text-xs"><option value="">All categories</option>{Object.entries(CATEGORY_LABELS).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select>
@@ -2327,33 +2973,52 @@ export default function GameFilmRoom() {
             {/* STATS tab — read-only box score */}
             {panelTab === 'stats' && (
               <div className="p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-white/30 font-medium">Box Score</span>
-                  <button
-                    onClick={() => setStatsFullscreen(true)}
-                    style={{ touchAction: 'manipulation' }}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-white/40 hover:text-white border border-white/8 hover:border-white/20 transition-all"
-                  >
+                {statsError && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 mb-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
+                    <span className="text-xs text-red-300 flex-1">Failed to load stats.</span>
+                    <button onClick={() => retrySection('stats')}
+                      className="text-xs text-red-400 hover:text-red-300 font-medium underline underline-offset-2">Retry</button>
+                  </div>
+                )}
+                {/* Desktop: box score renders full-width below video; sidebar shows a pointer */}
+                <div className="hidden lg:flex flex-col items-center justify-center py-8 gap-2 text-center">
+                  <BarChart2 className="w-7 h-7 text-white/15" />
+                  <p className="text-xs text-white/40">Box score is displayed below the video on this screen.</p>
+                  <button onClick={() => setStatsFullscreen(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/20 transition-all">
                     <Maximize2 className="w-3 h-3" /> Full Screen
                   </button>
                 </div>
-                <BoxScorePanel
-                  gameId={gameId}
-                  players={players}
-                  statEntries={statEntries}
-                  onSeek={seekAndPlay}
-                  onDeleteEntry={handleDeleteEntry}
-                />
+                {/* Phone: compact card view directly in the panel */}
+                <div className="lg:hidden">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-white/30 font-medium">Box Score</span>
+                    <button
+                      onClick={() => setStatsFullscreen(true)}
+                      style={{ touchAction: 'manipulation' }}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-white/40 hover:text-white border border-white/8 hover:border-white/20 transition-all"
+                    >
+                      <Maximize2 className="w-3 h-3" /> Full Screen
+                    </button>
+                  </div>
+                  <BoxScorePanel
+                    players={players}
+                    statEntries={statEntries}
+                    onSeek={seekAndPlay}
+                    onDeleteEntry={handleDeleteEntry}
+                  />
+                </div>
               </div>
             )}
 
-            {/* Fullscreen box score modal */}
+            {/* Full-screen box score modal (phone / explicit expand) */}
             {statsFullscreen && (
               <div className="fixed inset-0 z-50 bg-[#0d0f12] flex flex-col">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
                   <div>
                     <p className="text-[11px] text-white/30 uppercase tracking-widest mb-0.5">Box Score</p>
-                    <p className="font-bold text-white text-lg">Varsity Boys <span className="text-white/30 font-normal">vs</span> {game.opponent}</p>
+                    <p className="font-bold text-white text-lg">vs {game.opponent}</p>
                   </div>
                   <button
                     onClick={() => setStatsFullscreen(false)}
@@ -2365,13 +3030,36 @@ export default function GameFilmRoom() {
                 </div>
                 <div className="flex-1 overflow-y-auto p-5">
                   <BoxScorePanel
-                    gameId={gameId}
                     players={players}
                     statEntries={statEntries}
                     onSeek={(ms) => { setStatsFullscreen(false); seekAndPlay(ms) }}
                     onDeleteEntry={handleDeleteEntry}
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Desktop full-width stats panel — appears below video when Stats tab active */}
+            {panelTab === 'stats' && !statsFullscreen && (
+              <div className="hidden lg:block mt-3 rounded-xl border border-white/8 bg-[#13161b] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-white/50 uppercase tracking-wider">Box Score — vs {game.opponent}</p>
+                  {statsError && (
+                    <button onClick={() => retrySection('stats')} className="text-xs text-red-400 underline underline-offset-2">Retry</button>
+                  )}
+                  <button
+                    onClick={() => setStatsFullscreen(true)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-white/40 hover:text-white border border-white/8 hover:border-white/20 transition-all"
+                  >
+                    <Maximize2 className="w-3 h-3" /> Expand
+                  </button>
+                </div>
+                <BoxScorePanel
+                  players={players}
+                  statEntries={statEntries}
+                  onSeek={seekAndPlay}
+                  onDeleteEntry={handleDeleteEntry}
+                />
               </div>
             )}
 
@@ -2383,6 +3071,14 @@ export default function GameFilmRoom() {
             {/* ROSTER tab */}
             {panelTab === 'roster' && (
               <div className="p-3">
+                {playersError && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 mb-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
+                    <span className="text-xs text-red-300 flex-1">Failed to load roster.</span>
+                    <button onClick={() => retrySection('players')}
+                      className="text-xs text-red-400 hover:text-red-300 font-medium underline underline-offset-2">Retry</button>
+                  </div>
+                )}
                 <RosterPanel players={players} teamId={game.team_id} onPlayersChange={setPlayers} />
               </div>
             )}
@@ -2427,8 +3123,16 @@ export default function GameFilmRoom() {
           players={players}
           currentMs={currentMs}
           sessionEntries={sessionStatEntries}
+          userId={userId}
           onLog={handleLogEntry}
           onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={undoStack.current.length > 0 && !undoRedoInFlight.current}
+          canRedo={redoStack.current.length > 0 && !undoRedoInFlight.current}
+          undoPending={undoPending}
+          redoPending={redoPending}
+          undoError={undoError}
+          redoError={redoError}
           onClose={closeStatPanel}
         />
       )}

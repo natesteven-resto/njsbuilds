@@ -7,9 +7,10 @@ import {
   ChevronLeft, Play, Pause, SkipBack, SkipForward,
   ChevronUp, ChevronDown, Trash2, Loader2, Film, AlertCircle, RefreshCw,
 } from 'lucide-react'
+import { SessionPlanner } from '@/app/filmroom/components/SessionPlanner'
 import { AccountBar } from '@/app/filmroom/components/AccountBar'
 import { PresentationMode } from '@/app/filmroom/components/PresentationMode'
-import type { Playlist, PlaylistClip, Clip, Game } from '@/types/filmroom'
+import type { Playlist, PlaylistClip, Clip, Game, SessionPlan } from '@/types/filmroom'
 
 function msToDisplay(ms: number) {
   const s = Math.floor(Math.max(0, ms) / 1000)
@@ -206,7 +207,7 @@ export default function PlaylistDetailPage() {
       })
       .then((d: Record<string, unknown> | null) => {
         if (!d || ctrl.signal.aborted) return
-        setPlaylist({ id: d.id as string, owner_id: d.owner_id as string, name: d.name as string, created_at: d.created_at as string })
+        setPlaylist({ id: d.id as string, owner_id: d.owner_id as string, name: d.name as string, created_at: d.created_at as string, session_plan:d.session_plan as SessionPlan })
         setClips(Array.isArray(d.clips) ? d.clips as PlaylistClip[] : [])
         setLoading(false)
       })
@@ -223,7 +224,7 @@ export default function PlaylistDetailPage() {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (presenting) return
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.target instanceof HTMLElement && e.target.closest('input,textarea,select,button,a,[contenteditable=true]')) return
       if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'L')
         setActiveIdx(i => Math.min(clips.length - 1, i + 1))
       if (e.key === 'ArrowLeft'  || e.key === 'j' || e.key === 'J')
@@ -366,7 +367,7 @@ export default function PlaylistDetailPage() {
                   </p>
                 )}
                 {activeClip?.game && (
-                  <Link href={`/filmroom/game/${activeClip.game_id}`}
+                  <Link href={`/filmroom/game/${activeClip.game_id}?clip=${activeClip.id}`}
                     className="text-xs underline" style={{ color: '#c66a3e' }}>
                     vs {activeClip.game.opponent} — open in Film Room →
                   </Link>
@@ -396,6 +397,7 @@ export default function PlaylistDetailPage() {
               </p>
             </div>
           )}
+          {playlist&&<SessionPlanner key={playlist.id} playlistId={playlist.id} initial={playlist.session_plan} clips={clips} onSelect={setActiveIdx}/>}
         </div>
 
         {/* Clip list sidebar */}

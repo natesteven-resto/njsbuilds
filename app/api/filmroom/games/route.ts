@@ -3,8 +3,8 @@ import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-se
 
 // Explicit allowlist of client-writable game fields.
 // video_url, video_id, owner_id, team_id, created_at are server-only.
-const GAME_CREATE_FIELDS = ['team_id', 'opponent', 'game_date', 'location', 'notes', 'thumbnail_url'] as const
-const GAME_PATCH_FIELDS  = ['opponent', 'game_date', 'location', 'notes', 'thumbnail_url'] as const
+const GAME_CREATE_FIELDS = ['team_id', 'opponent', 'game_date', 'location', 'notes', 'thumbnail_url', 'season_label', 'session_type'] as const
+const GAME_PATCH_FIELDS  = ['opponent', 'game_date', 'location', 'notes', 'thumbnail_url', 'season_label', 'session_type'] as const
 // team_id is immutable after creation for this release.
 // video_url/video_id only set by upload completion routes.
 
@@ -35,7 +35,10 @@ export async function GET(request: NextRequest) {
       .order('game_date', { ascending: false })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json(data ?? [])
+    const {data:counts,error:countsError}=await supabase.rpc('filmroom_clip_counts')
+    if(countsError)return NextResponse.json({error:'Could not load clip counts.'},{status:500})
+    const countMap=new Map((counts||[]).map((c:{game_id:string;clip_count:number;highlight_count:number})=>[c.game_id,c]))
+    return NextResponse.json((data||[]).map((g:Record<string,unknown>)=>({...g,...(countMap.get(g.id) as object||{clip_count:0,highlight_count:0})})))
   } catch (e) {
     if (e instanceof NextResponse) return e
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
@@ -58,6 +61,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'game_date required' }, { status: 400 })
     }
 
+    if (body.season_label !== undefined && (typeof body.season_label !== 'string' || body.season_label.length > 60)) return NextResponse.json({error:'Invalid season.'},{status:400})
+    if (body.session_type !== undefined && !['game','practice','scouting'].includes(String(body.session_type))) return NextResponse.json({error:'Invalid session type.'},{status:400})
     // Verify team ownership using the RLS-scoped client (team must pass games_own WITH CHECK)
     const { data: team, error: teamErr } = await supabase
       .from('teams')
@@ -79,6 +84,8 @@ export async function POST(request: NextRequest) {
         game_date:    body.game_date,
         location:     body.location ?? null,
         notes:        body.notes ?? null,
+        season_label: typeof body.season_label === 'string' ? body.season_label.trim() : null,
+        session_type: body.session_type || 'game',
         thumbnail_url: body.thumbnail_url ?? null,
         owner_id:     user.id,
         // video_url and video_id intentionally omitted — set only by upload completion

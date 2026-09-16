@@ -42,6 +42,10 @@ export interface Game {
   created_at: string
   // Courtside additions
   resume_position_ms?: number
+  season_label?: string | null
+  session_type?: 'game' | 'practice' | 'scouting'
+  last_watched_at?: string | null
+  review_meta?: { bookmarks: {id:string; label:string; period:string; clock:string; position_ms:number}[] }
 }
 
 export type ClipCategory = 'offense' | 'defense' | 'transition' | 'set_play'
@@ -131,7 +135,10 @@ export interface ClipPlayer {
   player_id: string
 }
 
+export interface SessionPlan { objective: string; sections: {id:string; title:string; objective:string; clip_ids:string[]}[] }
+
 export interface Playlist {
+  session_plan?: SessionPlan
   id: string
   owner_id: string
   name: string

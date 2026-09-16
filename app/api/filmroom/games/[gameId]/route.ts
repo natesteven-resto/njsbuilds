@@ -1,3 +1,4 @@
+import { reviewMeta, shortText } from '@/lib/filmroom-workspace-validation'
 import { NextRequest, NextResponse } from 'next/server'
 import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-server'
 
@@ -5,7 +6,7 @@ type Params = { params: Promise<{ gameId: string }> }
 
 // Explicit allowlist for PATCH — team_id and video fields are immutable/server-only
 // resume_position_ms: writable by owner for playback resume
-const PATCH_FIELDS = ['opponent', 'game_date', 'location', 'notes', 'thumbnail_url', 'resume_position_ms'] as const
+const PATCH_FIELDS = ['opponent', 'game_date', 'location', 'notes', 'thumbnail_url', 'resume_position_ms', 'season_label', 'session_type', 'review_meta'] as const
 
 function pickPatchFields(raw: Record<string, unknown>) {
   const out: Partial<Record<typeof PATCH_FIELDS[number], unknown>> = {}
@@ -59,7 +60,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     await requireOwnedGame(gameId, user.id, svc)
 
     const raw = await request.json()
-    const patch = pickPatchFields(raw)
+    const patch: Record<string, unknown> = pickPatchFields(raw)
+    try {
+      if (patch.season_label !== undefined) patch.season_label = shortText(patch.season_label, 60)
+      if (patch.session_type !== undefined && !['game','practice','scouting'].includes(String(patch.session_type))) throw new Error('Invalid session type.')
+      if (patch.review_meta !== undefined) patch.review_meta = reviewMeta(patch.review_meta)
+    } catch (e) { return NextResponse.json({error: e instanceof Error ? e.message : 'Invalid metadata'}, {status:400}) }
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: 'No patchable fields provided' }, { status: 400 })
@@ -78,6 +84,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: 'resume_position_ms must be a non-negative number' }, { status: 400 })
       }
       patch.resume_position_ms = Math.round(ms)
+      patch.last_watched_at = new Date().toISOString()
     }
 
     const { data, error } = await svc

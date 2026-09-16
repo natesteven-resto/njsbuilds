@@ -1,3 +1,4 @@
+import { sessionPlan } from '@/lib/filmroom-workspace-validation'
 import { NextRequest, NextResponse } from 'next/server'
 import { getVerifiedUser, createServiceClient, assertOwner } from '@/lib/filmroom-supabase-server'
 
@@ -12,7 +13,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
     const { data: pl, error: plErr } = await svc
       .from('playlists')
-      .select('id, owner_id, name, created_at')
+      .select('id, owner_id, name, created_at, session_plan')
       .eq('id', playlistId)
       .single()
 
@@ -59,7 +60,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     const { playlistId } = await params
     const body = await request.json().catch(() => ({}))
     const name = typeof body.name === 'string' ? body.name.trim() : ''
-    if (!name || name.length > 120) {
+    if (body.name !== undefined && (!name || name.length > 120)) {
       return NextResponse.json({ error: 'name required (1–120 chars)' }, { status: 400 })
     }
 
@@ -74,11 +75,24 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     assertOwner(existing.owner_id, user.id)
 
+    const patch:Record<string,unknown>={}
+    if(body.name!==undefined)patch.name=name
+    if(body.session_plan!==undefined){
+      try{patch.session_plan=sessionPlan(body.session_plan)}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Invalid session plan.'},{status:400})}
+      const ids=(patch.session_plan as ReturnType<typeof sessionPlan>).sections.flatMap(s=>s.clip_ids)
+      if(ids.length){
+        const {data:links,error:le}=await svc.from('playlist_clips').select('clip_id').eq('playlist_id',playlistId)
+        if(le)return NextResponse.json({error:'Could not validate section clips.'},{status:500})
+        const owned=new Set((links||[]).map((l:{clip_id:string})=>l.clip_id))
+        if(ids.some(id=>!owned.has(id)))return NextResponse.json({error:'Sections may contain only clips in this playlist.'},{status:400})
+      }
+    }
+    if(!Object.keys(patch).length)return NextResponse.json({error:'No changes supplied.'},{status:400})
     const { data, error } = await svc
       .from('playlists')
-      .update({ name })
+      .update(patch)
       .eq('id', playlistId)
-      .select('id, owner_id, name, created_at')
+      .select('id, owner_id, name, created_at, session_plan')
       .single()
 
     if (error || !data) return NextResponse.json({ error: 'Update failed' }, { status: 500 })

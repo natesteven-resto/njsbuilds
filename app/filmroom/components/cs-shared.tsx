@@ -81,19 +81,20 @@ export function VideoThumbnail({ gameId, className }: { gameId: string; classNam
   </div>
 }
 
-export function CsNav({ active }: { active: 'library' | 'playlists' | 'players' }) {
+export function CsNav({ active }: { active: 'library' | 'playlists' | 'players' | 'clips' }) {
   return <nav className="flex items-center gap-1" aria-label="Film Room navigation">
     {([
       ['library', '/filmroom', 'Library', Film],
       ['playlists', '/filmroom/playlists', 'Playlists', ListVideo],
       ['players', '/filmroom/players', 'Players', Users],
+      ['clips', '/filmroom/clips', 'Clips', Film],
     ] as const).map(([key, href, label, Icon]) => <Link key={key} href={href} aria-current={active === key ? 'page' : undefined}
-      className={`flex min-h-11 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e49269] ${active === key ? 'border-[#c66a3e] text-[#eee9df]' : 'border-transparent text-[#aaa89f] hover:text-[#eee9df]'}`}>
+      className={`flex min-h-11 items-center gap-1 border-b-2 px-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e49269] ${active === key ? 'border-[#c66a3e] text-[#eee9df]' : 'border-transparent text-[#aaa89f] hover:text-[#eee9df]'}`}>
       <Icon className="h-4 w-4" aria-hidden />{label}
     </Link>)}
   </nav>
 }
-export function CsHeader({ active, right }: { active: 'library' | 'playlists' | 'players'; right?: React.ReactNode }) {
+export function CsHeader({ active, right }: { active: 'library' | 'playlists' | 'players' | 'clips'; right?: React.ReactNode }) {
   return <header className="sticky top-0 z-40 border-b border-[#eee9df]/10 bg-[#181917]">
     <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-5 px-4 py-2 sm:px-8">
       <Link href="/filmroom" className="order-1 flex min-h-11 shrink-0 items-center gap-2 text-[#eee9df] focus-visible:outline-2 focus-visible:outline-[#e49269]">

@@ -76,3 +76,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const { user } = await getVerifiedUser(request)
+    const b = await request.json()
+    if (typeof b.id !== 'string' || typeof b.name !== 'string' || !b.name.trim() || b.name.length > 100 || typeof b.season !== 'string' || b.season.length > 60)
+      return NextResponse.json({error:'Provide a team name (1–100 characters) and season (up to 60 characters).'},{status:400})
+    const {data,error} = await createServiceClient().from('teams').update({name:b.name.trim(),season:b.season.trim()}).eq('id',b.id).eq('owner_id',user.id).select().maybeSingle()
+    if(error)throw error
+    if(!data)return NextResponse.json({error:'Team unavailable.'},{status:404})
+    return NextResponse.json(data)
+  }catch(e){if(e instanceof NextResponse)return e;return NextResponse.json({error:'Could not save team.'},{status:500})}
+}

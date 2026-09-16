@@ -1,0 +1,9 @@
+ 'use client'
+import {useState} from 'react'
+import type {Game} from '@/types/filmroom'
+import {gameSeason} from './cs-shared'
+export function GameMetadata({game}:{game:Game}){
+ const [open,setOpen]=useState(false);const [kind,setKind]=useState(game.session_type||'game');const [season,setSeason]=useState(game.season_label||gameSeason(game.game_date));const [saved,setSaved]=useState({kind,season});const [busy,setBusy]=useState(false);const [error,setError]=useState('')
+ async function save(e:React.FormEvent){e.preventDefault();setBusy(true);setError('');try{const r=await fetch(`/api/filmroom/games/${game.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({season_label:season,session_type:kind})});if(!r.ok)throw Error('Could not save film details.');setSaved({kind,season});location.reload()}catch(e){setError(String(e))}finally{setBusy(false)}}
+ return <div className="border-t border-white/10 px-4 py-2 text-sm"><button onClick={()=>setOpen(!open)} aria-expanded={open} className="min-h-11 text-[#e49269]">{saved.kind==='scouting'?'Opponent scouting':saved.kind==='practice'?'Practice':'Game'} · {saved.season} · Edit</button>{open&&<form onSubmit={save} className="space-y-3 pb-3"><label className="block">Film type<select className="mt-1 w-full rounded border border-white/20 bg-[#181917] p-2" value={kind} onChange={e=>setKind(e.target.value as typeof kind)}><option value="game">Game</option><option value="practice">Practice</option><option value="scouting">Opponent scouting</option></select></label><label className="block">Season<input required maxLength={60} value={season} onChange={e=>setSeason(e.target.value)} className="mt-1 w-full rounded border border-white/20 bg-[#181917] p-2"/></label>{error&&<p role="alert" className="text-red-300">{error}</p>}<button disabled={busy} className="min-h-11 rounded bg-[#c66a3e] px-4 text-[#181917]">Save details</button></form>}</div>
+}

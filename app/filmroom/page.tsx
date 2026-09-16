@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Film, Plus, Search, ArrowUpRight, Play, ListVideo, Loader2, Trash2, X, RefreshCw } from 'lucide-react'
 import { AccountBar } from './components/AccountBar'
 import { CsHeader, VideoThumbnail, gameSeason, formatGameDate } from './components/cs-shared'
+import { GameMetadata } from './components/GameMetadata'
 import type { Game } from '@/types/filmroom'
 
 type LibraryGame = Game & { clip_count: number | null; highlight_count: number; resume_position_ms?: number }
@@ -16,14 +17,14 @@ function time(ms: number) { const s = Math.floor(ms / 1000); return `${Math.floo
 
 function AddGame({ teamId, close, created }: { teamId: string; close: () => void; created: (g: Game) => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const [form, setForm] = useState({ opponent: '', game_date: new Date().toLocaleDateString('en-CA'), location: '', notes: '' })
+  const [form, setForm] = useState({ opponent: '', game_date: new Date().toLocaleDateString('en-CA'), location: '', notes: '', session_type: 'game', season_label: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   useEffect(() => { dialog.current?.showModal() }, [])
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setError('')
     try {
-      const r = await fetch('/api/filmroom/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ team_id: teamId, opponent: form.opponent.trim(), game_date: form.game_date, location: form.location.trim() || null, notes: form.notes.trim() || null }) })
+      const r = await fetch('/api/filmroom/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ team_id: teamId, opponent: form.opponent.trim(), game_date: form.game_date, location: form.location.trim() || null, notes: form.notes.trim() || null, session_type: form.session_type, season_label: form.season_label.trim() }) })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Unable to add game. Please try again.')
       created(data); close()
@@ -35,6 +36,7 @@ function AddGame({ teamId, close, created }: { teamId: string; close: () => void
     <form onSubmit={submit} className="space-y-4">
       <div><label htmlFor="opponent" className="mb-1 block text-sm text-[#c9c3b8]">Opponent or session name</label><input autoFocus id="opponent" required maxLength={160} value={form.opponent} onChange={e => setForm({ ...form, opponent: e.target.value })} placeholder="Opponent, practice, or tryouts" className={`${control} w-full`} /></div>
       <div><label htmlFor="game_date" className="mb-1 block text-sm text-[#c9c3b8]">Game date</label><input id="game_date" type="date" required value={form.game_date} onChange={e => setForm({ ...form, game_date: e.target.value })} className={`${control} w-full [color-scheme:dark]`} /></div>
+      <div className="grid grid-cols-2 gap-3"><label className="text-sm">Film type<select className={`${control} mt-1 w-full`} value={form.session_type} onChange={e=>setForm({...form,session_type:e.target.value})}><option value="game">Game</option><option value="practice">Practice</option><option value="scouting">Opponent scouting</option></select></label><label className="text-sm">Season<input maxLength={60} placeholder="e.g. Summer 2026" className={`${control} mt-1 w-full`} value={form.season_label} onChange={e=>setForm({...form,season_label:e.target.value})}/></label></div>
       <div><label htmlFor="location" className="mb-1 block text-sm text-[#c9c3b8]">Location <span className="text-[#aaa89f]">(optional)</span></label><input id="location" maxLength={200} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className={`${control} w-full`} /></div>
       <div><label htmlFor="notes" className="mb-1 block text-sm text-[#c9c3b8]">Notes <span className="text-[#aaa89f]">(optional)</span></label><textarea id="notes" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className={`${control} w-full py-2`} /></div>
       {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
@@ -69,6 +71,7 @@ function GameCard({ game, removed }: { game: LibraryGame; removed: (id: string) 
       </div>
     </Link>
     <button aria-label={`Delete game vs ${game.opponent}`} onClick={remove} disabled={busy} className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-md bg-[#181917]/85 text-[#c9c3b8] hover:bg-red-950 hover:text-red-200 focus-visible:outline-2 focus-visible:outline-[#e49269]">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button>
+    <GameMetadata game={game}/>
     {error && <p role="alert" className="px-4 pb-3 text-xs text-red-300">{error}</p>}
   </article>
 }
@@ -84,6 +87,7 @@ export default function FilmRoomLibrary() {
   const [search, setSearch] = useState('')
   const [season, setSeason] = useState('all')
   const [filter, setFilter] = useState('all')
+  const [filmType,setFilmType]=useState('all')
   const [showAdd, setShowAdd] = useState(false)
   const [reload, setReload] = useState(0)
   useEffect(() => {
@@ -100,18 +104,7 @@ export default function FilmRoomLibrary() {
         const [g, teams] = await Promise.all([json('/api/filmroom/games'), json('/api/filmroom/teams')])
         if (!Array.isArray(g) || !Array.isArray(teams)) throw new Error('Unexpected library response.')
         const ownTeam = teams[0] || await json('/api/filmroom/teams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'My Team', season: gameSeason(new Date().toLocaleDateString('en-CA')), sport: 'basketball' }) })
-        const loaded: LibraryGame[] = g.map((game: Game) => ({ ...game, clip_count: null, highlight_count: 0 }))
-        // Bound concurrent count requests while retaining the existing API's ownership checks.
-        for (let start = 0; start < loaded.length; start += 4) {
-          await Promise.all(loaded.slice(start, start + 4).map(async game => {
-            try {
-              const r = await fetch(`/api/filmroom/clips?game_id=${game.id}`, { signal: abort.signal })
-              if (!r.ok) return
-              const clips = await r.json()
-              if (Array.isArray(clips)) { game.clip_count = clips.length; game.highlight_count = clips.filter(c => c.is_highlight).length }
-            } catch { /* Missing counts are explicitly shown as unavailable. */ }
-          }))
-        }
+        const loaded: LibraryGame[] = g.map((game: LibraryGame) => ({...game,clip_count:game.clip_count ?? null,highlight_count:game.highlight_count ?? 0}))
         if (abort.signal.aborted) return
         setTeam(ownTeam); setGames(loaded)
         try {
@@ -125,25 +118,25 @@ export default function FilmRoomLibrary() {
     return () => abort.abort()
   }, [router, reload])
   const removed = useCallback((id: string) => { setGames(g => g.filter(x => x.id !== id)); setReload(n => n + 1) }, [])
-  const seasons = [...new Set(games.map(g => gameSeason(g.game_date)))].sort().reverse()
-  const filtered = games.filter(g => (season === 'all' || gameSeason(g.game_date) === season) && (!search || g.opponent.toLowerCase().includes(search.toLowerCase())) && (filter === 'all' || (filter === 'film' ? !!g.video_url : !g.video_url)))
-  const resume = games.find(g => g.video_url && (g.resume_position_ms || 0) > 0)
+  const seasons = [...new Set(games.map(g => (g.season_label || gameSeason(g.game_date))))].sort().reverse()
+  const filtered = games.filter(g => (filmType==='all'||g.session_type===filmType) && (season === 'all' || (g.season_label || gameSeason(g.game_date)) === season) && (!search || g.opponent.toLowerCase().includes(search.toLowerCase())) && (filter === 'all' || (filter === 'film' ? !!g.video_url : !g.video_url)))
+  const resume = [...games].sort((a,b)=>(b.last_watched_at||'').localeCompare(a.last_watched_at||'')).find(g => g.video_url && (g.resume_position_ms || 0) > 0)
   const featured = resume || games.find(g => g.video_url)
   const clipCount = games.every(g => g.clip_count !== null) ? games.reduce((n, g) => n + (g.clip_count || 0), 0) : null
   return <div className="cs min-h-screen bg-[#181917] text-[#eee9df]">
     <CsHeader active="library" right={<AccountBar />} />
     <main className="mx-auto max-w-[1440px] px-4 pb-12 pt-7 sm:px-8 sm:pt-10">
       <div className="mb-7 flex flex-wrap items-end justify-between gap-5">
-        <div><p className="mb-2 text-xs font-semibold uppercase tracking-[.2em] text-[#c9c3b8]">Your private film library</p><h1 className="text-5xl font-black uppercase leading-none sm:text-6xl" style={{ fontFamily: 'var(--font-bc)' }}>{team?.name || 'Film Room'}</h1></div>
+        <div><p className="mb-2 text-xs font-semibold uppercase tracking-[.2em] text-[#c9c3b8]">Your private film library</p><h1 className="text-5xl font-black uppercase leading-none sm:text-6xl" style={{ fontFamily: 'var(--font-bc)' }}>{team?.name || 'Film Room'}</h1><Link href="/filmroom/settings#team" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-[#e49269]">Edit team ↗</Link></div>
         <button onClick={() => setShowAdd(true)} disabled={!team || loading} className={action}><Plus className="h-4 w-4" />Add game</button>
       </div>
       {loading ? <div role="status" className="flex items-center gap-3 py-16 text-[#c9c3b8]"><Loader2 className="h-5 w-5 animate-spin" />Loading your library…</div> : error ? <div role="alert" className="rounded-md border border-red-300/30 p-6"><p className="text-red-200">{error}</p><button onClick={() => setReload(n => n + 1)} className={`${control} mt-4 inline-flex items-center gap-2`}><RefreshCw className="h-4 w-4" />Try again</button></div> : <>
         <div className="mb-7 flex flex-wrap gap-x-6 gap-y-2 border-y border-[#eee9df]/10 py-3 text-xs uppercase tracking-wider text-[#aaa89f]">
-          <span><b className="mr-2 text-base text-[#eee9df]">{games.length}</b>Games</span><span><b className="mr-2 text-base text-[#eee9df]">{games.filter(g => g.video_url).length}</b>With film</span><span><b className="mr-2 text-base text-[#eee9df]">{clipCount ?? '—'}</b>Clips</span><span><b className="mr-2 text-base text-[#eee9df]">{games.reduce((n, g) => n + g.highlight_count, 0)}</b>Highlights</span>
+          <span><b className="mr-2 text-base text-[#eee9df]">{games.length}</b>{games.length===1?'Game':'Games'}</span><span><b className="mr-2 text-base text-[#eee9df]">{games.filter(g => g.video_url).length}</b>With film</span><span><b className="mr-2 text-base text-[#eee9df]">{clipCount ?? '—'}</b>{clipCount===1?'Clip':'Clips'}</span><span><b className="mr-2 text-base text-[#eee9df]">{games.reduce((n, g) => n + g.highlight_count, 0)}</b>Highlights</span>
         </div>
         <div className="mb-9 grid gap-6 lg:grid-cols-[minmax(0,2.4fr)_minmax(240px,1fr)]">
           {featured ? <section className="overflow-hidden rounded-md border border-[#eee9df]/10 bg-[#20211e]">
-            <div className="flex items-center justify-between px-5 py-3 text-xs uppercase tracking-wider text-[#c9c3b8]"><h2>{resume ? 'Continue watching' : 'Ready for review'}</h2><span>{gameSeason(featured.game_date)}</span></div>
+            <div className="flex items-center justify-between px-5 py-3 text-xs uppercase tracking-wider text-[#c9c3b8]"><h2>{resume ? 'Continue watching' : 'Ready for review'}</h2><span>{featured.season_label || gameSeason(featured.game_date)}</span></div>
             <Link href={`/filmroom/game/${featured.id}`} className="group grid focus-visible:outline-2 focus-visible:outline-[#e49269] sm:grid-cols-[1.55fr_1fr]">
               <VideoThumbnail gameId={featured.id} className="aspect-video h-full min-h-[200px]" />
               <div className="flex flex-col justify-center p-5 sm:p-7"><p className="mb-2 text-xs text-[#aaa89f]">{formatGameDate(featured.game_date)}</p><h3 className="text-3xl font-bold leading-tight sm:text-4xl" style={{ fontFamily: 'var(--font-bc)' }}>{featured.opponent}</h3>
@@ -156,7 +149,7 @@ export default function FilmRoomLibrary() {
             {playlistError ? <p className="text-sm text-[#c9c3b8]">Playlists could not be loaded. Open Playlists to try again.</p> : playlists.length ? <div className="divide-y divide-[#eee9df]/10">{playlists.slice(0, 3).map(p => <Link key={p.id} href={`/filmroom/playlists/${p.id}`} className="flex min-h-[65px] items-center gap-3 py-3"><ListVideo className="h-5 w-5 shrink-0 text-[#c66a3e]" /><div className="min-w-0"><h3 className="truncate text-sm font-semibold">{p.name}</h3><p className="mt-1 text-xs text-[#aaa89f]">{p.clip_count} {p.clip_count === 1 ? 'clip' : 'clips'}</p></div></Link>)}</div> : <><ListVideo className="mb-3 h-6 w-6 text-[#c66a3e]" /><p className="text-lg font-semibold">Build your next film session.</p><p className="mt-2 text-sm leading-relaxed text-[#aaa89f]">Collect clips across games, put them in order, and teach one point at a time.</p><Link href="/filmroom/playlists" className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#e49269]">Create a playlist<ArrowUpRight className="h-4 w-4" /></Link></>}
           </section>
         </div>
-        <section aria-labelledby="games-title"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 id="games-title" className="text-3xl font-bold uppercase" style={{ fontFamily: 'var(--font-bc)' }}>Game film <span className="ml-2 text-xl text-[#aaa89f]">{filtered.length}</span></h2><div className="flex w-full flex-wrap gap-2 sm:w-auto"><label className={`${control} flex min-w-0 flex-1 items-center gap-2`}><Search className="h-4 w-4 shrink-0 text-[#aaa89f]" /><input aria-label="Search games" type="search" placeholder="Search games" value={search} onChange={e => setSearch(e.target.value)} className="w-full min-w-0 bg-transparent py-2 outline-none sm:w-40" /></label><select aria-label="Filter by season" value={season} onChange={e => setSeason(e.target.value)} className={control}><option value="all">All seasons</option>{seasons.map(s => <option key={s}>{s}</option>)}</select><select aria-label="Filter by video availability" value={filter} onChange={e => setFilter(e.target.value)} className={control}><option value="all">All games</option><option value="film">With film</option><option value="empty">No film</option></select></div></div>
+        <section aria-labelledby="games-title"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 id="games-title" className="text-3xl font-bold uppercase" style={{ fontFamily: 'var(--font-bc)' }}>Game film <span className="ml-2 text-xl text-[#aaa89f]">{filtered.length}</span></h2><div className="flex w-full flex-wrap gap-2 sm:w-auto"><label className={`${control} flex min-w-0 flex-1 items-center gap-2`}><Search className="h-4 w-4 shrink-0 text-[#aaa89f]" /><input aria-label="Search games" type="search" placeholder="Search games" value={search} onChange={e => setSearch(e.target.value)} className="w-full min-w-0 bg-transparent py-2 outline-none sm:w-40" /></label><select aria-label="Filter by film type" value={filmType} onChange={e=>setFilmType(e.target.value)} className={control}><option value="all">All film types</option><option value="game">Games</option><option value="practice">Practices</option><option value="scouting">Opponent scouting</option></select><select aria-label="Filter by season" value={season} onChange={e => setSeason(e.target.value)} className={control}><option value="all">All seasons</option>{seasons.map(s => <option key={s}>{s}</option>)}</select><select aria-label="Filter by video availability" value={filter} onChange={e => setFilter(e.target.value)} className={control}><option value="all">All games</option><option value="film">With film</option><option value="empty">No film</option></select></div></div>
           {filtered.length ? <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{filtered.map(g => <GameCard key={g.id} game={g} removed={removed} />)}</div> : <p className="border-t border-[#eee9df]/10 py-10 text-sm text-[#aaa89f]">{games.length ? 'No games match these filters.' : 'Your library is ready for its first game.'}</p>}
         </section>
       </>}

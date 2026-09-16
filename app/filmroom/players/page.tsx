@@ -1,64 +1,15 @@
-'use client'
-
-import { useState, useEffect } from 'react'
+ 'use client'
+import {useEffect,useState} from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Users, ChevronRight, Loader2 } from 'lucide-react'
-import { AccountBar } from '@/app/filmroom/components/AccountBar'
-import { CsHeader } from '@/app/filmroom/components/cs-shared'
-import type { Player } from '@/types/filmroom'
-
-export default function PlayersPage() {
-  const router = useRouter()
-  const [players, setPlayers] = useState<Player[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch('/api/filmroom/players')
-      .then(r => { if (r.status === 401) { router.replace('/filmroom/login'); return null } return r.ok ? r.json() : [] })
-      .then(d => { if (d) { setPlayers(Array.isArray(d) ? d : []); setLoading(false) } })
-      .catch(() => setLoading(false))
-  }, [router])
-
-  return (
-    <div className="cs min-h-screen" style={{ background: '#181917', color: '#eee9df' }}>
-      <CsHeader active="players" right={<AccountBar />} />
-
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        <h1 className="font-black uppercase tracking-tight text-2xl"
-          style={{ fontFamily: 'var(--font-bc,"Arial Narrow",sans-serif)' }}>
-          Players
-        </h1>
-
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'rgba(238,233,223,0.30)' }} />
-          </div>
-        ) : players.length === 0 ? (
-          <div className="text-center py-16">
-            <Users className="w-10 h-10 mx-auto mb-3" style={{ color: 'rgba(238,233,223,0.15)' }} />
-            <p style={{ color: 'rgba(238,233,223,0.60)' }}>No players yet — add them from the game roster panel.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {players.map(p => (
-              <Link key={p.id} href={`/filmroom/players/${p.id}`}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors hover:border-[rgba(198,106,62,0.40)]"
-                style={{ background: '#1e1f1d', borderColor: 'rgba(238,233,223,0.10)' }}>
-                <div className="w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shrink-0"
-                  style={{ background: 'rgba(198,106,62,0.15)', color: '#c66a3e' }}>
-                  {p.number ?? '?'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate" style={{ color: '#eee9df' }}>{p.name}</p>
-                  {p.position && <p className="text-xs" style={{ color: 'rgba(238,233,223,0.50)' }}>{p.position}</p>}
-                </div>
-                <ChevronRight className="w-4 h-4 shrink-0" style={{ color: 'rgba(238,233,223,0.30)' }} />
-              </Link>
-            ))}
-          </div>
-        )}
-      </main>
-    </div>
-  )
+import {AccountBar} from '../components/AccountBar'
+import {CsHeader} from '../components/cs-shared'
+import type {Player,Team} from '@/types/filmroom'
+const input='w-full rounded border border-white/20 bg-[#181917] p-3'
+export default function Players(){
+ const [players,setPlayers]=useState<Player[]>([]);const [teams,setTeams]=useState<Team[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState('');const [editing,setEditing]=useState<string|null>(null);const [form,setForm]=useState({name:'',number:'',position:'',team_id:''});const [busy,setBusy]=useState(false)
+ async function load(){setLoading(true);setError('');try{const [p,t]=await Promise.all([fetch('/api/filmroom/players'),fetch('/api/filmroom/teams')]);if(p.status===401){location.href='/filmroom/login';return}if(!p.ok||!t.ok)throw Error('Could not load your roster.');setPlayers(await p.json());setTeams(await t.json())}catch(e){setError(e instanceof Error?e.message:'Roster unavailable.')}finally{setLoading(false)}}
+ useEffect(()=>{void load()},[])
+ function edit(p?:Player){setEditing(p?.id||'new');setForm({name:p?.name||'',number:p?.number==null?'':String(p.number),position:p?.position||'',team_id:p?.team_id||teams[0]?.id||''});setError('')}
+ async function save(e:React.FormEvent){e.preventDefault();setBusy(true);setError('');try{const r=await fetch(editing==='new'?'/api/filmroom/players':`/api/filmroom/players/${editing}`,{method:editing==='new'?'POST':'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...form,number:form.number===''?null:Number(form.number)})});const d=await r.json();if(!r.ok)throw Error(d.error||'Save failed.');setEditing(null);await load()}catch(e){setError(e instanceof Error?e.message:'Save failed.')}finally{setBusy(false)}}
+ return <div className="cs min-h-screen bg-[#181917] text-[#eee9df]"><CsHeader active="players" right={<AccountBar/>}/><main className="mx-auto max-w-3xl space-y-5 px-4 py-8"><div className="flex items-center justify-between"><div><h1 className="text-4xl font-bold" style={{fontFamily:'var(--font-bc)'}}>Players</h1><p className="mt-2 text-sm text-[#c9c3b8]">Manage your roster and review each player’s film.</p></div><button disabled={!teams.length||loading} onClick={()=>edit()} className="min-h-11 rounded bg-[#c66a3e] px-4 font-semibold text-[#181917] disabled:opacity-50">Add player</button></div>{error&&<p role="alert" className="text-red-300">{error} <button onClick={load} className="underline">Retry roster</button></p>}{editing&&<form onSubmit={save} className="space-y-4 rounded-lg border border-[#e49269]/40 bg-[#20211e] p-5"><h2 className="text-xl font-bold">{editing==='new'?'Add player':'Edit player'}</h2><label className="block">Name<input autoFocus required maxLength={100} className={input} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><div className="grid grid-cols-2 gap-4"><label>Jersey number<input type="number" min={0} max={999} className={input} value={form.number} onChange={e=>setForm({...form,number:e.target.value})}/></label><label>Position<input maxLength={30} className={input} value={form.position} onChange={e=>setForm({...form,position:e.target.value})}/></label></div>{editing==='new'&&<label className="block">Team<select className={input} value={form.team_id} onChange={e=>setForm({...form,team_id:e.target.value})}>{teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}<div className="flex gap-3"><button disabled={busy} className="min-h-11 rounded bg-[#c66a3e] px-5 text-[#181917]">{busy?'Saving…':'Save player'}</button><button type="button" disabled={busy} onClick={()=>setEditing(null)} className="min-h-11 px-4">Cancel</button></div></form>}{loading?<p role="status">Loading roster…</p>:!error&&players.length===0?<p>Add your first player to start tagging film.</p>:players.map(p=><article key={p.id} className="flex items-center gap-3 rounded-lg border border-white/10 bg-[#20211e] p-4"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#c66a3e]/15 font-bold text-[#e49269]">{p.number??'—'}</span><Link href={`/filmroom/players/${p.id}`} className="min-w-0 flex-1"><h2 className="font-semibold">{p.name}</h2><p className="text-sm text-[#c9c3b8]">{p.position||'Position not set'} · Review clips →</p></Link><button aria-label={`Edit ${p.name}`} onClick={()=>edit(p)} className="min-h-11 px-3 text-[#e49269]">Edit</button></article>)}</main></div>
 }
