@@ -1,0 +1,4 @@
+import {NextRequest,NextResponse} from 'next/server'
+import {getVerifiedUser} from '@/lib/filmroom-supabase-server'
+import {billingEnabled,filmStripe,billingOrigin,verifyBillingOrigin,accountBilling,billingFailure} from '@/lib/filmroom-billing'
+export async function POST(r:NextRequest){try{const {user}=await getVerifiedUser(r);if(!billingEnabled())return NextResponse.json({error:'Billing is not open yet'},{status:503});verifyBillingOrigin(r);const a=await accountBilling(user.id);if(!a.subscription?.customer_id)return NextResponse.json({error:'No subscription account'},{status:404});const configuration=process.env.FILMROOM_STRIPE_PORTAL_CONFIG_ID;if(!configuration)throw Error('Missing dedicated portal configuration');const s=await filmStripe().billingPortal.sessions.create({customer:a.subscription.customer_id,configuration,return_url:`${billingOrigin()}/filmroom/billing`});return NextResponse.json({url:s.url})}catch(e){return billingFailure(e)}}

@@ -61,7 +61,7 @@ function GameCard({ game, removed }: { game: LibraryGame; removed: (id: string) 
   return <article className="group relative overflow-hidden rounded-md border border-[#eee9df]/10 bg-[#1e1f1d] transition-colors hover:border-[#c66a3e]/65">
     <Link href={`/filmroom/game/${game.id}`} className="block focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#e49269]">
       {game.video_url ? <VideoThumbnail gameId={game.id} className="aspect-video" /> : <div className="flex aspect-video items-center justify-center gap-2 bg-[#131411] text-sm text-[#aaa89f]"><Film className="h-5 w-5" />Awaiting film</div>}
-      <div className="p-4">
+      <div className="p-4">{game.is_demo&&<p className="mb-2 text-xs font-bold uppercase tracking-wider text-[#e49269]">Demo · Practice the tools</p>}
         <h3 className="pr-8 text-2xl font-bold leading-tight" style={{ fontFamily: 'var(--font-bc)' }}>{game.opponent}</h3>
         <p className="mt-1 text-xs text-[#aaa89f]">{formatGameDate(game.game_date)}{game.location ? ` · ${game.location}` : ''}</p>
         <div className="mt-4 flex items-center justify-between border-t border-[#eee9df]/10 pt-3 text-xs text-[#c9c3b8]">
@@ -70,7 +70,7 @@ function GameCard({ game, removed }: { game: LibraryGame; removed: (id: string) 
         </div>
       </div>
     </Link>
-    <button aria-label={`Delete game vs ${game.opponent}`} onClick={remove} disabled={busy} className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-md bg-[#181917]/85 text-[#c9c3b8] hover:bg-red-950 hover:text-red-200 focus-visible:outline-2 focus-visible:outline-[#e49269]">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button>
+    {!game.is_demo&&<button aria-label={`Delete game vs ${game.opponent}`} onClick={remove} disabled={busy} className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-md bg-[#181917]/85 text-[#c9c3b8] hover:bg-red-950 hover:text-red-200 focus-visible:outline-2 focus-visible:outline-[#e49269]">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button>}
     <GameMetadata game={game}/>
     {error && <p role="alert" className="px-4 pb-3 text-xs text-red-300">{error}</p>}
   </article>
@@ -89,6 +89,7 @@ export default function FilmRoomLibrary() {
   const [filter, setFilter] = useState('all')
   const [filmType,setFilmType]=useState('all')
   const [showAdd, setShowAdd] = useState(false)
+  const [billing,setBilling]=useState<{enabled:boolean;canUpload?:boolean;gameCount?:number;usedBytes?:number}|null>(null)
   const [reload, setReload] = useState(0)
   useEffect(() => {
     const abort = new AbortController()
@@ -101,7 +102,8 @@ export default function FilmRoomLibrary() {
     const load = async () => {
       setLoading(true); setError(''); setGames([]); setTeam(null); setPlaylists([])
       try {
-        const [g, teams] = await Promise.all([json('/api/filmroom/games'), json('/api/filmroom/teams')])
+        const [g, teams, plan] = await Promise.all([json('/api/filmroom/games'), json('/api/filmroom/teams'),json('/api/filmroom/billing')])
+        setBilling(plan)
         if (!Array.isArray(g) || !Array.isArray(teams)) throw new Error('Unexpected library response.')
         const ownTeam = teams[0] || await json('/api/filmroom/teams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'My Team', season: gameSeason(new Date().toLocaleDateString('en-CA')), sport: 'basketball' }) })
         const loaded: LibraryGame[] = g.map((game: LibraryGame) => ({...game,clip_count:game.clip_count ?? null,highlight_count:game.highlight_count ?? 0}))
@@ -128,8 +130,9 @@ export default function FilmRoomLibrary() {
     <main className="mx-auto max-w-[1440px] px-4 pb-12 pt-7 sm:px-8 sm:pt-10">
       <div className="mb-7 flex flex-wrap items-end justify-between gap-5">
         <div><p className="mb-2 text-xs font-semibold uppercase tracking-[.2em] text-[#c9c3b8]">Your private film library</p><h1 className="text-5xl font-black uppercase leading-none sm:text-6xl" style={{ fontFamily: 'var(--font-bc)' }}>{team?.name || 'Film Room'}</h1><Link href="/filmroom/settings#team" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-[#e49269]">Edit team ↗</Link></div>
-        <button onClick={() => setShowAdd(true)} disabled={!team || loading} className={action}><Plus className="h-4 w-4" />Add game</button>
+        {billing?.enabled&&!billing.canUpload?<Link href="/filmroom/billing" className={action}>Subscribe · $25/month</Link>:<button onClick={() => setShowAdd(true)} disabled={!team || loading || !!(billing?.enabled&&(billing.gameCount||0)>=50)} className={action}><Plus className="h-4 w-4" />Add game</button>}
       </div>
+      {billing?.enabled&&<p className="mb-5 text-sm text-[#c9c3b8]">{billing.canUpload?`${billing.gameCount} / 50 games · ${((billing.usedBytes||0)/1e9).toFixed(1)} / 500 GB`:'Explore your demo game. Subscribe to add your own film.'} <Link href="/filmroom/billing" className="ml-2 text-[#e49269] underline">Plan & billing</Link></p>}
       {loading ? <div role="status" className="flex items-center gap-3 py-16 text-[#c9c3b8]"><Loader2 className="h-5 w-5 animate-spin" />Loading your library…</div> : error ? <div role="alert" className="rounded-md border border-red-300/30 p-6"><p className="text-red-200">{error}</p><button onClick={() => setReload(n => n + 1)} className={`${control} mt-4 inline-flex items-center gap-2`}><RefreshCw className="h-4 w-4" />Try again</button></div> : <>
         <div className="mb-7 flex flex-wrap gap-x-6 gap-y-2 border-y border-[#eee9df]/10 py-3 text-xs uppercase tracking-wider text-[#aaa89f]">
           <span><b className="mr-2 text-base text-[#eee9df]">{games.length}</b>{games.length===1?'Game':'Games'}</span><span><b className="mr-2 text-base text-[#eee9df]">{games.filter(g => g.video_url).length}</b>With film</span><span><b className="mr-2 text-base text-[#eee9df]">{clipCount ?? '—'}</b>{clipCount===1?'Clip':'Clips'}</span><span><b className="mr-2 text-base text-[#eee9df]">{games.reduce((n, g) => n + g.highlight_count, 0)}</b>Highlights</span>

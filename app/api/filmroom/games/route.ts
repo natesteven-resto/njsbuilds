@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-server'
 
+import { requirePaid, billingEnabled } from '@/lib/filmroom-billing'
+
 // Explicit allowlist of client-writable game fields.
 // video_url, video_id, owner_id, team_id, created_at are server-only.
 const GAME_CREATE_FIELDS = ['team_id', 'opponent', 'game_date', 'location', 'notes', 'thumbnail_url', 'season_label', 'session_type'] as const
@@ -28,6 +30,7 @@ export async function GET(request: NextRequest) {
   try {
     const { user, supabase } = await getVerifiedUser(request)
 
+    if(billingEnabled()){const {error:demoError}=await supabase.rpc('filmroom_provision_demo');if(demoError)throw demoError}
     const { data, error } = await supabase
       .from('games')
       .select('*')
@@ -74,6 +77,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden: team not owned' }, { status: 403 })
     }
 
+    await requirePaid(user.id)
     // Use service client for insert — owner_id set authoritatively
     const svc = createServiceClient()
     const { data, error } = await svc
@@ -93,7 +97,11 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      if (error.message.includes('GAME_LIMIT_REACHED')) return NextResponse.json({error:'Your library has reached 50 games. Delete a game before adding another.',code:'GAME_LIMIT_REACHED'},{status:409})
+      if (error.message.includes('SUBSCRIPTION_REQUIRED')) return NextResponse.json({error:'Subscribe to add games.',code:'SUBSCRIPTION_REQUIRED'},{status:402})
+      return NextResponse.json({error:'Could not create game.'},{status:500})
+    }
     return NextResponse.json(data, { status: 201 })
   } catch (e) {
     if (e instanceof NextResponse) return e

@@ -11,6 +11,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-server'
 
+import { requirePaid, billingEnabled } from '@/lib/filmroom-billing'
+
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getVerifiedUser(request)
@@ -24,10 +26,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'filename required' }, { status: 400 })
 
     // Verify game ownership
-    const { data: game } = await svc.from('games').select('owner_id').eq('id', game_id).single()
-    if (!game || game.owner_id !== user.id)
+    const { data: game } = await svc.from('games').select(billingEnabled() ? 'owner_id,is_demo' : 'owner_id').eq('id', game_id).single()
+    if (!game || (game as unknown as {owner_id:string}).owner_id !== user.id)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+    if ((game as unknown as {is_demo?:boolean}).is_demo) return NextResponse.json({error:'The demo video cannot be replaced.'},{status:403})
+    await requirePaid(user.id)
     // R2 multipart only for this release — client calls /upload/multipart?action=create
     return NextResponse.json({ method: 'r2' })
   } catch (e) {

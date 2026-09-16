@@ -30,6 +30,8 @@ export interface Player {
 }
 
 export interface Game {
+  is_demo?: boolean
+  video_bytes?: number | null
   id: string
   team_id: string
   opponent: string

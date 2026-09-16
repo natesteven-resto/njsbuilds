@@ -1,0 +1,5 @@
+import {NextRequest,NextResponse} from 'next/server'
+import {filmStripe,reconcileCustomer} from '@/lib/filmroom-billing'
+import type Stripe from 'stripe'
+export async function POST(r:NextRequest){const secret=process.env.FILMROOM_STRIPE_WEBHOOK_SECRET;const signature=r.headers.get('stripe-signature');if(!secret||!signature)return NextResponse.json({error:'Webhook unavailable'},{status:400});let event:Stripe.Event;try{event=filmStripe().webhooks.constructEvent(await r.text(),signature,secret)}catch{return NextResponse.json({error:'Invalid signature'},{status:400})}
+ try{if(event.type.startsWith('customer.subscription.')||event.type.startsWith('checkout.session.')||event.type==='invoice.paid'||event.type==='invoice.payment_failed'){const o=event.data.object as unknown as {customer?:string|{id:string}};const customer=typeof o.customer==='string'?o.customer:o.customer?.id;if(customer)await reconcileCustomer(customer)}return NextResponse.json({received:true})}catch{return NextResponse.json({error:'Reconciliation failed; retry required'},{status:500})}}

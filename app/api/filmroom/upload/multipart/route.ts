@@ -16,6 +16,10 @@ import {
   CompleteMultipartUploadCommand, AbortMultipartUploadCommand,
   GetObjectCommand, HeadObjectCommand,
 } from '@aws-sdk/client-s3'
+import {cleanDetachedVideos} from '@/lib/filmroom-storage'
+import {billingEnabled,requirePaid} from '@/lib/filmroom-billing'
+import {validUploadBytes,uploadPartBytes} from '@/lib/filmroom-plan'
+import {randomUUID} from 'crypto'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-server'
 
@@ -63,8 +67,9 @@ function fingerprint(safeFilename: string, sizeBytes: number | null): string {
 async function abortR2(key: string, uploadId: string) {
   try {
     await r2Client().send(new AbortMultipartUploadCommand({ Bucket: R2_BUCKET, Key: key, UploadId: uploadId }))
+    return true
   } catch (err) {
-    console.warn('[multipart abort R2 non-fatal]', String(err).slice(0, 100))
+    return false
   }
 }
 
@@ -100,6 +105,8 @@ export async function POST(request: NextRequest) {
 
     // ── CREATE ────────────────────────────────────────────────────────────────
     if (action === 'create') {
+      await requirePaid(user.id)
+      if(billingEnabled())await cleanDetachedVideos(user.id)
       const body = await request.json()
       const { filename, contentType = 'video/mp4', game_id } = body
       const fileSizeBytes: number | null = typeof body.fileSizeBytes === 'number' && body.fileSizeBytes > 0
@@ -111,6 +118,12 @@ export async function POST(request: NextRequest) {
       const { data: game } = await svc.from('games').select('owner_id, active_upload_session').eq('id', game_id).single()
       if (!game || game.owner_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+      if (billingEnabled()) {
+        if (!validUploadBytes(body.fileSizeBytes)) return NextResponse.json({error:'Provide the exact video size, up to 500 GB.'},{status:400})
+        const {data:check,error}=await svc.from('games').select('is_demo').eq('id',game_id).eq('owner_id',user.id).single()
+        if(error)throw error
+        if(check.is_demo)return NextResponse.json({error:'The demo video cannot be replaced.'},{status:403})
+      }
       const safe = filename.replace(/[^a-zA-Z0-9._-]/g, '_')
       const fp   = fingerprint(safe, fileSizeBytes)
 
@@ -122,19 +135,25 @@ export async function POST(request: NextRequest) {
       if (existing) {
         if (existing.file_fingerprint === fp)
           return NextResponse.json({ sessionId: existing.id, key: existing.r2_key, uploadId: existing.upload_id, playbackUrl: `${CDN_BASE}/${existing.r2_key}`, resumed: true })
-        await abortR2(existing.r2_key, existing.upload_id)
+        const aborted=await abortR2(existing.r2_key, existing.upload_id)
+        if(billingEnabled()&&aborted)await svc.from('filmroom_video_assets').delete().eq('r2_key',existing.r2_key).eq('owner_id',user.id).eq('state','reserved')
         await svc.from('upload_sessions').update({ status: 'aborted', updated_at: new Date().toISOString() }).eq('id', existing.id)
       }
 
-      const key = `games/${game_id}/${Date.now()}-${safe}`
-      const r2res = await r2Client().send(new CreateMultipartUploadCommand({ Bucket: R2_BUCKET, Key: key, ContentType: contentType }))
+      const key = `games/${game_id}/${randomUUID()}-${safe}`
+      if(billingEnabled()){
+        const {error}=await svc.from('filmroom_video_assets').insert({owner_id:user.id,game_id,r2_key:key,bytes:fileSizeBytes,state:'reserved'})
+        if(error)return NextResponse.json({error:error.message.includes('STORAGE_LIMIT_REACHED')?'This upload would exceed your 500 GB storage limit.':error.message.includes('SUBSCRIPTION_REQUIRED')?'Subscribe to upload film.':'Could not reserve storage for this upload.'},{status:error.message.includes('STORAGE_LIMIT_REACHED')?409:503})
+      }
+      let r2res;try{r2res=await r2Client().send(new CreateMultipartUploadCommand({ Bucket: R2_BUCKET, Key: key, ContentType: contentType }))}catch(e){if(billingEnabled())await svc.from('filmroom_video_assets').delete().eq('r2_key',key).eq('owner_id',user.id);throw e}
       const uploadId = r2res.UploadId!
+      if(billingEnabled()){const {error}=await svc.from('filmroom_video_assets').update({upload_id:uploadId}).eq('r2_key',key).eq('owner_id',user.id);if(error){await abortR2(key,uploadId);throw error}}
 
       const { data: session, error: sErr } = await svc.from('upload_sessions')
         .insert({ owner_id: user.id, game_id, r2_key: key, upload_id: uploadId, file_fingerprint: fp, expected_size: fileSizeBytes, status: 'in_progress' })
         .select('id').single()
 
-      if (sErr) { await abortR2(key, uploadId); return NextResponse.json({ error: 'Session create failed' }, { status: 500 }) }
+      if (sErr) { const aborted=await abortR2(key, uploadId);if(billingEnabled()&&aborted)await svc.from('filmroom_video_assets').delete().eq('r2_key',key).eq('owner_id',user.id); return NextResponse.json({ error: 'Session create failed' }, { status: 500 }) }
 
       await svc.from('games').update({ active_upload_session: session.id }).eq('id', game_id).eq('owner_id', user.id)
 
@@ -143,21 +162,24 @@ export async function POST(request: NextRequest) {
 
     // ── SIGN PART ─────────────────────────────────────────────────────────────
     if (action === 'part') {
+      await requirePaid(user.id)
       const { sessionId, partNumber } = await request.json()
       if (!sessionId) return NextResponse.json({ error: 'sessionId required' }, { status: 400 })
       const pn = strictInt(partNumber, 1, 10000)
       if (pn === null) return NextResponse.json({ error: 'partNumber must be whole integer 1–10000' }, { status: 400 })
 
-      const { data: session } = await svc.from('upload_sessions').select('owner_id, r2_key, upload_id, status, game_id').eq('id', sessionId).single()
+      const { data: session } = await svc.from('upload_sessions').select('owner_id, r2_key, upload_id, status, game_id, expected_size').eq('id', sessionId).single()
       if (!session || session.owner_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       if (session.status !== 'in_progress') return NextResponse.json({ error: 'Session not active' }, { status: 409 })
 
       const { data: game } = await svc.from('games').select('owner_id').eq('id', session.game_id).single()
       if (!game || game.owner_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+      const partBytes=billingEnabled()?uploadPartBytes(session.expected_size,pn):undefined
+      if(partBytes===null)return NextResponse.json({error:'Part is outside the reserved file size.'},{status:400})
       const signedUrl = await getSignedUrl(r2Client(),
-        new UploadPartCommand({ Bucket: R2_BUCKET, Key: session.r2_key, UploadId: session.upload_id, PartNumber: pn }),
-        { expiresIn: 3600 })
+        new UploadPartCommand({ Bucket: R2_BUCKET, Key: session.r2_key, UploadId: session.upload_id, PartNumber: pn, ...(partBytes?{ContentLength:partBytes}:{}) }),
+        { expiresIn: 3600, ...(partBytes?{signedHeaders:new Set(['content-length'])}:{}) })
       return NextResponse.json({ signedUrl })
     }
 
@@ -221,6 +243,7 @@ export async function POST(request: NextRequest) {
         },
       }))
 
+      if(billingEnabled())return attachVerified(svc,session,sessionId,user.id)
       const playbackUrl = `${CDN_BASE}/${session.r2_key}`
 
       const { data: updated, error: attachErr } = await svc.from('games')
@@ -246,13 +269,17 @@ export async function POST(request: NextRequest) {
       if (!sessionId) return NextResponse.json({ error: 'sessionId required' }, { status: 400 })
 
       const { data: session } = await svc.from('upload_sessions')
-        .select('owner_id, r2_key, upload_id, status, game_id').eq('id', sessionId).single()
+        .select('owner_id, r2_key, upload_id, status, game_id, expected_size').eq('id', sessionId).single()
       if (!session || session.owner_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+      if(billingEnabled()&&['in_progress','complete_pending_attach'].includes(session.status)){
+        await svc.from('filmroom_video_assets').update({state:'cleanup'}).eq('r2_key',session.r2_key).eq('owner_id',user.id).eq('state','reserved')
+        await cleanDetachedVideos(user.id)
+      }
       await svc.from('upload_sessions').update({ status: 'aborted', updated_at: new Date().toISOString() }).eq('id', sessionId).eq('owner_id', user.id)
       await svc.from('games').update({ active_upload_session: null }).eq('id', session.game_id).eq('owner_id', user.id).eq('active_upload_session', sessionId)
 
-      if (session.status === 'in_progress') await abortR2(session.r2_key, session.upload_id)
+      if (session.status === 'in_progress') {const aborted=await abortR2(session.r2_key, session.upload_id);if(billingEnabled()&&aborted)await svc.from('filmroom_video_assets').delete().eq('r2_key',session.r2_key).eq('owner_id',user.id).eq('state','reserved')}
       return NextResponse.json({ ok: true })
     }
 
@@ -270,6 +297,7 @@ async function recoverPendingAttach(
   sessionId: string,
   userId: string,
 ): Promise<NextResponse> {
+  if(billingEnabled())return attachVerified(svc,session,sessionId,userId)
   try {
     await r2Client().send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: session.r2_key }))
   } catch {
@@ -284,4 +312,15 @@ async function recoverPendingAttach(
   if (!updated) return NextResponse.json({ error: 'Superseded — not attached', recoverable: false }, { status: 409 })
   await svc.from('upload_sessions').update({ status: 'complete', updated_at: new Date().toISOString() }).eq('id', sessionId)
   return NextResponse.json({ ok: true, playbackUrl, attached: true, recovered: true })
+}
+
+async function attachVerified(svc:ReturnType<typeof createServiceClient>,session:{r2_key:string},sessionId:string,owner:string){
+ const playbackUrl=`${CDN_BASE}/${session.r2_key}`;
+ // Preserve recovery after R2 completion even if the metadata/database step fails.
+ await svc.from('upload_sessions').update({status:'complete_pending_attach',updated_at:new Date().toISOString()}).eq('id',sessionId).eq('owner_id',owner).in('status',['in_progress','complete_pending_attach']);
+ const head=await r2Client().send(new HeadObjectCommand({Bucket:R2_BUCKET,Key:session.r2_key}));
+ if(!validUploadBytes(head.ContentLength))return NextResponse.json({error:'Could not verify uploaded video size.'},{status:409});
+ const {error}=await svc.rpc('filmroom_attach_upload',{p_owner:owner,p_session:sessionId,p_bytes:head.ContentLength,p_url:playbackUrl});
+ if(error)return NextResponse.json({error:error.message.includes('SIZE_MISMATCH')?'Uploaded size does not match the reserved video. Please restart the upload.':'Upload could not be attached. Retry completion.',recoverable:!error.message.includes('SIZE_MISMATCH')},{status:409});
+ return NextResponse.json({ok:true,playbackUrl,attached:true});
 }
