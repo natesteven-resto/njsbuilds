@@ -881,7 +881,7 @@ function BoxScorePanel({
               <div className="mt-2 space-y-1.5">
                 {groups.map(g => (
                   <div key={g.label} className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] text-white/60 uppercase tracking-widest w-12 shrink-0">{g.label}</span>
+                    <span className="text-[10px] text-white/60 uppercase tracking-widest w-full">{g.label}</span>
                     {g.items.map(item => (
                       <span key={item.key}
                         className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${item.dim ? 'text-white/60' : 'bg-white/6 text-white/80'}`}>
