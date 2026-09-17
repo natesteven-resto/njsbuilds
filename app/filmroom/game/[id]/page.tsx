@@ -2754,7 +2754,7 @@ export default function GameFilmRoom() {
                   <Bookmark className="w-3 h-3" /> Add bookmark
                 </button>
                 </ToolbarMenu>
-                <ToolbarMenu label="Playback settings">
+                <ToolbarMenu label="Playback settings" startOnSmall>
                   <PlaybackQualityControl gameId={gameId} sourceKey={game.video_url||''} quality={playbackQuality} onChange={setPlaybackQuality}/>
                   <p className="text-white/55">Original keeps your full upload quality. Auto adapts to your connection, up to 1080p.</p>
                 </ToolbarMenu>
