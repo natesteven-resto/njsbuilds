@@ -29,6 +29,7 @@ async function as(role,user,sql){
 async function test(name,fn){try{await fn();console.log('PASS',name);}catch(e){failures++;console.log('FAIL',name,e.message);}}
 function assert(v,msg){if(!v)throw Error(msg);}
 async function denied(sql){try{const r=await as('authenticated',A,sql);assert(r.affectedRows===0,'unexpected write allowed');}catch(e){if(e.message==='unexpected write allowed')throw e; if(!/permission|row-level|constraint|ownership|owner|forbidden|mismatch|not allowed/i.test(e.message))throw e;}}
+await test('server role can read owned resources and update upload attachment fields',async()=>{const r=await as('service_role','',`SELECT id FROM games WHERE id='${ids.ga}'`);assert(r.rows.length===1,'server table grant missing');await as('service_role','',`UPDATE games SET video_bytes=0 WHERE id='${ids.ga}'`);await as('service_role','',`SELECT id FROM upload_sessions LIMIT 1`)});
 for(const table of ['coaches','teams','games','players','clips','clip_players','clip_comments','player_stats','stat_clips','stat_entries','upload_sessions']){
   await test('anonymous cannot read '+table,async()=>{try{const r=await as('anon','',`SELECT * FROM ${table}`);assert(r.rows.length===0,'data leaked');}catch(e){if(!/permission denied/.test(e.message))throw e;}});
 }
