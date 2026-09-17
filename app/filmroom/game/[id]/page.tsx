@@ -1411,8 +1411,9 @@ function TransportBar({
 
 function SaveClipModal({
   gameId, teamId, startMs, endMs, players, drawingData, videoDurationMs,
-  onClose, onSave,
+  onClose, onSave, existingClip,
 }: {
+  existingClip?: Clip
   gameId: string
   teamId: string
   startMs: number
@@ -1443,9 +1444,9 @@ function SaveClipModal({
   }
   const [range,setRange]=useState({start:startMs/1000,end:endMs/1000})
   const [form, setForm] = useState({
-    title: '', category: 'offense' as ClipCategory,
-    tags: '', is_highlight: false, player_ids: [] as string[],
-    coaching_note: '', play_type: '',
+    title: existingClip?.title ?? '', category: existingClip?.category ?? 'offense' as ClipCategory,
+    tags: existingClip?.tags.join(', ') ?? '', is_highlight: existingClip?.is_highlight ?? false, player_ids: existingClip?.players?.map(p=>p.id) ?? [] as string[],
+    coaching_note: existingClip?.coaching_note ?? '', play_type: existingClip?.play_type ?? '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -1456,8 +1457,8 @@ function SaveClipModal({
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/filmroom/clips', {
-        method: 'POST',
+      const res = await fetch(existingClip ? `/api/filmroom/clips/${existingClip.id}` : '/api/filmroom/clips', {
+        method: existingClip ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           game_id: gameId,
@@ -1476,7 +1477,7 @@ function SaveClipModal({
       })
       if (!res.ok) throw new Error((await res.json()).error)
       const clip = await res.json()
-      onSave(clip)
+      onSave(existingClip ? {...existingClip,...clip,players:existingClip.players} : clip)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed')
@@ -1496,10 +1497,10 @@ function SaveClipModal({
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Save Clip" onKeyDown={handleDialogKeyDown} className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm max-h-[90dvh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={existingClip ? "Edit Clip" : "Save Clip"} onKeyDown={handleDialogKeyDown} className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm max-h-[90dvh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-sm font-semibold">Save Clip</h2>
+            <h2 className="text-sm font-semibold">{existingClip ? "Edit Clip" : "Save Clip"}</h2>
             <p className="text-xs text-white/40 mt-0.5">{msToTimecode(range.start*1000)} → {msToTimecode(range.end*1000)} ({formatDuration(range.start*1000, range.end*1000)})</p>
           </div>
           <button aria-label="Close Save Clip" onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-white/60 hover:text-white">
@@ -1540,7 +1541,7 @@ function SaveClipModal({
               <label className="block text-xs text-white/50 mb-1">Tag Players</label>
               <div className="flex flex-wrap gap-1.5">
                 {players.map(p => (
-                  <button key={p.id} type="button" onClick={() => togglePlayer(p.id)}
+                  <button key={p.id} type="button" disabled={!!existingClip} onClick={() => togglePlayer(p.id)}
                     className={`px-2.5 py-1 rounded-xl text-xs transition-all border ${form.player_ids.includes(p.id) ? 'bg-[rgba(198,106,62,0.15)] text-[#eee9df] border-[rgba(198,106,62,0.35)]' : 'border-white/8 text-white/50 hover:text-white/80'}`}>
                     #{p.number} {p.name}
                   </button>
@@ -1607,7 +1608,7 @@ function SaveClipModal({
             <button type="submit" disabled={loading}
               className="flex-1 py-2 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50" style={{background:"#c66a3e",color:"#181917"}}>
               {loading && <Loader2 className="w-3 h-3 animate-spin" />}
-              Save Clip
+              {existingClip ? "Save Changes" : "Save Clip"}
             </button>
           </div>
         </form>
@@ -1683,11 +1684,12 @@ function CommentThread({ clipId }: { clipId: string }) {
 // ─── Clip List Item ───────────────────────────────────────────────────────────
 
 function ClipItem({
-  clip, isActive, onSelect, onDelete, onJumpTo, onAddToPlaylist,
+  clip, isActive, onSelect, onDelete, onJumpTo, onAddToPlaylist, onEdit,
 }: {
   clip: Clip
   isActive: boolean
   onSelect: () => void
+  onEdit: (clip: Clip) => void
   onDelete: (id: string) => void
   onJumpTo: (ms: number) => void
   onAddToPlaylist?: (clipId: string) => void
@@ -1731,6 +1733,7 @@ function ClipItem({
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <button onClick={e=>{e.stopPropagation();onEdit(clip)}} aria-label={`Edit clip: ${clip.title}`} className="px-2 py-1 rounded-lg text-xs text-white/60 hover:text-white hover:bg-white/6">Edit</button>
             {onAddToPlaylist && (
               <button onClick={(e) => { e.stopPropagation(); onAddToPlaylist(clip.id) }}
                 aria-label={`Add ${clip.title} to playlist`}
@@ -1977,6 +1980,7 @@ export default function GameFilmRoom() {
   const [markIn, setMarkIn] = useState<number | null>(null)
   const [markOut, setMarkOut] = useState<number | null>(null)
   const [showSaveClip, setShowSaveClip] = useState(false)
+  const [editingClip,setEditingClip]=useState<Clip|null>(null)
   const [showVideoUrl, setShowVideoUrl] = useState(false)
   const [activeClipId, setActiveClipId] = useState<string | null>(null)
   const [panelTab, setPanelTab] = useState<PanelTab>('clips')
@@ -2325,10 +2329,21 @@ export default function GameFilmRoom() {
     if (v) v.playbackRate = playbackSpeed
   }, [playbackSpeed])
 
+  // Hold playback paused for the whole edit session, including a token-refresh resume.
+  useEffect(() => {
+    if (!showSaveClip && !editingClip) return
+    const video=videoRef.current
+    if (!video) return
+    const pause=()=>{video.pause();setIsPlaying(false)}
+    pause()
+    video.addEventListener('play',pause)
+    return ()=>video.removeEventListener('play',pause)
+  },[showSaveClip,editingClip])
+
   // Instant clip: mark last 10s → now, clamped to 0
   const instantClip = useCallback(() => {
-    const inMs = Math.max(0, currentMs - 10_000)
-    const outMs = currentMs
+    const outMs = Math.round((videoRef.current?.currentTime ?? currentMs/1000)*1000)
+    const inMs = Math.max(0, outMs - 10_000)
     if (outMs - inMs < 500) return // too short
     setMarkIn(inMs)
     setMarkOut(outMs)
@@ -2516,7 +2531,7 @@ export default function GameFilmRoom() {
       if (e.target instanceof HTMLSelectElement) return
       if (e.target instanceof HTMLAnchorElement) return
       if ((e.target as HTMLElement)?.closest('summary')) return
-      if (showStatPanel || showSaveClip || showVideoUrl || showAddToPlaylist) return
+      if (showStatPanel || showSaveClip || editingClip || showVideoUrl || showAddToPlaylist) return
       switch (e.key) {
         case ' ': e.preventDefault(); playPause(); break
         case 'ArrowLeft': e.preventDefault(); frameStep(-1); break
@@ -2539,7 +2554,7 @@ export default function GameFilmRoom() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel, showSaveClip, showVideoUrl, showAddToPlaylist, toggleFullscreen, instantClip])
+  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel, showSaveClip, editingClip, showVideoUrl, showAddToPlaylist, toggleFullscreen, instantClip])
 
   if (loading) return (
     <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center">
@@ -2799,6 +2814,7 @@ export default function GameFilmRoom() {
                   className="flex items-center gap-1 px-2 py-2 text-xs text-yellow-400/80 rounded-lg hover:bg-white/6 disabled:opacity-40">
                   <Bookmark className="w-3 h-3" /> Add bookmark
                 </button>
+                {isFullscreen && clips.length>0 && <details><summary className="cursor-pointer py-2">Edit saved clips</summary><div className="max-h-48 overflow-y-auto space-y-1">{clips.map(clip=><button key={clip.id} onClick={()=>setEditingClip(clip)} className="block w-full text-left rounded px-2 py-2 hover:bg-white/10" aria-label={`Edit saved clip: ${clip.title}`}>{clip.title}</button>)}</div></details>}
                 </ToolbarMenu>
                 <ToolbarMenu label="Playback settings" startOnSmall>
                   <PlaybackQualityControl gameId={gameId} sourceKey={game.video_url||''} quality={playbackQuality} onChange={setPlaybackQuality}/>
@@ -2938,6 +2954,7 @@ export default function GameFilmRoom() {
                       clip={clip}
                       isActive={activeClipId === clip.id}
                       onSelect={() => setActiveClipId(id => id === clip.id ? null : clip.id)}
+                      onEdit={clip=>{videoRef.current?.pause();setIsPlaying(false);setEditingClip(clip)}}
                       onDelete={deleteClip}
                       onJumpTo={(ms) => { jumpToClip(ms); setActiveClipId(clip.id) }}
                       onAddToPlaylist={(clipId) => setShowAddToPlaylist(clipId)}
@@ -3064,7 +3081,11 @@ export default function GameFilmRoom() {
             )}
 
 
-      {/* Modals */}
+      {/* Modals stay descendants of the same fullscreen root. */}
+      {editingClip && <SaveClipModal existingClip={editingClip} gameId={gameId} teamId={game.team_id}
+        startMs={editingClip.start_time_ms} endMs={editingClip.end_time_ms} players={players}
+        drawingData={editingClip.drawing_data} videoDurationMs={durationMs}
+        onClose={()=>setEditingClip(null)} onSave={updated=>setClips(cs=>cs.map(c=>c.id===updated.id?updated:c))}/>}
       {showSaveClip && markIn !== null && markOut !== null && (
         <SaveClipModal
           gameId={gameId}
