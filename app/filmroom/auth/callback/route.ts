@@ -4,6 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import {safeFilmroomNext} from '@/lib/filmroom-auth-next'
 import { getFilmRoomConfig } from '@/lib/filmroom-config'
 
 export async function GET(request: NextRequest) {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   const response = NextResponse.redirect(
     new URL(
-      type === 'recovery' ? '/filmroom/reset-password?confirmed=true' : '/filmroom',
+      type === 'recovery' ? '/filmroom/reset-password?confirmed=true' : safeFilmroomNext(searchParams.get('next')),
       request.url
     )
   )
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
     else if (msg.includes('recovery') || msg.includes('reset')) slug = 'recovery_failed'
     const dest = new URL('/filmroom/login', request.url)
     dest.searchParams.set('error', slug)
+    dest.searchParams.set('next', safeFilmroomNext(searchParams.get('next')))
     return NextResponse.redirect(dest)
   }
 

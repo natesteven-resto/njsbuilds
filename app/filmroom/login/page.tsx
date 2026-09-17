@@ -78,13 +78,13 @@ function LoginForm() {
     const { error: err } = await supabase.auth.resend({
       type: 'signup',
       email: emailToSend,
-      options: { emailRedirectTo: `${window.location.origin}/filmroom/auth/callback` },
+      options: { emailRedirectTo: `${window.location.origin}/filmroom/auth/callback?next=${encodeURIComponent(next)}` },
     })
     setResending(false)
     if (err) { setResendError(err.message) }
     else { setResendOk(true); setCooldownSec(RESEND_COOLDOWN_SEC) }
     } catch { setResendError('Unable to send email. Please try again.')} finally {setResending(false)}
-  }, [cooldownSec, resending])
+  }, [cooldownSec, resending, next])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -201,6 +201,7 @@ function LoginForm() {
   // ── Normal sign-in form ──────────────────────────────────────────────────
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {next === '/filmroom/family' && <p className="text-sm text-[#e79568]">Parent access: sign in with the email your coach invited. No subscription is needed to view shared games.</p>}
       <div>
         <label htmlFor="email" className="block text-xs font-medium text-white/60 mb-1.5">Email address</label>
         <input id="email" type="email" autoComplete="email" required value={email}
@@ -235,7 +236,7 @@ function LoginForm() {
       </button>
       <p className="text-center text-xs text-white/60">
         No account?{' '}
-        <Link href="/filmroom/signup" className="text-[#e79568] hover:text-[#f2b18c] transition-colors">Create one</Link>
+        <Link href={'/filmroom/signup?next='+encodeURIComponent(next)} className="text-[#e79568] hover:text-[#f2b18c] transition-colors">Create one</Link>
       </p>
     </form>
   )

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import {safeFilmroomNext} from '@/lib/filmroom-auth-next'
 import { AuthShell } from '../components/AuthShell'
 import { getSupabaseBrowser } from '@/lib/filmroom-supabase-browser'
 import { Loader2, CheckCircle2, Mail, RefreshCw, AlertCircle } from 'lucide-react'
@@ -9,6 +10,8 @@ import { Loader2, CheckCircle2, Mail, RefreshCw, AlertCircle } from 'lucide-reac
 const RESEND_COOLDOWN_SEC = 60
 
 export default function SignupPage() {
+  const [next,setNext]=useState('/filmroom')
+  useEffect(()=>{setNext(safeFilmroomNext(new URLSearchParams(window.location.search).get('next')))},[])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -40,7 +43,7 @@ export default function SignupPage() {
     const { error: authErr } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/filmroom/auth/callback` },
+      options: { emailRedirectTo: `${window.location.origin}/filmroom/auth/callback?next=${encodeURIComponent(next)}` },
     })
     setLoading(false)
     if (authErr) { setError(authErr.message); return }
@@ -59,7 +62,7 @@ export default function SignupPage() {
     const { error: err } = await supabase.auth.resend({
       type: 'signup',
       email,
-      options: { emailRedirectTo: `${window.location.origin}/filmroom/auth/callback` },
+      options: { emailRedirectTo: `${window.location.origin}/filmroom/auth/callback?next=${encodeURIComponent(next)}` },
     })
     setResending(false)
     if (err) {
@@ -69,7 +72,7 @@ export default function SignupPage() {
       setCooldownSec(RESEND_COOLDOWN_SEC)
     }
     } catch {setResendError('Unable to send email. Please try again.')} finally {setResending(false)}
-  }, [email, cooldownSec, resending])
+  }, [email, cooldownSec, resending, next])
 
   if (done) {
     return (
@@ -137,7 +140,7 @@ export default function SignupPage() {
 
               <p className="text-xs text-white/60">
                 Already confirmed?{' '}
-                <Link href="/filmroom/login" className="text-[#e79568] hover:text-[#f2b18c] transition-colors">
+                <Link href={'/filmroom/login?next='+encodeURIComponent(next)} className="text-[#e79568] hover:text-[#f2b18c] transition-colors">
                   Sign in
                 </Link>
               </p>
@@ -151,7 +154,8 @@ export default function SignupPage() {
     <AuthShell>
 
         <div className="w-full">
-          <h2 className="text-3xl font-semibold text-[#eee9df] mb-7">Create your account</h2>
+          <h2 className="text-3xl font-semibold text-[#eee9df] mb-7">{next === '/filmroom/family' ? 'Create your parent account' : 'Create your account'}</h2>
+          {next === '/filmroom/family' && <p className="mb-5 text-sm text-[#e79568]">Use the email your coach invited. Parent viewing is free.</p>}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -199,7 +203,7 @@ export default function SignupPage() {
 
             <p className="text-center text-xs text-white/60">
               Already have an account?{' '}
-              <Link href="/filmroom/login" className="text-[#e79568] hover:text-[#f2b18c] transition-colors">
+              <Link href={'/filmroom/login?next='+encodeURIComponent(next)} className="text-[#e79568] hover:text-[#f2b18c] transition-colors">
                 Sign in
               </Link>
             </p>
