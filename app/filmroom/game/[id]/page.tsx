@@ -1427,8 +1427,14 @@ function SaveClipModal({
   const dialogRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
-    dialogRef.current?.querySelector<HTMLInputElement>('[name="clip-title"]')?.focus()
-    return () => { if (previous?.isConnected) previous.focus() }
+    const surfaces = [...new Set([document.documentElement, document.body, document.fullscreenElement].filter(Boolean))] as HTMLElement[]
+    const styles = surfaces.map(el => ({el, overflow:el.style.overflow, overscroll:el.style.overscrollBehavior}))
+    surfaces.forEach(el => {el.style.overflow='hidden';el.style.overscrollBehavior='none'})
+    dialogRef.current?.querySelector<HTMLInputElement>('[name="clip-title"]')?.focus({preventScroll:true})
+    return () => {
+      styles.forEach(({el,overflow,overscroll})=>{el.style.overflow=overflow;el.style.overscrollBehavior=overscroll})
+      if (previous?.isConnected) previous.focus({preventScroll:true})
+    }
   }, [])
   const handleDialogKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     // Editing a clip must never reach the film's fullscreen/playback shortcuts.
@@ -1496,9 +1502,9 @@ function SaveClipModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={existingClip ? "Edit Clip" : "Save Clip"} onKeyDown={handleDialogKeyDown} className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm max-h-[90dvh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-3 sm:p-4 overflow-hidden overscroll-none" onClick={onClose}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={existingClip ? "Edit Clip" : "Save Clip"} onKeyDown={handleDialogKeyDown} className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex shrink-0 items-center justify-between p-4 border-b border-white/10">
           <div>
             <h2 className="text-sm font-semibold">{existingClip ? "Edit Clip" : "Save Clip"}</h2>
             <p className="text-xs text-white/40 mt-0.5">{msToTimecode(range.start*1000)} → {msToTimecode(range.end*1000)} ({formatDuration(range.start*1000, range.end*1000)})</p>
@@ -1508,7 +1514,8 @@ function SaveClipModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-col overflow-hidden">
+          <div aria-label="Clip details" className="min-h-0 overflow-y-auto overscroll-contain p-4 space-y-3" style={{touchAction:"pan-y"}}>
           <div className="grid grid-cols-2 gap-3">{(['start','end'] as const).map(k=><label key={k} className="text-xs text-white/65">{k==='start'?'Clip start (seconds)':'Clip end (seconds)'}<input type="number" min={0} step="any" required value={range[k]} onChange={e=>setRange(r=>({...r,[k]:Number(e.target.value)}))} className="block w-full bg-black/30 border border-white/15 rounded-md p-2 mt-1 text-[#eee9df]"/></label>)}</div>
           <div>
             <label className="block text-xs text-white/50 mb-1">Clip Title</label>
@@ -1598,18 +1605,20 @@ function SaveClipModal({
             <span className="text-xs text-white/60">Mark as highlight</span>
           </label>
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
-
-          <div className="flex gap-2 pt-1">
+          </div>
+          <div className="shrink-0 border-t border-white/10 bg-[#1a1d23] p-4">
+          {error && <p role="alert" className="text-xs text-red-400 mb-3">{error}</p>}
+          <div className="flex gap-2">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2 rounded-xl border border-white/10 text-xs text-white/60 hover:bg-white/5 transition-colors">
+              className="flex-1 min-h-11 py-2 rounded-xl border border-white/10 text-xs text-white/60 hover:bg-white/5 transition-colors">
               Cancel
             </button>
             <button type="submit" disabled={loading}
-              className="flex-1 py-2 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50" style={{background:"#c66a3e",color:"#181917"}}>
+              className="flex-1 min-h-11 py-2 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50" style={{background:"#c66a3e",color:"#181917"}}>
               {loading && <Loader2 className="w-3 h-3 animate-spin" />}
               {existingClip ? "Save Changes" : "Save Clip"}
             </button>
+          </div>
           </div>
         </form>
       </div>
