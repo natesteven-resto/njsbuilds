@@ -1,0 +1,11 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),ts=require('typescript');
+let refs=[],states=[],ri=0,si=0,scrubs=[],taps=0;
+const react={useRef:v=>refs[ri++]||(refs[ri-1]={current:v}),useState:v=>{const i=si++;if(states[i]===undefined)states[i]=v;return [states[i],v=>states[i]=typeof v==='function'?v(states[i]):v]},useCallback:f=>f};
+const exports1={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('app/filmroom/components/JogWheel.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports:exports1,require:n=>n==='react'?react:n==='react/jsx-runtime'?{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})}:require(n),Math});
+const find=(n,fn)=>{if(!n||typeof n!=='object')return null;if(fn(n))return n;for(const c of [n.props?.children].flat(Infinity)){const r=find(c,fn);if(r)return r}return null};
+let tree,wheel;function render(){ri=si=0;tree=exports1.JogWheel({visible:true,currentMs:0,onScrub:x=>scrubs.push(x),onTap:()=>taps++});wheel=find(tree,n=>n.props?.['aria-label']==='Video jog wheel');wheel.props.ref.current={getBoundingClientRect:()=>({left:0,top:0,width:120,height:120}),setPointerCapture:()=>{},hasPointerCapture:()=>false}}
+const e=(x,y)=>({clientX:x,clientY:y,pointerId:1,button:0,preventDefault(){},stopPropagation(){}});
+render();wheel.props.onPointerDown(e(60,5));render();assert.equal(find(tree,n=>n.props?.children==='spin to scrub').props.style.visibility,'hidden');wheel.props.onPointerMove(e(62,5));wheel.props.onPointerUp(e(62,5));assert.equal(scrubs.length,0);assert.equal(taps,1);
+render();wheel.props.onPointerDown(e(60,5));wheel.props.onPointerMove(e(90,15));assert.ok(scrubs[0]>0);wheel.props.onPointerUp(e(90,15));assert.equal(taps,1);
+render();wheel.props.onPointerDown(e(60,60));wheel.props.onPointerMove(e(62,59));wheel.props.onPointerMove(e(100,60));assert.equal(scrubs.length,1);wheel.props.onPointerCancel(e(100,60));assert.equal(taps,1);render();assert.equal(find(tree,n=>n.props?.children==='spin to scrub').props.style.visibility,'visible');
+console.log('PASS fixed hint layout, click jitter, deliberate rotation, center dead zone, cancellation stays paused');

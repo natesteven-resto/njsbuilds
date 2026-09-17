@@ -11,7 +11,7 @@ interface JogWheelProps {
 
 const SIZE = 120
 const TICK_COUNT = 36
-const MS_PER_DEG = 50  // ms per degree of rotation (~30 frames per full rotation)
+const MS_PER_DEG = 50  // ms per degree of rotation (18 seconds per full rotation)
 
 function msToTimecode(ms: number) {
   const totalSec = Math.floor(ms / 1000)
@@ -26,35 +26,46 @@ export function JogWheel({ visible, currentMs, onScrub, onTap }: JogWheelProps) 
   const [isDragging, setIsDragging] = useState(false)
   const wheelRef = useRef<HTMLDivElement>(null)
   const lastAngle = useRef<number | null>(null)
-  const totalMovement = useRef(0)
+  const startPoint = useRef<{x:number;y:number}|null>(null)
+  const dragged = useRef(false)
+  const pointer = useRef<number|null>(null)
 
   // Get angle in degrees of pointer relative to wheel center
-  const getAngle = useCallback((clientX: number, clientY: number): number => {
+  const getAngle = useCallback((clientX: number, clientY: number): number | null => {
     const el = wheelRef.current
-    if (!el) return 0
+    if (!el) return null
     const rect = el.getBoundingClientRect()
     const cx = rect.left + rect.width / 2
     const cy = rect.top + rect.height / 2
     const dx = clientX - cx
     const dy = clientY - cy
+    if (Math.hypot(dx, dy) < 18) return null
     return Math.atan2(dy, dx) * (180 / Math.PI)
   }, [])
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.button !== 0 || pointer.current !== null) return
     e.preventDefault()
     e.stopPropagation()
     // Capture on the wheel div itself, not target, to avoid position jump
     wheelRef.current?.setPointerCapture(e.pointerId)
     lastAngle.current = getAngle(e.clientX, e.clientY)
-    totalMovement.current = 0
+    pointer.current = e.pointerId
+    startPoint.current = {x:e.clientX,y:e.clientY}
+    dragged.current = false
     setIsDragging(true)
   }, [getAngle])
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDragging || lastAngle.current === null) return
+    if (pointer.current !== e.pointerId || !startPoint.current) return
     e.preventDefault()
 
+    if (!dragged.current) {
+      if (Math.hypot(e.clientX-startPoint.current.x,e.clientY-startPoint.current.y) < 4) return
+      dragged.current = true
+    }
     const angle = getAngle(e.clientX, e.clientY)
+    if (angle === null || lastAngle.current === null) {lastAngle.current=angle;return}
     let delta = angle - lastAngle.current
 
     // Normalize delta to [-180, 180] to handle the 180/-180 crossing
@@ -62,21 +73,22 @@ export function JogWheel({ visible, currentMs, onScrub, onTap }: JogWheelProps) 
     if (delta < -180) delta += 360
 
     lastAngle.current = angle
-    totalMovement.current += Math.abs(delta)
 
     setRotation(r => r + delta)
     onScrub(delta * MS_PER_DEG)
   }, [isDragging, getAngle, onScrub])
 
-  const onPointerUp = useCallback(() => {
-    if (!isDragging) return
-    const wasTap = totalMovement.current < 8
-    setIsDragging(false)
+  const finishPointer = useCallback((e: React.PointerEvent, cancelled = false) => {
+    if (pointer.current !== e.pointerId) return
+    e.stopPropagation()
+    const wasTap = !cancelled && !dragged.current
+    pointer.current = null
+    startPoint.current = null
     lastAngle.current = null
-    totalMovement.current = 0
+    setIsDragging(false)
+    if (wheelRef.current?.hasPointerCapture(e.pointerId)) wheelRef.current.releasePointerCapture(e.pointerId)
     if (wasTap) onTap()
-    // else: stay paused at current frame
-  }, [isDragging, onTap])
+  }, [onTap])
 
   const R = SIZE / 2
   const ticks = Array.from({ length: TICK_COUNT }, (_, i) => ({
@@ -110,10 +122,12 @@ export function JogWheel({ visible, currentMs, onScrub, onTap }: JogWheelProps) 
       {/* Wheel */}
       <div
         ref={wheelRef}
+        aria-label="Video jog wheel"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        onPointerUp={e=>finishPointer(e)}
+        onPointerCancel={e=>finishPointer(e,true)}
+        onLostPointerCapture={e=>finishPointer(e,true)}
         style={{
           width: SIZE,
           height: SIZE,
@@ -194,11 +208,9 @@ export function JogWheel({ visible, currentMs, onScrub, onTap }: JogWheelProps) 
       </div>
 
       {/* Hint */}
-      {!isDragging && (
-        <div className="text-[10px] text-white/25 font-medium tracking-wide">
+      <div className="text-[10px] text-white/25 font-medium tracking-wide" style={{visibility:isDragging?'hidden':'visible'}}>
           spin to scrub
         </div>
-      )}
     </div>
   )
 }
