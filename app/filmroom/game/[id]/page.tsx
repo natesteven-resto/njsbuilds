@@ -1515,7 +1515,7 @@ function SaveClipModal({
         </div>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-col overflow-hidden">
-          <div aria-label="Clip details" className="min-h-0 overflow-y-auto overscroll-contain p-4 space-y-3" style={{touchAction:"pan-y"}}>
+          <div aria-label="Clip details" className="filmroom-scroll-area min-h-0 overflow-y-auto overscroll-contain p-4 space-y-3" style={{touchAction:"pan-y"}}>
           <div className="grid grid-cols-2 gap-3">{(['start','end'] as const).map(k=><label key={k} className="text-xs text-white/65">{k==='start'?'Clip start (seconds)':'Clip end (seconds)'}<input type="number" min={0} step="any" required value={range[k]} onChange={e=>setRange(r=>({...r,[k]:Number(e.target.value)}))} className="block w-full bg-black/30 border border-white/15 rounded-md p-2 mt-1 text-[#eee9df]"/></label>)}</div>
           <div>
             <label className="block text-xs text-white/50 mb-1">Clip Title</label>

@@ -76,3 +76,18 @@ body {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Film Room dialog scrollbar; keep the rest of the site's pages unchanged. */
+.cs .filmroom-scroll-area {
+  color-scheme: dark;
+  scrollbar-width: thin;
+  scrollbar-color: #686860 #1a1d23;
+}
+.cs .filmroom-scroll-area::-webkit-scrollbar { width: 8px; height: 8px; }
+.cs .filmroom-scroll-area::-webkit-scrollbar-track { background: #1a1d23; }
+.cs .filmroom-scroll-area::-webkit-scrollbar-thumb {
+  background: #686860;
+  border: 2px solid #1a1d23;
+  border-radius: 999px;
+}
+.cs .filmroom-scroll-area::-webkit-scrollbar-thumb:hover { background: #a39a8a; }
