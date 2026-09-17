@@ -12,7 +12,7 @@ export async function streamRequest<T>(path:string,method='GET',body?:unknown):P
  const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account()}/stream${path}`,{method,headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_STREAM_TOKEN}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',signal:AbortSignal.timeout(15000)})
  const data=await r.json().catch(()=>null)
  // Never expose provider errors: they can contain the signed source URL.
- if(!r.ok||!data?.success)throw new StreamError(r.status||502)
+ if(!r.ok||!data?.success){console.warn('[filmroom-stream]',{status:r.status,codes:(data?.errors||[]).map((e:{code?:number})=>e.code).filter((n:unknown)=>typeof n==='number')});throw new StreamError(r.ok?502:r.status)}
  return data.result as T
 }
 function ownedVideo(v:StreamVideo,a:PlaybackAsset){return /^[a-f0-9]{32}$/.test(v.uid)&&v.creator===a.id&&v.meta?.app==='filmroom'&&v.meta?.job===a.id}
