@@ -1,6 +1,7 @@
 'use client'
 import {usePrivatePlayback,type PlaybackQuality} from '@/app/filmroom/components/usePrivatePlayback'
 import {PlaybackQualityControl} from '@/app/filmroom/components/PlaybackQualityControl'
+import {ToolbarMenu} from '@/app/filmroom/components/ToolbarMenu'
 import { CustomClipTags } from '@/app/filmroom/components/CustomClipTags'
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
@@ -1284,7 +1285,7 @@ function VideoPlayer({gameId,sourceKey,quality,onFallback,onTimeUpdate,onDuratio
 function TransportBar({
   isPlaying, currentMs, durationMs,
   onPlayPause, onSeek, onSkip, onFrameStep,
-  markIn, markOut, onMarkIn, onMarkOut,
+  markIn, markOut,
   isFullscreen, onStatTap, coachingTools,
 }: {
   isPlaying: boolean
@@ -1296,8 +1297,6 @@ function TransportBar({
   onFrameStep: (dir: 1 | -1) => void
   markIn: number | null
   markOut: number | null
-  onMarkIn: () => void
-  onMarkOut: () => void
   isFullscreen?: boolean
   onStatTap?: () => void
   coachingTools?: React.ReactNode
@@ -1381,18 +1380,7 @@ function TransportBar({
           {msToTimecode(currentMs)} / {msToTimecode(durationMs)}
         </span>
 
-        {/* Mark In / Out */}
-        <div className="flex w-full sm:w-auto items-center justify-between sm:justify-start gap-1 sm:ml-2">
-          <button onClick={onMarkIn}
-            className={`flex items-center gap-1 px-2 py-3 rounded-lg text-xs font-medium transition-all ${markIn != null ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-white/40 hover:text-white hover:bg-white/6'}`}
-            title="Mark In point (I)">
-            <Scissors className="w-3 h-3" /> IN
-          </button>
-          <button onClick={onMarkOut}
-            className={`flex items-center gap-1 px-2 py-3 rounded-lg text-xs font-medium transition-all ${markOut != null ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'text-white/40 hover:text-white hover:bg-white/6'}`}
-            title="Mark Out point (O)">
-            OUT <Scissors className="w-3 h-3" />
-          </button>
+        <div className="flex items-center gap-1">
           {onStatTap && (
             <button
               onClick={onStatTap}
@@ -2019,7 +2007,6 @@ export default function GameFilmRoom() {
   const [presentationClips, setPresentationClips] = useState<PresentationClip[]>([])
   const [playlists, setPlaylists] = useState<Playlist[]>([])
   const [showAddToPlaylist, setShowAddToPlaylist] = useState<string | null>(null) // clipId
-  const [instantClipPulse, setInstantClipPulse] = useState(false)
 
   // Section-level error states for retry without full page reload
   const [clipsError, setClipsError] = useState(false)
@@ -2300,8 +2287,6 @@ export default function GameFilmRoom() {
     setMarkIn(inMs)
     setMarkOut(outMs)
     videoRef.current?.pause();setIsPlaying(false);setShowSaveClip(true)
-    setInstantClipPulse(true)
-    setTimeout(() => setInstantClipPulse(false), 400)
   }, [currentMs])
 
   // Helper: persist current video position via PATCH keepalive.
@@ -2484,6 +2469,7 @@ export default function GameFilmRoom() {
       if (e.target instanceof HTMLButtonElement) return
       if (e.target instanceof HTMLSelectElement) return
       if (e.target instanceof HTMLAnchorElement) return
+      if ((e.target as HTMLElement)?.closest('summary')) return
       if (showStatPanel || showSaveClip || showVideoUrl || showAddToPlaylist) return
       switch (e.key) {
         case ' ': e.preventDefault(); playPause(); break
@@ -2676,7 +2662,7 @@ export default function GameFilmRoom() {
                 {eventLabels && !drawingActive && visibleEvents.length>0 && <div className="absolute top-3 left-3 z-30 max-w-[75%] pointer-events-none space-y-1" aria-label="Current film events">
                   {visibleEvents.slice(0,3).map(e=><div key={e.id} className="rounded-md border border-white/15 bg-black/80 px-3 py-2 text-sm text-white shadow">{statDescription(e)}</div>)}
                   {visibleEvents.length>3&&<div className="text-xs text-white bg-black/80 px-3 py-1">+{visibleEvents.length-3} more events</div>}
-                </div>}
+              </div>}
                 <DrawingOverlay
                   active={drawingActive}
                   onDataChange={onDrawingChange}
@@ -2729,18 +2715,9 @@ export default function GameFilmRoom() {
               onFrameStep={frameStep}
               markIn={markIn}
               markOut={markOut}
-              onMarkIn={() => setMarkIn(currentMs)}
-              onMarkOut={() => setMarkOut(currentMs)}
               isFullscreen={isFullscreen}
               onStatTap={videoLoaded ? openStatPanel : undefined}
               coachingTools={<div className="flex flex-wrap items-center gap-1">
-                <PlaybackQualityControl gameId={gameId} sourceKey={game.video_url||''} quality={playbackQuality} onChange={setPlaybackQuality}/>
-                <button aria-expanded={showEventSettings} onClick={()=>setShowEventSettings(v=>!v)} className="px-2 py-2 rounded-lg text-xs border border-white/15 text-white/80">Events</button>
-                <button onClick={() => setAddingBookmark(a => !a)} disabled={bookmarkPending}
-                  aria-label="Add bookmark at current position" title="Add bookmark at current position"
-                  className="flex items-center gap-1 px-2 py-2 text-xs text-yellow-400/80 rounded-lg hover:bg-white/6 disabled:opacity-40">
-                  <Bookmark className="w-3 h-3" /> Add
-                </button>
                 {/* Draw */}
                 <button
                   onClick={() => setDrawingActive(a => !a)}
@@ -2754,18 +2731,6 @@ export default function GameFilmRoom() {
                   {drawingActive ? 'Drawing On' : 'Draw'}
                 </button>
 
-                {/* Instant clip: last 10s (Q) */}
-                <button
-                  onClick={instantClip}
-                  className={`flex items-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium transition-all border border-white/8 bg-white/3 text-white/40 hover:text-white hover:bg-white/6 ${
-                    instantClipPulse ? 'cs-pulse' : ''
-                  }`}
-                  title="Mark last 10s as clip (Q)"
-                >
-                  <Scissors className="w-3.5 h-3.5" />
-                  Last 10s
-                </button>
-
                 {/* Speed control */}
                 <div className="flex items-center gap-1 px-2 py-1.5 rounded-xl border border-white/8 bg-white/3">
                   <button onClick={() => setPlaybackSpeed(s => Math.max(0.25, parseFloat((s - 0.25).toFixed(2))))}
@@ -2775,18 +2740,26 @@ export default function GameFilmRoom() {
                     className="text-white/40 hover:text-white text-xs px-1" aria-label="Increase speed">+</button>
                 </div>
 
+                  <ToolbarMenu label="Create clip">
+                  <p className="text-white/55">Mark the start and end, or grab the last 10 seconds.</p>
+                  <div className="flex gap-2">
+                    <button onClick={()=>setMarkIn(currentMs)} className="min-h-10 border border-white/20 rounded px-3">Mark in{markIn!==null?' · '+msToTimecode(markIn):''}</button>
+                    <button onClick={()=>setMarkOut(currentMs)} className="min-h-10 border border-white/20 rounded px-3">Mark out{markOut!==null?' · '+msToTimecode(markOut):''}</button>
+                  </div>
+                  <button onClick={instantClip} disabled={currentMs<500} className="min-h-10 w-full border border-white/20 rounded px-3 disabled:opacity-40">Last 10 seconds</button>
+                  <button disabled={!canSave} onClick={()=>setShowSaveClip(true)} className="min-h-10 w-full bg-[#c66a3e] text-[#181917] rounded px-3 disabled:opacity-40">Save clip</button>
+                <button onClick={() => setAddingBookmark(a => !a)} disabled={bookmarkPending}
+                  aria-label="Add bookmark at current position" title="Add bookmark at current position"
+                  className="flex items-center gap-1 px-2 py-2 text-xs text-yellow-400/80 rounded-lg hover:bg-white/6 disabled:opacity-40">
+                  <Bookmark className="w-3 h-3" /> Add bookmark
+                </button>
+                </ToolbarMenu>
+                <ToolbarMenu label="Playback settings">
+                  <PlaybackQualityControl gameId={gameId} sourceKey={game.video_url||''} quality={playbackQuality} onChange={setPlaybackQuality}/>
+                  <p className="text-white/55">Original keeps your full upload quality. Auto adapts to your connection, up to 1080p.</p>
+                </ToolbarMenu>
               </div>}
             />}
-            {showEventSettings && <section aria-label="Event display settings" className="shrink-0 max-h-48 overflow-y-auto bg-[#20211e] border-t border-white/10 p-3 flex flex-wrap items-center gap-3 text-xs">
-                <button aria-label="Previous event" title="Previous matching event" disabled={!previousEvent} onClick={()=>previousEvent&&reviewAt(previousEvent.at,previousEvent.id)} className="px-2 py-2 text-xs disabled:opacity-30">‹ Event</button>
-                <button aria-label="Next event" title="Next matching event" disabled={!nextEvent} onClick={()=>nextEvent&&reviewAt(nextEvent.at,nextEvent.id)} className="px-2 py-2 text-xs disabled:opacity-30">Event ›</button>
-
-              <label className="flex items-center gap-2 min-h-9"><input type="checkbox" checked={eventLabels} onChange={e=>setEventLabels(e.target.checked)}/>Show event labels on video</label>
-              <select aria-label="Filter events by player" value={eventPlayer} onChange={e=>{setEventPlayer(e.target.value);setReviewEventId(null)}} className="bg-[#181917] border border-white/20 rounded p-2"><option value="">All players</option><option value="opponent">Opponent</option>{players.map(p=><option key={p.id} value={p.id}>#{p.number} {p.name}</option>)}</select>
-              <select aria-label="Filter events by stat" value={eventType} onChange={e=>{setEventType(e.target.value);setReviewEventId(null)}} className="bg-[#181917] border border-white/20 rounded p-2"><option value="">All stats and clips</option>{Object.entries(STAT_NAMES).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
-              <label>Review lead-in <select aria-label="Review lead-in" value={eventLead} onChange={e=>setEventLead(Number(e.target.value))} className="ml-2 bg-[#181917] border border-white/20 rounded p-2">{[3,5,10].map(n=><option key={n} value={n}>{n} seconds</option>)}</select></label>
-              <span className="text-white/60">New stats save 2 seconds before the tagging position.</span>
-            </section>}
             {game.video_url && (
               <div className="shrink-0 max-h-32 overflow-y-auto">
               <BookmarkBar
@@ -2803,7 +2776,16 @@ export default function GameFilmRoom() {
               />
               </div>
             )}
-            {!isFullscreen&&<EventTimeline clips={matchingClips} stats={matchingStats} durationMs={durationMs} currentMs={currentMs} selectedId={activeClipId} leadIn={eventLead} onSeek={at=>reviewAt(at)} onClip={c=>{setActiveClipId(c.id);reviewAt(c.start_time_ms,c.id)}}/>}
+            {!isFullscreen&&<EventTimeline actions={<button aria-expanded={showEventSettings} onClick={()=>setShowEventSettings(v=>!v)} className="px-3 py-2 rounded-lg border border-white/15 text-white/80">Events</button>} settings={showEventSettings && <section aria-label="Event display settings" className="shrink-0 max-h-48 overflow-y-auto bg-[#20211e] border-t border-white/10 p-3 flex flex-wrap items-center gap-3 text-xs">
+                <button aria-label="Previous event" title="Previous matching event" disabled={!previousEvent} onClick={()=>previousEvent&&reviewAt(previousEvent.at,previousEvent.id)} className="px-2 py-2 text-xs disabled:opacity-30">‹ Event</button>
+                <button aria-label="Next event" title="Next matching event" disabled={!nextEvent} onClick={()=>nextEvent&&reviewAt(nextEvent.at,nextEvent.id)} className="px-2 py-2 text-xs disabled:opacity-30">Event ›</button>
+
+              <label className="flex items-center gap-2 min-h-9"><input type="checkbox" checked={eventLabels} onChange={e=>setEventLabels(e.target.checked)}/>Show event labels on video</label>
+              <select aria-label="Filter events by player" value={eventPlayer} onChange={e=>{setEventPlayer(e.target.value);setReviewEventId(null)}} className="bg-[#181917] border border-white/20 rounded p-2"><option value="">All players</option><option value="opponent">Opponent</option>{players.map(p=><option key={p.id} value={p.id}>#{p.number} {p.name}</option>)}</select>
+              <select aria-label="Filter events by stat" value={eventType} onChange={e=>{setEventType(e.target.value);setReviewEventId(null)}} className="bg-[#181917] border border-white/20 rounded p-2"><option value="">All stats and clips</option>{Object.entries(STAT_NAMES).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
+              <label>Review lead-in <select aria-label="Review lead-in" value={eventLead} onChange={e=>setEventLead(Number(e.target.value))} className="ml-2 bg-[#181917] border border-white/20 rounded p-2">{[3,5,10].map(n=><option key={n} value={n}>{n} seconds</option>)}</select></label>
+              <span className="text-white/60">New stats save 2 seconds before the tagging position.</span>
+            </section>} clips={matchingClips} stats={matchingStats} durationMs={durationMs} currentMs={currentMs} selectedId={activeClipId} leadIn={eventLead} onSeek={at=>reviewAt(at)} onClip={c=>{setActiveClipId(c.id);reviewAt(c.start_time_ms,c.id)}}/>}
             {/* Upload success banner — hidden in fullscreen */}
             {!isFullscreen && uploadDone && (
               <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
@@ -2898,7 +2880,7 @@ export default function GameFilmRoom() {
                     <Scissors className="w-8 h-8 mx-auto text-white/15 mb-2" />
                     <p className="text-xs text-white/30">No clips yet.</p>
                     <p className="text-xs text-white/50 mt-1">
-                      Tap <strong className="text-white/35">IN</strong> on the timeline, then <strong className="text-white/35">OUT</strong>, then <strong className="text-white/35">Save Clip</strong>.
+                      Open <strong className="text-white/35">Create clip</strong>, mark in and out, then save.
                       On desktop use <kbd className="font-mono bg-white/8 px-1 rounded text-[10px]">I</kbd> and <kbd className="font-mono bg-white/8 px-1 rounded text-[10px]">O</kbd> keys.
                     </p>
                   </div>
