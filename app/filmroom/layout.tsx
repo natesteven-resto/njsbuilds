@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { FilmRoomPageBoundary } from './components/FilmRoomPageBoundary'
 import { Barlow_Condensed } from 'next/font/google'
 
 export const metadata: Metadata = {
@@ -17,7 +18,8 @@ const barlowCondensed = Barlow_Condensed({
 
 export default function FilmRoomLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`min-h-screen bg-[#181917] text-[#eee9df] font-sans ${barlowCondensed.variable}`}>
+    <div className={`filmroom-shell min-h-screen bg-[#181917] text-[#eee9df] font-sans ${barlowCondensed.variable}`}>
+      <FilmRoomPageBoundary />
       {children}
     </div>
   )

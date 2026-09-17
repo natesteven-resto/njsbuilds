@@ -91,3 +91,12 @@ body {
   border-radius: 999px;
 }
 .cs .filmroom-scroll-area::-webkit-scrollbar-thumb:hover { background: #a39a8a; }
+
+/* Paint the browser canvas too, not only Film Room's content wrapper. */
+html:has(.filmroom-shell),
+html:has(.filmroom-shell) body {
+  background: #181917;
+  color-scheme: dark;
+  overscroll-behavior-y: none;
+}
+.filmroom-shell { min-height: 100dvh; }
