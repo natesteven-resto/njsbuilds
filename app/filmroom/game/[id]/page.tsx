@@ -1,6 +1,7 @@
 'use client'
 import {usePrivatePlayback,type PlaybackQuality} from '@/app/filmroom/components/usePrivatePlayback'
 import {PlaybackQualityControl} from '@/app/filmroom/components/PlaybackQualityControl'
+import {QuickTagDock} from '@/app/filmroom/components/QuickTagDock'
 import {ToolbarMenu} from '@/app/filmroom/components/ToolbarMenu'
 import { CustomClipTags } from '@/app/filmroom/components/CustomClipTags'
 
@@ -332,7 +333,7 @@ function StatEntryPanel({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-[60] flex items-end justify-center"
       style={{ backgroundColor: 'rgba(0,0,0,0.76)' }}
     >
       {/* Backdrop tap closes */}
@@ -1989,6 +1990,13 @@ export default function GameFilmRoom() {
 
   // Stat entry state
   const [showStatPanel, setShowStatPanel] = useState(false)
+  const [quickTagOpen,setQuickTagOpen]=useState(false)
+  const [quickPlayer,setQuickPlayer]=useState('')
+  const [quickPending,setQuickPending]=useState(false)
+  const [quickMessage,setQuickMessage]=useState('')
+  const [quickError,setQuickError]=useState<string|null>(null)
+  const resumeAfterDetails=useRef(false)
+  useEffect(()=>{setQuickPlayer('');setQuickMessage('');setQuickError(null);setQuickTagOpen(false)},[gameId])
   const [statsFullscreen, setStatsFullscreen] = useState(false)
   const [statEntries, setStatEntries] = useState<StatEntry[]>([])
   const [sessionStatEntries, setSessionStatEntries] = useState<StatEntry[]>([])
@@ -2164,6 +2172,7 @@ export default function GameFilmRoom() {
   // Stat panel: pause video when opening
   const openStatPanel = useCallback(() => {
     const v = videoRef.current
+    resumeAfterDetails.current=!!v&&!v.paused
     if (v && !v.paused) { v.pause(); setIsPlaying(false) }
     setShowStatPanel(true)
   }, [])
@@ -2171,13 +2180,9 @@ export default function GameFilmRoom() {
   // Close stat panel: only resume if video was playing before panel opened
   const closeStatPanel = useCallback(() => {
     setShowStatPanel(false)
-    // isPlaying tracks state before panel opened (openStatPanel paused if playing)
-    // Re-check: only resume if we were actually playing before
-    if (isPlaying) {
-      const video = videoRef.current
-      if (video && video.src) video.play().catch(() => {})
-    }
-  }, [isPlaying])
+    if (resumeAfterDetails.current) void videoRef.current?.play().catch(()=>{})
+    resumeAfterDetails.current=false
+  }, [])
 
   // Log a stat entry — push to undo stack, clear redo stack
   const handleLogEntry = useCallback((entry: StatEntry) => {
@@ -2186,6 +2191,25 @@ export default function GameFilmRoom() {
     undoStack.current.push(entry)
     redoStack.current = []
   }, [])
+
+  const quickTag = useCallback(async (stat: StatType) => {
+    if (undoRedoInFlight.current || !quickPlayer || !videoRef.current || videoRef.current.readyState<1) return
+    const player=quickPlayer===OPP_ID?OPP_PLAYER:players.find(p=>p.id===quickPlayer)
+    if(!player)return
+    // Snapshot the player and the actual video moment before any network work.
+    const at=statMoment(videoRef.current.currentTime*1000)
+    undoRedoInFlight.current=true
+    setQuickPending(true);setQuickError(null);setUndoError(null);setRedoError(null)
+    try {
+      const res=await fetch('/api/filmroom/stat-entries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({game_id:gameId,player_id:player.id===OPP_ID?null:player.id,stat_type:stat,video_time_ms:at})})
+      if(!res.ok)throw Error('Could not save this stat. Please try again.')
+      const raw:RawStatEntry=await res.json()
+      const entry=player.id===OPP_ID?{...rawToEntry(raw),player_id:OPP_ID,player_name:'Opponent',player_number:'OPP'}:rawToEntry(raw)
+      handleLogEntry(entry)
+      setQuickMessage(`Saved ${player.id===OPP_ID?'Opponent':player.name} · ${STAT_NAMES[stat]} at ${msToDisplay(at)}`)
+    } catch {setQuickError('Could not confirm this stat was saved. Check the stats before trying again.')}
+    finally {undoRedoInFlight.current=false;setQuickPending(false)}
+  },[gameId,quickPlayer,players,handleLogEntry])
 
   // Undo last session entry — delete from DB, push to redo stack.
   // In-flight ref prevents double-click races.
@@ -2203,6 +2227,8 @@ export default function GameFilmRoom() {
       setSessionStatEntries(prev => prev.filter(e => e.id !== last.id))
       undoStack.current.pop()
       redoStack.current.push(last)
+      setQuickMessage(`Undid ${last.player_name} · ${STAT_NAMES[last.stat_type]}`)
+      setQuickError(null)
     } catch (e) {
       setUndoError(e instanceof Error ? e.message : 'Undo failed — try again')
     } finally {
@@ -2241,6 +2267,8 @@ export default function GameFilmRoom() {
       setSessionStatEntries(prev => [...prev, newEntry])
       redoStack.current.pop()
       undoStack.current.push(newEntry)
+      setQuickMessage(`Restored ${newEntry.player_name} · ${STAT_NAMES[newEntry.stat_type]}`)
+      setQuickError(null)
     } catch (e) {
       setRedoError(e instanceof Error ? e.message : 'Redo failed — try again')
     } finally {
@@ -2716,7 +2744,7 @@ export default function GameFilmRoom() {
               markIn={markIn}
               markOut={markOut}
               isFullscreen={isFullscreen}
-              onStatTap={videoLoaded ? openStatPanel : undefined}
+              onStatTap={videoLoaded ? ()=>setQuickTagOpen(v=>!v) : undefined}
               coachingTools={<div className="flex flex-wrap items-center gap-1">
                 {/* Draw */}
                 <button
@@ -2760,6 +2788,7 @@ export default function GameFilmRoom() {
                 </ToolbarMenu>
               </div>}
             />}
+            {game.video_url&&quickTagOpen&&<QuickTagDock players={players} selectedPlayer={quickPlayer} onPlayer={setQuickPlayer} stats={STAT_DEFS} onTag={stat=>void quickTag(stat as StatType)} busy={quickPending||undoPending||redoPending} canUndo={undoStack.current.length>0} canRedo={redoStack.current.length>0} onUndo={()=>void handleUndo()} onRedo={()=>void handleRedo()} onClose={()=>setQuickTagOpen(false)} onDetails={openStatPanel} message={quickMessage} error={quickError||undoError||redoError} fullscreen={isFullscreen}/>}
             {game.video_url && (
               <div className="shrink-0 max-h-32 overflow-y-auto">
               <BookmarkBar
