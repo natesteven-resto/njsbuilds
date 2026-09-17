@@ -71,6 +71,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next() // unrelated app — zero Supabase calls
   }
 
+  // Stripe sends signed server requests without a user session. The webhook
+  // handler verifies the raw body and signature; all other APIs require login.
+  if (pathname === '/api/filmroom/billing/webhook') {
+    return NextResponse.next()
+  }
+
   // ── Official @supabase/ssr pattern:
   //    Build supabaseResponse first; setAll rebuilds it so downstream
   //    receives all refreshed cookies via the mutated request object.

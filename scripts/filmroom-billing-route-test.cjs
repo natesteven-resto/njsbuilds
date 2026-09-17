@@ -5,6 +5,11 @@ function load(file,mocks={}){const exports={};vm.runInNewContext(ts.transpileMod
 let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS '+name)}
 (async()=>{
 const plan=load('lib/filmroom-plan.ts');
+let authCalls=0,configCalls=0;
+const guard=load('middleware.ts',{'@supabase/ssr':{createServerClient:()=>({auth:{getUser:async()=>{authCalls++;return {data:{user:null}}}}})},'./lib/filmroom-config':{getFilmRoomConfig:()=>{configCalls++;return {url:'https://test.supabase.co',anonKey:'test'}}}});
+await test('Stripe webhook reaches signature verification without user auth or Supabase configuration',async()=>{const response=await guard.middleware(new NextRequest('https://www.njsbuilds.com/api/filmroom/billing/webhook',{method:'POST'}));assert.equal(response.headers.get('x-middleware-next'),'1');assert.equal(authCalls,0);assert.equal(configCalls,0)});
+await test('webhook exception does not expose sibling or nested APIs',async()=>{for(const path of ['billing','billing/checkout','billing/portal','billing/webhook/other','billing/webhooks','upload/multipart']){const response=await guard.middleware(new NextRequest('https://www.njsbuilds.com/api/filmroom/'+path,{method:'POST'}));assert.equal(response.status,401,path)}});
+
 await test('active entitlement ends at paid period boundary',()=>{assert(plan.subscriptionAllowsUploads('active','2026-09-17',Date.parse('2026-09-16')));assert(!plan.subscriptionAllowsUploads('active','2026-09-16',Date.parse('2026-09-16')));for(const s of ['trialing','past_due','unpaid','canceled','none'])assert(!plan.subscriptionAllowsUploads(s,'2099-01-01'))});
 await test('upload size validation rejects invalid and oversized inputs',()=>{for(const v of [-1,0,1.5,NaN,Infinity,'100',500000000001])assert(!plan.validUploadBytes(v));assert(plan.validUploadBytes(500000000000))});
 await test('part sizing cannot exceed the declared reservation',()=>{assert.equal(plan.uploadPartBytes(105000000,1),104857600);assert.equal(plan.uploadPartBytes(105000000,2),142400);assert.equal(plan.uploadPartBytes(105000000,3),null);assert.equal(plan.uploadPartBytes(1,1),1);assert.equal(plan.uploadPartBytes(1,0),null)});
@@ -48,7 +53,7 @@ const webhook=load('app/api/filmroom/billing/webhook/route.ts',{'@/lib/filmroom-
 const payload=JSON.stringify({id:'evt_local',object:'event',type:'invoice.paid',data:{object:{customer:'cus_A'}}});
 const signed=()=>new NextRequest('https://www.njsbuilds.com/api/filmroom/billing/webhook',{method:'POST',headers:{'stripe-signature':realStripe.webhooks.generateTestHeaderString({payload,secret})},body:payload});
 await test('webhook rejects forged signature',async()=>assert.equal((await webhook.POST(new NextRequest('https://www.njsbuilds.com/api/filmroom/billing/webhook',{method:'POST',headers:{'stripe-signature':'invalid'},body:payload}))).status,400));
-await test('valid webhook and replay reconcile owned customer',async()=>{reconciled=[];assert.equal((await webhook.POST(signed())).status,200);assert.equal((await webhook.POST(signed())).status,200);assert.deepEqual(reconciled,['cus_A','cus_A'])});
+await test('valid webhook and replay reconcile owned customer',async()=>{reconciled=[];const request=signed();assert.equal((await guard.middleware(request)).headers.get('x-middleware-next'),'1');assert.equal((await webhook.POST(request)).status,200);assert.equal((await webhook.POST(signed())).status,200);assert.deepEqual(reconciled,['cus_A','cus_A'])});
 
 const recovery=load('lib/filmroom-complete-upload.ts');
 await test('lost multipart completion response recovers only with an existing object',async()=>{let calls=[];const client={send:async command=>{calls.push(command.constructor.name);if(calls.length===1)throw Object.assign(Error('gone'),{name:'NoSuchUpload'});return {ContentLength:100}}};await recovery.completeUpload(client,{Bucket:'test',Key:'games/test',UploadId:'upload'});assert.deepEqual(calls,['CompleteMultipartUploadCommand','HeadObjectCommand'])});

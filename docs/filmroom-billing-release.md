@@ -51,3 +51,10 @@ Run `node scripts/filmroom-billing-db-test.mjs` and `node scripts/filmroom-billi
 - Dedicated sandbox customer portal displayed only the fixture's Film Room subscription and three paid monthly invoices. Customer cancellation scheduled service end at the paid boundary.
 - Billing UI corrected: unpaid periods no longer say “paid”; unfinished/expired checkout and stale active state receive specific labels. TypeScript passed after this change.
 - Limits: database/auth request plumbing used the earlier disposable PostgreSQL and mocked route tests, not an externally hosted full-app test. Actual webhook delivery, staged authenticated browser flow, and R2 upload checks remain outstanding. No live migration, deployment, or paid billing activation.
+
+## Webhook routing blocker fixed
+The shared auth middleware previously required a user login for Stripe's webhook, preventing payment notifications from reaching signature verification. Only the exact `/api/filmroom/billing/webhook` path now bypasses cookie authentication; the handler still validates its raw-body Stripe signature. Sibling and nested API routes remain protected.
+
+Validation: 31 route/unit checks passed; production build passed. HTTP tests against the compiled app with dummy credentials verified five private paths return 401, missing/forged signatures return 400, and a correctly signed no-op test event returns 200 without a login cookie. This verifies middleware and handler integration, not external Stripe delivery or database reconciliation. No production changes made.
+
+Full authenticated billing testing requires an isolated database with migration 015. No Docker runtime was available for local Supabase, and no separate hosted test database was identified. Asked Nate whether one exists or whether to prepare an isolated setup.
