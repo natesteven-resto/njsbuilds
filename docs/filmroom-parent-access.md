@@ -22,7 +22,9 @@ The video-token endpoint permits parents only after a film-specific access check
 - Parent playback authorization/signing covered by route tests; a full parent video refresh/playback test against Cloudflare remains for staging.
 
 ## Deployment
-Not deployed. Apply migration 017 after 015/016 only to Film Room, then deploy this branch to an isolated preview. Test coach-to-parent sharing and expiring playback against private Cloudflare storage before production promotion. Live billing remains disabled. No RestoReports resources are changed.
+Migrations 015, 016 and 017 were applied to dedicated Film Room project gurhiziqghzuqumpzkig on September 16, 2026. Verified two original games intact, billing enforcement false, no direct browser invitation-table grants, and parent RPC ready. Production deployment is in progress with FILMROOM_BILLING_ENABLED=false. No RestoReports resources are changed.
+
+Nate’s release preference: publish completed changes after testing by default. Do not hold routine changes in development waiting for another deployment request. Live paid billing activation remains separately deferred.
 
 ## Follow-up roadmap
 1. Combined subscription + parent access staging verification against Cloudflare.
