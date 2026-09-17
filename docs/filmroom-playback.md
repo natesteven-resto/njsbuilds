@@ -12,7 +12,8 @@ watchable in Original and are not automatically sent for paid processing.
 ## Deployment
 
 Apply migration 018 to the dedicated Film Room database. Set
-FILMROOM_STREAM_ENABLED=true and supply CLOUDFLARE_STREAM_TOKEN (Stream Write).
+FILMROOM_STREAM_ENABLED=true. Use the approved protected CLOUDFLARE_API_TOKEN
+(FilmRoom account token, Stream Write), with CLOUDFLARE_STREAM_TOKEN as legacy fallback.
 The existing account and customer host have defaults; overrides are
 CLOUDFLARE_ACCOUNT_ID and FILMROOM_STREAM_HOST. R2 credentials must support
 HeadObject/GetObject in Film Room's bucket. Keep FILMROOM_BILLING_ENABLED=false.

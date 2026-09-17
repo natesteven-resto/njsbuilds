@@ -1,6 +1,7 @@
 import {createServiceClient} from './filmroom-supabase-server'
 
-export const streamEnabled = () => process.env.FILMROOM_STREAM_ENABLED === 'true' && !!process.env.CLOUDFLARE_STREAM_TOKEN
+const token = () => (process.env.CLOUDFLARE_API_TOKEN || process.env.CLOUDFLARE_STREAM_TOKEN || '').trim()
+export const streamEnabled = () => process.env.FILMROOM_STREAM_ENABLED === 'true' && !!token()
 const account = () => process.env.CLOUDFLARE_ACCOUNT_ID || '108ae2b237d537d16e57f93a1a13444f'
 const host = () => process.env.FILMROOM_STREAM_HOST || 'customer-gc6om70w6s4e1vdp.cloudflarestream.com'
 export type StreamVideo = {uid:string;creator?:string;requireSignedURLs?:boolean;readyToStream?:boolean;status?:{state?:string;pctComplete?:string};meta?:{app?:string;job?:string}}
@@ -9,7 +10,7 @@ export class StreamError extends Error {constructor(public status:number){super(
 
 export async function streamRequest<T>(path:string,method='GET',body?:unknown):Promise<T> {
  if(!streamEnabled())throw new StreamError(503)
- const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account()}/stream${path}`,{method,headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_STREAM_TOKEN}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',signal:AbortSignal.timeout(15000)})
+ const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account()}/stream${path}`,{method,headers:{Authorization:`Bearer ${token()}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',signal:AbortSignal.timeout(15000)})
  const data=await r.json().catch(()=>null)
  // Never expose provider errors: they can contain the signed source URL.
  if(!r.ok||!data?.success){console.warn('[filmroom-stream]',{status:r.status,codes:(data?.errors||[]).map((e:{code?:number})=>e.code).filter((n:unknown)=>typeof n==='number')});throw new StreamError(r.ok?502:r.status)}
