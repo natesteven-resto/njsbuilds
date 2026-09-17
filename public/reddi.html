@@ -327,26 +327,226 @@
       background: rgba(255,255,255,0.3);
     }
 
+    /* service pills strip in hero */
+    .hero-services {
+      position: absolute;
+      bottom: 56px;
+      left: 0; right: 0;
+      z-index: 10;
+      overflow: hidden;
+    }
+    .hero-services-inner {
+      display: flex;
+      gap: 10px;
+      padding: 0 48px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      padding-bottom: 4px;
+    }
+    .hero-services-inner::-webkit-scrollbar { display: none; }
+    .hero-service-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 100px;
+      padding: 9px 18px;
+      white-space: nowrap;
+      text-decoration: none;
+      color: rgba(255,255,255,0.85);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      transition: background 0.2s, border-color 0.2s;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .hero-service-pill:hover {
+      background: rgba(232,25,44,0.25);
+      border-color: rgba(232,25,44,0.5);
+      color: #fff;
+    }
+    .hero-service-pill span { font-size: 15px; }
+
     /* scroll indicator */
     .scroll-indicator {
       position: absolute;
-      bottom: 40px;
+      bottom: 16px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 8px;
-      color: rgba(255,255,255,0.35);
+      gap: 6px;
+      color: rgba(255,255,255,0.5);
       font-size: 11px;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
-      animation: bounce 2s infinite;
+      z-index: 10;
+      animation: bounceScroll 2s ease-in-out infinite;
     }
-    .scroll-indicator svg { width: 20px; opacity: 0.4; }
-    @keyframes bounce {
-      0%, 100% { transform: translateX(-50%) translateY(0); }
-      50% { transform: translateX(-50%) translateY(6px); }
+    .scroll-indicator-line {
+      width: 1px;
+      height: 36px;
+      background: linear-gradient(to bottom, rgba(255,255,255,0.6), transparent);
+      animation: scrollLine 2s ease-in-out infinite;
+    }
+    .scroll-indicator-text { font-weight: 600; }
+    @keyframes bounceScroll {
+      0%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.6; }
+      50% { transform: translateX(-50%) translateY(8px); opacity: 1; }
+    }
+    @keyframes scrollLine {
+      0% { transform: scaleY(0); transform-origin: top; opacity: 0; }
+      50% { transform: scaleY(1); transform-origin: top; opacity: 1; }
+      100% { transform: scaleY(1); transform-origin: bottom; opacity: 0; }
+    }
+
+    /* AI chat button */
+    .ai-chat-btn {
+      position: fixed;
+      bottom: 32px;
+      right: 32px;
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--red);
+      color: #fff;
+      border: none;
+      border-radius: 100px;
+      padding: 16px 26px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 32px rgba(232,25,44,0.45);
+      transition: transform 0.2s, box-shadow 0.2s;
+      font-family: var(--font-body);
+      letter-spacing: 0.01em;
+    }
+    .ai-chat-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 40px rgba(232,25,44,0.55);
+    }
+    .ai-chat-btn svg { width: 20px; height: 20px; }
+    .ai-chat-pulse {
+      position: absolute;
+      top: -4px; right: -4px;
+      width: 14px; height: 14px;
+      background: #22c55e;
+      border-radius: 50%;
+      border: 2px solid #0a0a0a;
+    }
+    .ai-chat-pulse::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 2px solid #22c55e;
+      animation: pulsering 1.5s ease-out infinite;
+    }
+    @keyframes pulsering {
+      0% { opacity: 0.8; transform: scale(0.8); }
+      100% { opacity: 0; transform: scale(2); }
+    }
+
+    /* chat drawer */
+    .chat-drawer {
+      position: fixed;
+      bottom: 100px;
+      right: 32px;
+      z-index: 199;
+      width: 360px;
+      background: var(--dark);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+      display: none;
+    }
+    .chat-drawer.open { display: flex; flex-direction: column; }
+    .chat-header {
+      background: var(--red);
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .chat-header-avatar {
+      width: 38px; height: 38px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .chat-header-info { flex: 1; }
+    .chat-header-name { font-weight: 700; font-size: 14px; }
+    .chat-header-status { font-size: 12px; opacity: 0.8; }
+    .chat-messages {
+      padding: 20px;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .chat-bubble {
+      background: var(--dark2);
+      border-radius: 12px 12px 12px 2px;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: rgba(255,255,255,0.85);
+      line-height: 1.5;
+      max-width: 90%;
+    }
+    .chat-suggestions {
+      padding: 0 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .chat-suggestion {
+      background: rgba(232,25,44,0.1);
+      border: 1px solid rgba(232,25,44,0.25);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.8);
+      cursor: pointer;
+      text-align: left;
+      font-family: var(--font-body);
+      transition: background 0.2s;
+    }
+    .chat-suggestion:hover { background: rgba(232,25,44,0.2); }
+    .chat-input-row {
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 14px 16px;
+      display: flex;
+      gap: 10px;
+    }
+    .chat-input {
+      flex: 1;
+      background: var(--dark2);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--white);
+      font-family: var(--font-body);
+      outline: none;
+    }
+    .chat-input::placeholder { color: rgba(255,255,255,0.3); }
+    .chat-send {
+      background: var(--red);
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 16px;
     }
 
     /* ── TRUST BAR ── */
@@ -830,6 +1030,30 @@
       <div class="hero-dot" onclick="goSlide(1)"></div>
       <div class="hero-dot" onclick="goSlide(2)"></div>
     </div>
+
+    <!-- Service Pills — visible above the fold -->
+    <div class="hero-services">
+      <div class="hero-services-inner">
+        <a href="#services" class="hero-service-pill"><span>🔧</span> Plumbing</a>
+        <a href="#services" class="hero-service-pill"><span>❄️</span> HVAC</a>
+        <a href="#services" class="hero-service-pill"><span>⚡</span> Electrical</a>
+        <a href="#services" class="hero-service-pill"><span>🏠</span> Garage Doors</a>
+        <a href="#services" class="hero-service-pill"><span>🌿</span> Fencing</a>
+        <a href="#services" class="hero-service-pill"><span>💧</span> Sprinklers</a>
+        <a href="#services" class="hero-service-pill"><span>🌱</span> Lawn Care</a>
+        <a href="#services" class="hero-service-pill"><span>🍽️</span> Appliance Repair</a>
+        <a href="#services" class="hero-service-pill"><span>🚜</span> Excavation</a>
+        <a href="#services" class="hero-service-pill"><span>🏘️</span> Roofing & Exteriors</a>
+        <a href="#services" class="hero-service-pill"><span>♻️</span> Environmental</a>
+        <a href="#services" class="hero-service-pill"><span>🪵</span> Flooring</a>
+      </div>
+    </div>
+
+    <!-- Scroll indicator -->
+    <div class="scroll-indicator">
+      <div class="scroll-indicator-line"></div>
+      <div class="scroll-indicator-text">Scroll</div>
+    </div>
   </section>
 
   <!-- TRUST BAR -->
@@ -845,6 +1069,39 @@
     <div class="trust-item">✓ 24/7 Emergency Service</div>
     <div class="trust-divider"></div>
     <div class="trust-item">✓ Warrantied Work</div>
+  </div>
+
+  <!-- AI CHAT BUTTON (fixed) -->
+  <button class="ai-chat-btn" onclick="toggleChat()" id="chatBtn">
+    <div class="ai-chat-pulse"></div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+    How can I help you?
+  </button>
+
+  <!-- AI CHAT DRAWER -->
+  <div class="chat-drawer" id="chatDrawer">
+    <div class="chat-header">
+      <div class="chat-header-avatar">🧠</div>
+      <div class="chat-header-info">
+        <div class="chat-header-name">Reddi Assistant</div>
+        <div class="chat-header-status">🟢 Online now &mdash; AI + Live Agents</div>
+      </div>
+      <button onclick="toggleChat()" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;opacity:0.7">&times;</button>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+      <div class="chat-bubble">Hi! I'm the Reddi assistant. I can help you schedule service, answer questions about our 12 divisions, or connect you with a live agent. What do you need today?</div>
+    </div>
+    <div class="chat-suggestions">
+      <button class="chat-suggestion" onclick="pickSuggestion(this)">I need emergency plumbing help</button>
+      <button class="chat-suggestion" onclick="pickSuggestion(this)">Schedule an HVAC tune-up</button>
+      <button class="chat-suggestion" onclick="pickSuggestion(this)">Get a free estimate</button>
+    </div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="chatInput" placeholder="Type your question..." onkeydown="if(event.key==='Enter') sendChat()" />
+      <button class="chat-send" onclick="sendChat()">&#x27A4;</button>
+    </div>
   </div>
 
   <!-- ABOUT -->
@@ -1144,6 +1401,46 @@
 
     // kick off
     goSlide(0);
+
+    // ── AI CHAT ──
+    function toggleChat() {
+      const drawer = document.getElementById('chatDrawer');
+      drawer.classList.toggle('open');
+    }
+
+    function pickSuggestion(el) {
+      document.getElementById('chatInput').value = el.textContent;
+      el.parentElement.style.display = 'none';
+      sendChat();
+    }
+
+    function sendChat() {
+      const input = document.getElementById('chatInput');
+      const messages = document.getElementById('chatMessages');
+      const text = input.value.trim();
+      if (!text) return;
+
+      // User bubble
+      const userBubble = document.createElement('div');
+      userBubble.style.cssText = 'background:var(--red);border-radius:12px 12px 2px 12px;padding:10px 14px;font-size:14px;color:#fff;line-height:1.5;align-self:flex-end;max-width:85%;margin-left:auto;';
+      userBubble.textContent = text;
+      messages.appendChild(userBubble);
+      input.value = '';
+      messages.scrollTop = messages.scrollHeight;
+
+      // Typing indicator
+      const typing = document.createElement('div');
+      typing.className = 'chat-bubble';
+      typing.innerHTML = '<span style="opacity:0.5">Reddi is typing...</span>';
+      messages.appendChild(typing);
+      messages.scrollTop = messages.scrollHeight;
+
+      // Simulated AI response
+      setTimeout(() => {
+        typing.innerHTML = 'Thanks for reaching out! A Reddi specialist will follow up shortly, or call us now at <strong><a href="tel:3168582083" style="color:var(--red)">316-858-2083</a></strong> for immediate help.';
+        messages.scrollTop = messages.scrollHeight;
+      }, 1200);
+    }
   </script>
 </body>
 </html>
