@@ -12,6 +12,8 @@ export async function streamRequest<T>(path:string,method='GET',body?:unknown):P
  if(!streamEnabled())throw new StreamError(503)
  const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account()}/stream${path}`,{method,headers:{Authorization:`Bearer ${token()}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',signal:AbortSignal.timeout(15000)})
  const data=await r.json().catch(()=>null)
+ // Stream deletion may return an empty successful response.
+ if(method==='DELETE'&&r.ok&&data===null)return undefined as T
  // Never expose provider errors: they can contain the signed source URL.
  if(!r.ok||!data?.success){console.warn('[filmroom-stream]',{status:r.status,codes:(data?.errors||[]).map((e:{code?:number})=>e.code).filter((n:unknown)=>typeof n==='number')});throw new StreamError(r.ok?502:r.status)}
  return data.result as T
