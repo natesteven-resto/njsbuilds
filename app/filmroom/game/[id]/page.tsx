@@ -1423,6 +1423,24 @@ function SaveClipModal({
   onClose: () => void
   onSave: (clip: Clip) => void
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    dialogRef.current?.querySelector<HTMLInputElement>('[name="clip-title"]')?.focus()
+    return () => { if (previous?.isConnected) previous.focus() }
+  }, [])
+  const handleDialogKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Editing a clip must never reach the film's fullscreen/playback shortcuts.
+    e.stopPropagation()
+    if (e.key !== 'Tab') return
+    const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex="0"]'
+    ) ?? []).filter(el => el.getClientRects().length > 0)
+    const first = controls[0]
+    const last = controls[controls.length - 1]
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus() }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus() }
+  }
   const [range,setRange]=useState({start:startMs/1000,end:endMs/1000})
   const [form, setForm] = useState({
     title: '', category: 'offense' as ClipCategory,
@@ -1477,14 +1495,14 @@ function SaveClipModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm max-h-[90dvh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4" onClick={onClose}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Save Clip" onKeyDown={handleDialogKeyDown} className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm max-h-[90dvh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-sm font-semibold">Save Clip</h2>
             <p className="text-xs text-white/40 mt-0.5">{msToTimecode(range.start*1000)} → {msToTimecode(range.end*1000)} ({formatDuration(range.start*1000, range.end*1000)})</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-white/60 hover:text-white">
+          <button aria-label="Close Save Clip" onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-white/60 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -1493,7 +1511,7 @@ function SaveClipModal({
           <div className="grid grid-cols-2 gap-3">{(['start','end'] as const).map(k=><label key={k} className="text-xs text-white/65">{k==='start'?'Clip start (seconds)':'Clip end (seconds)'}<input type="number" min={0} step="any" required value={range[k]} onChange={e=>setRange(r=>({...r,[k]:Number(e.target.value)}))} className="block w-full bg-black/30 border border-white/15 rounded-md p-2 mt-1 text-[#eee9df]"/></label>)}</div>
           <div>
             <label className="block text-xs text-white/50 mb-1">Clip Title</label>
-            <input type="text" placeholder="e.g. Pick and roll coverage"
+            <input name="clip-title" type="text" placeholder="e.g. Pick and roll coverage"
               value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
               className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
           </div>
@@ -2521,7 +2539,7 @@ export default function GameFilmRoom() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel, toggleFullscreen, instantClip])
+  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel, showSaveClip, showVideoUrl, showAddToPlaylist, toggleFullscreen, instantClip])
 
   if (loading) return (
     <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center">
