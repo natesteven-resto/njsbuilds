@@ -1,4 +1,6 @@
 'use client'
+import {usePrivatePlayback,type PlaybackQuality} from '@/app/filmroom/components/usePrivatePlayback'
+import {PlaybackQualityControl} from '@/app/filmroom/components/PlaybackQualityControl'
 import { CustomClipTags } from '@/app/filmroom/components/CustomClipTags'
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
@@ -1260,138 +1262,21 @@ async function pollStreamReady(videoId: string, maxWaitMs = 120_000): Promise<vo
 
 // ─── Video Player Component ───────────────────────────────────────────────────
 
-// Video token cache: {src, type, expiresAt, refreshAfterSeconds}
-let _videoTokenCache: { gameId: string; src: string; type: string; expiresAt: number; refreshAfterSeconds: number | null } | null = null
-
-async function fetchVideoToken(gameId: string): Promise<{ src: string; type: string; refreshAfterSeconds: number | null }> {
-  const res = await fetch(`/api/filmroom/video-token?gameId=${encodeURIComponent(gameId)}`)
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw Object.assign(new Error(err.error ?? 'Video token failed'), { status: res.status })
-  }
-  const data = await res.json()
-  _videoTokenCache = {
-    gameId,
-    src: data.src,
-    type: data.type,
-    expiresAt: data.expiresInSeconds ? Date.now() + data.expiresInSeconds * 1000 : Infinity,
-    refreshAfterSeconds: data.refreshAfterSeconds ?? null,
-  }
-  return { src: data.src, type: data.type, refreshAfterSeconds: data.refreshAfterSeconds ?? null }
-}
-
-function VideoPlayer({
-  gameId,
-  onTimeUpdate,
-  onDurationChange,
-  playerRef,
-  isFullscreen,
-}: {
-  gameId: string
-  onTimeUpdate: (ms: number) => void
-  onDurationChange: (ms: number) => void
-  playerRef: React.RefObject<HTMLVideoElement | null>
-  isFullscreen?: boolean
+function VideoPlayer({gameId,sourceKey,quality,onFallback,onTimeUpdate,onDurationChange,playerRef,isFullscreen}:{
+ gameId:string;sourceKey:string;quality:PlaybackQuality;onFallback:()=>void;
+ onTimeUpdate:(ms:number)=>void;onDurationChange:(ms:number)=>void;
+ playerRef:React.RefObject<HTMLVideoElement|null>;isFullscreen?:boolean
 }) {
-  const [resolvedSrc, setResolvedSrc] = useState<string | null>(null)
-  const [tokenError, setTokenError] = useState<string | null>(null)
-  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    // Recursive refresh loop: fires every refreshAfterSeconds, indefinitely.
-    // Uses loadedmetadata event (not load()) to restore position after src swap.
-    async function scheduleRefresh(afterSeconds: number) {
-      if (cancelled) return
-      refreshTimerRef.current = setTimeout(async () => {
-        if (cancelled) return
-        const v = playerRef.current
-        const wasPlaying = v ? !v.paused : false
-        const savedTime = v ? v.currentTime : 0
-        try {
-          const { src: newSrc, refreshAfterSeconds } = await fetchVideoToken(gameId)
-          if (cancelled) return
-          setResolvedSrc(newSrc)
-          if (v) {
-            // Restore position on loadedmetadata — src change triggers async load
-            const restoreOnMetadata = () => {
-              v.currentTime = savedTime
-              if (wasPlaying) v.play().catch(() => {})
-              v.removeEventListener('loadedmetadata', restoreOnMetadata)
-            }
-            v.addEventListener('loadedmetadata', restoreOnMetadata)
-            v.src = newSrc
-            v.load() // non-blocking; loadedmetadata fires when ready
-          }
-          // Schedule next refresh cycle
-          if (refreshAfterSeconds) scheduleRefresh(refreshAfterSeconds)
-        } catch {
-          // Token refresh failed — keep playing with old URL until it expires
-          // Retry refresh in 60s
-          if (!cancelled) scheduleRefresh(60)
-        }
-      }, afterSeconds * 1000)
-    }
-
-    async function load() {
-      try {
-        const { src, refreshAfterSeconds } = await fetchVideoToken(gameId)
-        if (cancelled) return
-        setResolvedSrc(src)
-        setTokenError(null)
-        if (refreshAfterSeconds) scheduleRefresh(refreshAfterSeconds)
-      } catch (err: unknown) {
-        if (cancelled) return
-        const status = (err as { status?: number }).status
-        setTokenError(
-          status === 401 ? 'Please sign in to watch this video' :
-          status === 403 ? 'You do not have access to this video' :
-          'Failed to load video'
-        )
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
-    }
-  }, [gameId, playerRef])
-
-  if (tokenError) return (
-    <div className={`flex items-center justify-center bg-black text-white/40 text-sm ${
-      isFullscreen ? 'w-full h-full' : 'w-full aspect-video'
-    }`}>{tokenError}</div>
-  )
-
-  if (!resolvedSrc) return (
-    <div className={`flex items-center justify-center bg-black ${
-      isFullscreen ? 'w-full h-full' : 'w-full aspect-video'
-    }`}>
-      <div className="w-6 h-6 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" aria-label="Loading video" />
-    </div>
-  )
-
-  return (
-    <video
-      ref={playerRef}
-      src={resolvedSrc ?? ''}
-      // In fullscreen: fill the flex container height; in normal layout: use aspect-video
-      // but cap height so transport bar stays on screen without scrolling
-      className={isFullscreen
-        ? 'w-full h-full object-contain bg-black'
-        : 'w-full object-contain bg-black'
-      }
-      style={isFullscreen ? undefined : { maxHeight: 'calc(100vh - 48px - 130px)' }}
-      onTimeUpdate={(e) => onTimeUpdate(Math.round(e.currentTarget.currentTime * 1000))}
-      onDurationChange={(e) => onDurationChange(Math.round(e.currentTarget.duration * 1000))}
-      onLoadedMetadata={(e) => onDurationChange(Math.round(e.currentTarget.duration * 1000))}
-      playsInline
-      preload="metadata"
-      controls={false}
-    />
-  )
+ const {error,loading}=usePrivatePlayback(playerRef,gameId,quality,onFallback,sourceKey)
+ return <>
+  <video ref={playerRef} className={isFullscreen?'w-full h-full object-contain bg-black':'w-full object-contain bg-black'}
+   style={isFullscreen?undefined:{maxHeight:'calc(100vh - 48px - 130px)'}}
+   onTimeUpdate={e=>onTimeUpdate(Math.round(e.currentTarget.currentTime*1000))}
+   onDurationChange={e=>{if(Number.isFinite(e.currentTarget.duration))onDurationChange(Math.round(e.currentTarget.duration*1000))}}
+   playsInline preload="metadata" controls={false}/>
+  {loading&&<span role="status" className="absolute top-3 left-3 rounded bg-black/80 px-3 py-2 text-xs text-white/70 pointer-events-none">Loading video…</span>}
+  {error&&<span role="alert" className="absolute top-3 left-3 rounded bg-black/80 px-3 py-2 text-xs text-red-300 pointer-events-none">{error}</span>}
+ </>
 }
 
 // ─── Transport Bar ────────────────────────────────────────────────────────────
@@ -2089,6 +1974,7 @@ export default function GameFilmRoom() {
   const [activeClipId, setActiveClipId] = useState<string | null>(null)
   const [panelTab, setPanelTab] = useState<PanelTab>('clips')
   const [uploadDone, setUploadDone] = useState(false)
+  const [playbackQuality,setPlaybackQuality]=useState<PlaybackQuality>('original')
   const [isFullscreen, setIsFullscreen] = useState(false)
   const fullscreenRootRef = useRef<HTMLDivElement>(null)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
@@ -2779,6 +2665,9 @@ export default function GameFilmRoom() {
               <div className={`relative bg-black ${isFullscreen ? 'flex-1 min-h-0' : 'rounded-t-xl overflow-hidden border border-b-0 border-white/8'}`}>
                 <VideoPlayer
                   gameId={gameId}
+                  sourceKey={game.video_url}
+                  quality={playbackQuality}
+                  onFallback={()=>setPlaybackQuality('original')}
                   onTimeUpdate={setCurrentMs}
                   onDurationChange={setDurationMs}
                   playerRef={videoRef}
@@ -2845,6 +2734,7 @@ export default function GameFilmRoom() {
               isFullscreen={isFullscreen}
               onStatTap={videoLoaded ? openStatPanel : undefined}
               coachingTools={<div className="flex flex-wrap items-center gap-1">
+                <PlaybackQualityControl gameId={gameId} sourceKey={game.video_url||''} quality={playbackQuality} onChange={setPlaybackQuality}/>
                 <button aria-expanded={showEventSettings} onClick={()=>setShowEventSettings(v=>!v)} className="px-2 py-2 rounded-lg text-xs border border-white/15 text-white/80">Events</button>
                 <button onClick={() => setAddingBookmark(a => !a)} disabled={bookmarkPending}
                   aria-label="Add bookmark at current position" title="Add bookmark at current position"

@@ -1,3 +1,5 @@
+import {after} from 'next/server'
+import {cleanDetachedPlaybacks} from '@/lib/filmroom-stream'
 import { NextRequest, NextResponse } from 'next/server'
 import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-server'
 
@@ -30,6 +32,7 @@ export async function GET(request: NextRequest) {
   try {
     const { user, supabase } = await getVerifiedUser(request)
 
+    after(cleanDetachedPlaybacks)
     if(billingEnabled()){const {error:demoError}=await supabase.rpc('filmroom_provision_demo');if(demoError)throw demoError}
     const { data, error } = await supabase
       .from('games')

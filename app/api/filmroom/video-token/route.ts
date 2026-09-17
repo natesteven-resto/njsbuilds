@@ -1,13 +1,5 @@
-/**
- * Film Room — Private Video Playback Token
- *
- * GET ?gameId=X
- *   - Verifies game ownership
- *   - Returns a 15-minute presigned GET URL for the game's R2 video
- *   - Client refreshes at 12-minute intervals while video is active
- *   - For Stream (HLS) videos: returns the HLS manifest URL directly
- *     (Stream handles its own auth via signed tokens if configured)
- */
+/** Private original/optimized playback. Always authorizes the viewer before signing. */
+import {streamEnabled,streamToken} from '@/lib/filmroom-stream'
 import { NextRequest, NextResponse } from 'next/server'
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
@@ -72,6 +64,16 @@ export async function GET(request: NextRequest) {
     // Parent URLs expire quickly after sharing is revoked. Existing downloaded bytes cannot be recalled.
     const ttl = isParent ? 60 : SIGNED_URL_TTL
     if (!game.video_url) return NextResponse.json({ error: 'No video attached to this game' }, { status: 404 })
+
+    if(searchParams.get('quality')==='auto') {
+      if(!streamEnabled())return NextResponse.json({error:'Auto is unavailable. Choose Original.'},{status:503})
+      const {data:asset,error:assetError}=await svc.from('filmroom_playback_assets').select('*').eq('game_id',gameId).eq('source_url',game.video_url).eq('state','ready').maybeSingle()
+      if(assetError||!asset)return NextResponse.json({error:'Auto is not ready. Choose Original.'},{status:409})
+      try {
+        const src=await streamToken(asset,ttl)
+        return NextResponse.json({type:'hls',src,expiresInSeconds:ttl,refreshAfterSeconds:isParent?40:720},{headers:{'Cache-Control':'private, no-store'}})
+      } catch {return NextResponse.json({error:'Auto is unavailable. Choose Original.'},{status:503})}
+    }
 
     // Cloudflare Stream URLs: we do NOT return raw permanent manifest URLs.
     // Stream requires signed playback tokens (requireSignedURLs) to be private.

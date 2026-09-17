@@ -1,3 +1,5 @@
+import {after} from 'next/server'
+import {cleanDetachedPlaybacks} from '@/lib/filmroom-stream'
 import { reviewMeta, shortText } from '@/lib/filmroom-workspace-validation'
 import { NextRequest, NextResponse } from 'next/server'
 import { getVerifiedUser, createServiceClient } from '@/lib/filmroom-supabase-server'
@@ -117,6 +119,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       .eq('owner_id', user.id)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    after(cleanDetachedPlaybacks)
     return NextResponse.json({ ok: true })
   } catch (e) {
     if (e instanceof NextResponse) return e

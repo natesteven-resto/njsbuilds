@@ -177,4 +177,24 @@ await test('changed email loses access',async()=>{await db.exec(`UPDATE auth.use
 await test('revocation removes discovery, stats and future playback',async()=>{await db.exec(`DELETE FROM filmroom_parent_invites WHERE id='${I}'`);assert((await family(P)).games.length===0,'revoked game listed');assert(!await access(P,ids.ga,'film'),'revoked playback granted');assert((await db.query(`SELECT * FROM filmroom_parent_shares WHERE invite_id='${I}'`)).rows.length===0,'shares not cascaded')});
 await test('anonymous cannot invoke family RPC',async()=>{let blocked=false;try{await as('anon','',`SELECT filmroom_parent_library()`)}catch{blocked=true}assert(blocked,'anonymous family access')});
 
+
+await test('optimized copies are private, claimed once, and detached with the source',async()=>{
+ await db.exec('BEGIN');
+ try{
+  await db.exec(`UPDATE games SET video_url='https://example.test/original.mp4' WHERE id='${ids.ga}';`);
+  let q=await db.query(`SELECT * FROM filmroom_claim_playback('${ids.ga}','${A}','https://example.test/original.mp4')`);assert(q.rows.length===1,'first claim failed');
+  q=await db.query(`SELECT * FROM filmroom_claim_playback('${ids.ga}','${A}','https://example.test/original.mp4')`);assert(q.rows.length===0,'duplicate claim');
+  await db.exec(`UPDATE games SET video_url='https://example.test/replacement.mp4' WHERE id='${ids.ga}';`);
+  q=await db.query(`SELECT state FROM filmroom_playback_assets WHERE game_id='${ids.ga}'`);assert(q.rows[0].state==='cleanup','old rendition not detached');
+  await db.exec(`UPDATE filmroom_playback_assets SET state='ready' WHERE game_id='${ids.ga}'`);
+  q=await db.query(`SELECT state FROM filmroom_playback_assets WHERE game_id='${ids.ga}'`);assert(q.rows[0].state==='cleanup','late encoder revived stale copy');
+  await db.exec(`DELETE FROM games WHERE id='${ids.ga}'`);
+  q=await db.query(`SELECT state,game_id FROM filmroom_playback_assets WHERE owner_id='${A}'`);assert(q.rows[0].state==='cleanup'&&q.rows[0].game_id===null,'deleted copy lost cleanup ledger');
+ }finally{await db.exec('ROLLBACK')}
+});
+await test('clients cannot forge renditions or claim processing',async()=>{
+ for(const sql of [`SELECT * FROM filmroom_playback_assets`,`SELECT * FROM filmroom_claim_playback('${ids.ga}','${A}','forged')`]){
+  try{await as('authenticated',A,sql);throw Error('unexpected access')}catch(e){assert(/permission denied/.test(e.message),'client access permitted')}
+ }
+});
 console.log(JSON.stringify({failures}));await db.close();process.exitCode=failures?1:0;
