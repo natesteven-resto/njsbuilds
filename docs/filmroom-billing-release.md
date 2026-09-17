@@ -26,7 +26,7 @@ Run `node scripts/filmroom-billing-db-test.mjs` and `node scripts/filmroom-billi
 8. Complete browser review on a staging deployment using the same isolated Film Room services. No paid checkout or limits should be enabled on live until the above passes. Then coordinate database `enabled=true` and `FILMROOM_BILLING_ENABLED=true` deployment during a short controlled activation; verify owner access first.
 
 ## Known operational follow-ups
-- The shared Stripe account is selected. The production price, restricted key, and dedicated portal are saved in Vercel. Stripe sandbox/test credentials and an approved demo source are still pending; production credentials were not loaded into local tests.
+- The shared Stripe account is selected. The production price, restricted key, and dedicated portal are saved in Vercel. Sandbox checkout, renewal, payment recovery, and portal tests have passed using temporary test credentials; an approved demo source remains deferred. Production credentials were not loaded into local tests.
 - No live migration, owner entitlement, storage backfill, payment transaction, or billing deployment was performed.
 - Cleanup retries are demand-driven. Monitor failed deletions/abandoned uploads and set an R2 lifecycle rule for incomplete multipart uploads after an agreed retention period.
 - Free practice accounts can create coaching annotations; add abuse/rate limits before opening broad public signups.
@@ -42,3 +42,12 @@ Run `node scripts/filmroom-billing-db-test.mjs` and `node scripts/filmroom-billi
 - 29 mocked unit/route checks pass, plus the disposable PostgreSQL migration/privacy/quota suite. TypeScript and production build pass.
 - These are development tests, not real Stripe sandbox checkout or real R2 upload verification. No live charges, database migrations, deployments, or billing enablement occurred.
 - Per Nate, demo footage and hosting changes are deferred. They do not block continued code development.
+
+## Stripe sandbox lifecycle verification (September 16, 2026)
+- Hosted Checkout: official declined card showed a payment error; retry with the success card produced a paid, active $25 monthly subscription.
+- End-of-period cancellation: active until the paid boundary, then canceled after advancing the isolated Stripe test clock.
+- A second isolated test clock verified successful monthly renewal, a declined renewal yielding `past_due`, and successful invoice repayment restoring `active`.
+- Loaded the repository's actual subscription selector and upload-permission functions against these real sandbox responses. Initial payment, renewal, failed renewal, and recovery all yielded the expected permission; a different owner was excluded each time.
+- Dedicated sandbox customer portal displayed only the fixture's Film Room subscription and three paid monthly invoices. Customer cancellation scheduled service end at the paid boundary.
+- Billing UI corrected: unpaid periods no longer say “paid”; unfinished/expired checkout and stale active state receive specific labels. TypeScript passed after this change.
+- Limits: database/auth request plumbing used the earlier disposable PostgreSQL and mocked route tests, not an externally hosted full-app test. Actual webhook delivery, staged authenticated browser flow, and R2 upload checks remain outstanding. No live migration, deployment, or paid billing activation.
