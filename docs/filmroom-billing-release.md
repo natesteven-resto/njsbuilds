@@ -26,8 +26,19 @@ Run `node scripts/filmroom-billing-db-test.mjs` and `node scripts/filmroom-billi
 8. Complete browser review on a staging deployment using the same isolated Film Room services. No paid checkout or limits should be enabled on live until the above passes. Then coordinate database `enabled=true` and `FILMROOM_BILLING_ENABLED=true` deployment during a short controlled activation; verify owner access first.
 
 ## Known operational follow-ups
-- No Stripe account/test credentials or approved demo source was supplied in this work session.
+- The shared Stripe account is selected. The production price, restricted key, and dedicated portal are saved in Vercel. Stripe sandbox/test credentials and an approved demo source are still pending; production credentials were not loaded into local tests.
 - No live migration, owner entitlement, storage backfill, payment transaction, or billing deployment was performed.
 - Cleanup retries are demand-driven. Monitor failed deletions/abandoned uploads and set an R2 lifecycle rule for incomplete multipart uploads after an agreed retention period.
 - Free practice accounts can create coaching annotations; add abuse/rate limits before opening broad public signups.
 - Define canceled-account video retention and customer notices before deleting any former subscriber's film.
+
+
+## Development pass: payment lifecycle and upload recovery
+- Payment refresh now reconciles the authenticated account with Stripe through an origin-checked POST. A checkout return requests one refresh. GET remains read-only.
+- Subscription selection requires the exact Film Room app, owner metadata, and configured price. An expired active record cannot hide a newer payment failure.
+- Expired incomplete payments can restart checkout; completed pending checkout sessions remain protected from duplicate billing.
+- Payment failure and cancellation labels distinguish those states from free demo access.
+- A lost multipart-completion response recovers only if R2 confirms the object exists; actual-size and ownership checks still precede attachment.
+- 29 mocked unit/route checks pass, plus the disposable PostgreSQL migration/privacy/quota suite. TypeScript and production build pass.
+- These are development tests, not real Stripe sandbox checkout or real R2 upload verification. No live charges, database migrations, deployments, or billing enablement occurred.
+- Per Nate, demo footage and hosting changes are deferred. They do not block continued code development.

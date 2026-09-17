@@ -34,7 +34,7 @@ export async function POST(r:NextRequest){
   if(claimed.data.checkout_session_id){
    const existing=await stripe.checkout.sessions.retrieve(claimed.data.checkout_session_id)
    if(existing.status==='open'&&existing.url)return NextResponse.json({url:existing.url})
-   if(existing.status==='complete'&&!(account.subscription?.status==='canceled'&&existing.subscription===account.subscription.subscription_id))return NextResponse.json({error:'Your payment is being confirmed. Refresh your subscription status shortly.'},{status:409})
+   if(existing.status==='complete'&&!(['canceled','incomplete_expired'].includes(account.subscription?.status)&&existing.subscription===account.subscription.subscription_id))return NextResponse.json({error:'Your payment is being confirmed. Refresh your subscription status shortly.'},{status:409})
    key=randomUUID()
    const rotated=await db.from('filmroom_subscriptions').update({checkout_key:key,checkout_session_id:null}).eq('owner_id',user.id).eq('checkout_lease',lease);if(rotated.error)throw rotated.error
   }

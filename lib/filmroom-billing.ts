@@ -1,6 +1,7 @@
 import Stripe from 'stripe'
 import {NextRequest,NextResponse} from 'next/server'
 import {createServiceClient} from './filmroom-supabase-server'
+import {selectFilmRoomSubscription} from './filmroom-subscription-selection'
 import {FILMROOM_PLAN,subscriptionAllowsUploads} from './filmroom-plan'
 export function billingEnabled(){return process.env.FILMROOM_BILLING_ENABLED==='true'}
 export function filmStripe(){const key=process.env.FILMROOM_STRIPE_SECRET_KEY;if(!key)throw Error('Film Room billing is not configured');return new Stripe(key)}
@@ -16,9 +17,7 @@ export async function reconcileCustomer(customer:string){
  const db=createServiceClient();const observed=new Date().toISOString();const {data:row,error}=await db.from('filmroom_subscriptions').select('owner_id').eq('customer_id',customer).maybeSingle();if(error)throw error;if(!row)return;
  const price=process.env.FILMROOM_STRIPE_PRICE_ID;if(!price)throw Error('Missing Film Room price');
  const list=await filmStripe().subscriptions.list({customer,status:'all',limit:100});if(list.has_more)throw Error('Too many subscriptions to reconcile safely');
- const relevant=list.data.filter(s=>s.metadata.app==='filmroom'&&s.items.data.some(i=>i.price.id===price));
- relevant.sort((a,b)=>(a.status==='active'?-1:0)-(b.status==='active'?-1:0)||b.created-a.created);
- const current=relevant[0];const until=current?Math.max(...current.items.data.filter(i=>i.price.id===price).map(i=>i.current_period_end)):0;
+ const {current,until}=selectFilmRoomSubscription(list.data,price,row.owner_id);
  const result=await db.rpc('filmroom_sync_subscription',{p_owner:row.owner_id,p_customer:customer,p_subscription:current?.id||null,p_status:current?.status||'none',p_until:until?new Date(until*1000).toISOString():null,p_observed:observed});if(result.error)throw result.error;
 }
 export function billingFailure(e:unknown){if(e instanceof NextResponse)return e;return NextResponse.json({error:'Billing is temporarily unavailable. Please try again.'},{status:503})}

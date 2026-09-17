@@ -16,6 +16,7 @@ import {
   CompleteMultipartUploadCommand, AbortMultipartUploadCommand,
   GetObjectCommand, HeadObjectCommand,
 } from '@aws-sdk/client-s3'
+import {completeUpload} from '@/lib/filmroom-complete-upload'
 import {cleanDetachedVideos} from '@/lib/filmroom-storage'
 import {billingEnabled,requirePaid} from '@/lib/filmroom-billing'
 import {validUploadBytes,uploadPartBytes} from '@/lib/filmroom-plan'
@@ -234,14 +235,14 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: `Size mismatch: expected ~${session.expected_size}, got ${totalBytes}` }, { status: 400 })
       }
 
-      await r2Client().send(new CompleteMultipartUploadCommand({
+      await completeUpload(r2Client(),{
         Bucket: R2_BUCKET, Key: session.r2_key, UploadId: session.upload_id,
         MultipartUpload: {
           Parts: parts
             .sort((a: { PartNumber: number }, b: { PartNumber: number }) => a.PartNumber - b.PartNumber)
             .map((p: { ETag: string; PartNumber: number }) => ({ ETag: p.ETag.trim(), PartNumber: p.PartNumber })),
         },
-      }))
+      })
 
       if(billingEnabled())return attachVerified(svc,session,sessionId,user.id)
       const playbackUrl = `${CDN_BASE}/${session.r2_key}`
