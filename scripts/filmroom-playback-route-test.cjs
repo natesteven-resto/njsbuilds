@@ -1,0 +1,18 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),ts=require('typescript'),{NextRequest,NextResponse}=require('next/server');
+const gameId='a'.repeat(8)+'-aaaa-4aaa-8aaa-'+'a'.repeat(12),source='https://r2.example.test/filmroom-videos/games/'+gameId+'/test.mp4';
+Object.assign(process.env,{CLOUDFLARE_R2_ENDPOINT:'https://r2.example.test',CLOUDFLARE_R2_BUCKET:'filmroom-videos'});
+let viewer='owner',shared=false,asset=null,submits=0,claimCount=0,claim=true,providerError=null;
+const db={from:table=>{let action='select',patch;const q={select:()=>q,eq:()=>q,neq:()=>q,maybeSingle:async()=>({data:asset}),single:async()=>({data:{id:gameId,owner_id:'owner',video_url:source}}),update:p=>{action='update';patch=p;return q},delete:()=>{action='delete';return q},then:resolve=>{if(action==='update'&&asset)Object.assign(asset,patch);if(action==='delete')asset=null;resolve({error:null})}};return q},rpc:async()=>{claimCount++;if(!claim)return {data:[]};asset={id:'job',state:'submitting',progress:0};return {data:[{...asset}]}}};
+class StreamError extends Error{constructor(status){super('provider');this.status=status}}
+const mockStream={StreamError,streamEnabled:()=>true,cleanDetachedPlaybacks:async()=>{},refreshPlayback:async a=>a,streamRequest:async(path,method)=>{if(path==='/copy'){submits++;if(providerError)throw providerError;return {uid:'b'.repeat(32)}}return {}}};
+const exports1={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('app/api/filmroom/playback/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports:exports1,require:n=>({'next/server':{NextResponse,NextRequest,after:()=>{}},'@/lib/filmroom-supabase-server':{getVerifiedUser:async()=>({user:{id:viewer},supabase:{rpc:async()=>({data:shared})}}),createServiceClient:()=>db},'@/lib/filmroom-stream':mockStream,'@aws-sdk/client-s3':{S3Client:class{send(){return {ContentLength:100}}},HeadObjectCommand:class{},GetObjectCommand:class{}},'@aws-sdk/s3-request-presigner':{getSignedUrl:async()=>'https://signed.example.test'}}[n]||require(n)),process,Date,URL,console});
+const request=()=>new NextRequest('https://example.test/api/filmroom/playback?gameId='+gameId);
+(async()=>{
+viewer='parent';assert.equal((await exports1.GET(request())).status,403);shared=true;assert.equal((await exports1.GET(request())).status,200);assert.equal((await exports1.POST(request())).status,403);assert.equal((await exports1.DELETE(request())).status,403);assert.equal(submits,0);
+viewer='owner';assert.equal((await exports1.POST(request())).status,202);assert.equal(asset.state,'processing');assert.equal(submits,1);assert.equal((await exports1.POST(request())).status,200);assert.equal(submits,1);assert.equal(claimCount,1);
+assert.equal((await exports1.DELETE(request())).status,409);
+asset=null;providerError=new StreamError(503);assert.equal((await exports1.POST(request())).status,503);assert.equal(asset.state,'submitting');await exports1.POST(request());assert.equal(submits,2,'unknown outcome resubmitted');
+asset=null;providerError=new StreamError(400);assert.equal((await exports1.POST(request())).status,400);assert.equal(asset.state,'failed');assert.equal((await exports1.DELETE(request())).status,200);assert.equal(asset,null);
+claim=false;providerError=null;await exports1.POST(request());assert.equal(submits,3,'losing concurrent claimant submitted');
+console.log('PASS playback owner/parent authorization, single submission, unknown outcome retention, failed retry, concurrent claim loss');
+})().catch(e=>{console.error(e);process.exitCode=1});
