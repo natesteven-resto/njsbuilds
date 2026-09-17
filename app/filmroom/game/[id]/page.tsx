@@ -1428,11 +1428,39 @@ function SaveClipModal({
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
     const surfaces = [...new Set([document.documentElement, document.body, document.fullscreenElement].filter(Boolean))] as HTMLElement[]
-    const styles = surfaces.map(el => ({el, overflow:el.style.overflow, overscroll:el.style.overscrollBehavior}))
-    surfaces.forEach(el => {el.style.overflow='hidden';el.style.overscrollBehavior='none'})
+    const styles = surfaces.map(el => ({el, overflow:el.style.overflow, overscroll:el.style.overscrollBehavior, background:el.style.backgroundColor}))
+    const body=document.body
+    const bodyStyle={position:body.style.position,top:body.style.top,left:body.style.left,width:body.style.width}
+    const scrollX=window.scrollX,scrollY=window.scrollY
+    surfaces.forEach(el => {el.style.overflow='hidden';el.style.overscrollBehavior='none';el.style.backgroundColor='#181917'})
+    // iPad can still pan the document with overflow:hidden alone.
+    Object.assign(body.style,{position:'fixed',top:`-${scrollY}px`,left:`-${scrollX}px`,width:'100%'})
+    let lastY=0
+    const touchStart=(e:TouchEvent)=>{if(e.touches.length===1)lastY=e.touches[0].clientY}
+    const touchMove=(e:TouchEvent)=>{
+      if(e.touches.length!==1)return // Preserve pinch zoom.
+      const y=e.touches[0].clientY,delta=y-lastY;lastY=y
+      const details=dialogRef.current?.querySelector('[aria-label="Clip details"]')
+      let el=e.target instanceof HTMLElement?e.target:null
+      // Allow an inner textarea or the details pane to consume the gesture.
+      while(el&&details?.contains(el)){
+        const overflow=getComputedStyle(el).overflowY
+        const max=el.scrollHeight-el.clientHeight
+        if(/auto|scroll/.test(overflow)&&max>1&&((delta>0&&el.scrollTop>0)||(delta<0&&el.scrollTop<max-1)))return
+        if(el===details)break
+        el=el.parentElement
+      }
+      if(e.cancelable)e.preventDefault()
+    }
+    document.addEventListener('touchstart',touchStart,{passive:true})
+    document.addEventListener('touchmove',touchMove,{passive:false})
     dialogRef.current?.querySelector<HTMLInputElement>('[name="clip-title"]')?.focus({preventScroll:true})
     return () => {
-      styles.forEach(({el,overflow,overscroll})=>{el.style.overflow=overflow;el.style.overscrollBehavior=overscroll})
+      document.removeEventListener('touchstart',touchStart)
+      document.removeEventListener('touchmove',touchMove)
+      styles.forEach(({el,overflow,overscroll,background})=>{el.style.overflow=overflow;el.style.overscrollBehavior=overscroll;el.style.backgroundColor=background})
+      Object.assign(body.style,bodyStyle)
+      window.scrollTo({left:scrollX,top:scrollY,behavior:'instant'})
       if (previous?.isConnected) previous.focus({preventScroll:true})
     }
   }, [])
