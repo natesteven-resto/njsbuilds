@@ -1,4 +1,5 @@
 'use client'
+import {selectOwnedTeam,savedCoachTeam} from '@/lib/filmroom-navigation'
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
@@ -164,7 +165,7 @@ export default function RosterPage() {
       if (tRes.status === 401) { router.push('/filmroom/login?next=/filmroom/roster'); return }
       if (!tRes.ok) { setError('Failed to load roster'); setLoading(false); return }
       const teams = await tRes.json()
-      const team = Array.isArray(teams) && teams.length > 0 ? teams[0] : null
+      const team = Array.isArray(teams) ? selectOwnedTeam(teams,savedCoachTeam()) : null
       if (!team) { setTeamId(null); setLoading(false); return }
       setTeamId(team.id)
       setTeamName(team.name)

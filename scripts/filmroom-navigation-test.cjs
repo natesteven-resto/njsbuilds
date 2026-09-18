@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript')
+const scope={exports:{},localStorage:{getItem(){throw Error('Blocked')},setItem(){throw Error('Blocked')}}};vm.createContext(scope)
+vm.runInContext(ts.transpileModule(fs.readFileSync('lib/filmroom-navigation.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,scope)
+const {shouldOpenFamily,selectOwnedTeam,savedCoachTeam,rememberCoachTeam}=scope.exports
+assert.equal(shouldOpenFamily(true,false,false),true,'invited parent gets family landing')
+assert.equal(shouldOpenFamily(true,true,false),false,'coach keeps owned games')
+assert.equal(shouldOpenFamily(true,false,true),false,'explicit coach switch avoids redirect loop')
+assert.equal(shouldOpenFamily(true,false,false,true),false,'paid coach with empty library keeps coach landing')
+assert.equal(shouldOpenFamily(false,false,false),false,'no invitation never grants shared access')
+const teams=[{id:'a'},{id:'b'}]
+assert.equal(selectOwnedTeam(teams,'b').id,'b')
+assert.equal(selectOwnedTeam(teams,'another-user-team').id,'a','stale selection limited to owned teams')
+assert.equal(selectOwnedTeam([],null),null)
+assert.equal(savedCoachTeam(),null);assert.doesNotThrow(()=>rememberCoachTeam('a'))
+console.log('PASS: parent landing, existing/paid coach, explicit mode switch, absent invite, owned team selection, unavailable storage')

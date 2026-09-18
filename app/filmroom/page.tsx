@@ -7,6 +7,7 @@ import { Film, Plus, Search, ArrowUpRight, Play, ListVideo, Loader2, Trash2, X, 
 import { AccountBar } from './components/AccountBar'
 import { CsHeader, VideoThumbnail, gameSeason, formatGameDate } from './components/cs-shared'
 import { GameMetadata } from './components/GameMetadata'
+import {shouldOpenFamily,selectOwnedTeam,savedCoachTeam,rememberCoachTeam} from '@/lib/filmroom-navigation'
 import type { Game } from '@/types/filmroom'
 
 type LibraryGame = Game & { clip_count: number | null; highlight_count: number; resume_position_ms?: number }
@@ -78,9 +79,11 @@ function GameCard({ game, removed }: { game: LibraryGame; removed: (id: string) 
 
 export default function FilmRoomLibrary() {
   const router = useRouter()
-  const [games, setGames] = useState<LibraryGame[]>([])
+  const [allGames, setGames] = useState<LibraryGame[]>([])
   const [playlists, setPlaylists] = useState<LibraryPlaylist[]>([])
   const [playlistError, setPlaylistError] = useState(false)
+  const [teams,setTeams]=useState<{id:string;name:string}[]>([])
+  const [hasFamily,setHasFamily]=useState(false)
   const [team, setTeam] = useState<{ id: string; name: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -102,13 +105,17 @@ export default function FilmRoomLibrary() {
     const load = async () => {
       setLoading(true); setError(''); setGames([]); setTeam(null); setPlaylists([])
       try {
-        const [g, teams, plan] = await Promise.all([json('/api/filmroom/games'), json('/api/filmroom/teams'),json('/api/filmroom/billing')])
+        const [g, teams, plan, family] = await Promise.all([json('/api/filmroom/games'), json('/api/filmroom/teams'),json('/api/filmroom/billing'),json('/api/filmroom/family')])
+        if (!Array.isArray(g) || !Array.isArray(teams)) throw new Error('Unexpected library response.')
+        const invited=family.invitations?.length>0||family.games?.length>0
+        setHasFamily(invited)
+        if(shouldOpenFamily(invited,g.some((game:Game)=>!game.is_demo),new URLSearchParams(location.search).get('view')==='coach',!!plan.canUpload)){router.replace('/filmroom/family');return}
         setBilling(plan)
         if (!Array.isArray(g) || !Array.isArray(teams)) throw new Error('Unexpected library response.')
-        const ownTeam = teams[0] || await json('/api/filmroom/teams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'My Team', season: gameSeason(new Date().toLocaleDateString('en-CA')), sport: 'basketball' }) })
+        const ownTeam = selectOwnedTeam(teams,savedCoachTeam()) || await json('/api/filmroom/teams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'My Team', season: gameSeason(new Date().toLocaleDateString('en-CA')), sport: 'basketball' }) })
         const loaded: LibraryGame[] = g.map((game: LibraryGame) => ({...game,clip_count:game.clip_count ?? null,highlight_count:game.highlight_count ?? 0}))
         if (abort.signal.aborted) return
-        setTeam(ownTeam); setGames(loaded)
+        setTeams(teams.length?teams:[ownTeam]);setTeam(ownTeam); setGames(loaded)
         try {
           const p = await json('/api/filmroom/playlists')
           if (!abort.signal.aborted) { setPlaylists(Array.isArray(p) ? p : []); setPlaylistError(false) }
@@ -120,6 +127,7 @@ export default function FilmRoomLibrary() {
     return () => abort.abort()
   }, [router, reload])
   const removed = useCallback((id: string) => { setGames(g => g.filter(x => x.id !== id)); setReload(n => n + 1) }, [])
+  const games=allGames.filter(g=>g.team_id===team?.id)
   const seasons = [...new Set(games.map(g => (g.season_label || gameSeason(g.game_date))))].sort().reverse()
   const filtered = games.filter(g => (filmType==='all'||g.session_type===filmType) && (season === 'all' || (g.season_label || gameSeason(g.game_date)) === season) && (!search || g.opponent.toLowerCase().includes(search.toLowerCase())) && (filter === 'all' || (filter === 'film' ? !!g.video_url : !g.video_url)))
   const resume = [...games].sort((a,b)=>(b.last_watched_at||'').localeCompare(a.last_watched_at||'')).find(g => g.video_url && (g.resume_position_ms || 0) > 0)
@@ -129,9 +137,10 @@ export default function FilmRoomLibrary() {
     <CsHeader active="library" right={<AccountBar />} />
     <main className="mx-auto max-w-[1440px] px-4 pb-12 pt-7 sm:px-8 sm:pt-10">
       <div className="mb-7 flex flex-wrap items-end justify-between gap-5">
-        <div><p className="mb-2 text-xs font-semibold uppercase tracking-[.2em] text-[#c9c3b8]">Your private film library</p><h1 className="text-5xl font-black uppercase leading-none sm:text-6xl" style={{ fontFamily: 'var(--font-bc)' }}>{team?.name || 'Film Room'}</h1><Link href="/filmroom/settings#team" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-[#e49269]">Edit team ↗</Link></div>
+        <div><p className="mb-2 text-xs font-semibold uppercase tracking-[.2em] text-[#c9c3b8]">Your private film library</p><h1 className="text-5xl font-black uppercase leading-none sm:text-6xl" style={{ fontFamily: 'var(--font-bc)' }}>{team?.name || 'Film Room'}</h1><label className="mt-4 block text-sm text-[#c9c3b8]">Coach team<select aria-label="Switch coach team" value={team?.id||''} onChange={e=>{setTeam(selectOwnedTeam(teams,e.target.value));rememberCoachTeam(e.target.value);setSearch('');setSeason('all');setFilter('all');setFilmType('all')}} className={control+" ml-3"}>{teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><Link href="/filmroom/settings#team" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-[#e49269]">Edit team ↗</Link></div>
         {billing?.enabled&&!billing.canUpload?<Link href="/filmroom/billing" className={action}>Subscribe · $25/month</Link>:<button onClick={() => setShowAdd(true)} disabled={!team || loading || !!(billing?.enabled&&(billing.gameCount||0)>=50)} className={action}><Plus className="h-4 w-4" />Add game</button>}
       </div>
+      {hasFamily&&<Link href="/filmroom/family" className="mb-5 inline-flex min-h-11 items-center rounded border border-[#e49269]/40 px-4 text-[#e49269]">Parent view · Games shared with me →</Link>}
       {billing?.enabled&&<p className="mb-5 text-sm text-[#c9c3b8]">{billing.canUpload?`${billing.gameCount} / 50 games · ${((billing.usedBytes||0)/1e9).toFixed(1)} / 500 GB`:'Explore your demo game. Subscribe to add your own film.'} <Link href="/filmroom/billing" className="ml-2 text-[#e49269] underline">Plan & billing</Link></p>}
       {loading ? <div role="status" className="flex items-center gap-3 py-16 text-[#c9c3b8]"><Loader2 className="h-5 w-5 animate-spin" />Loading your library…</div> : error ? <div role="alert" className="rounded-md border border-red-300/30 p-6"><p className="text-red-200">{error}</p><button onClick={() => setReload(n => n + 1)} className={`${control} mt-4 inline-flex items-center gap-2`}><RefreshCw className="h-4 w-4" />Try again</button></div> : <>
         <div className="mb-7 flex flex-wrap gap-x-6 gap-y-2 border-y border-[#eee9df]/10 py-3 text-xs uppercase tracking-wider text-[#aaa89f]">
@@ -148,7 +157,7 @@ export default function FilmRoomLibrary() {
             </Link>
           </section> : <section className="flex min-h-[230px] flex-col items-start justify-center rounded-md border border-dashed border-[#eee9df]/25 p-7"><Film className="mb-4 h-7 w-7 text-[#c66a3e]" /><h2 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-bc)' }}>Your next film session starts here.</h2><p className="mt-2 max-w-md text-sm text-[#c9c3b8]">Add a game or practice, upload the film, and turn the moments that matter into teaching clips.</p></section>}
           <section className="flex flex-col border-y border-[#eee9df]/10 py-4 lg:border-y-0 lg:border-l lg:pl-6">
-            <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-xs font-semibold uppercase tracking-[.15em] text-[#c9c3b8]">Teaching playlists</h2><Link href="/filmroom/playlists" aria-label="View all playlists" className="flex h-11 w-11 items-center justify-center text-[#e49269]"><ArrowUpRight className="h-5 w-5" /></Link></div>
+            <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-xs font-semibold uppercase tracking-[.15em] text-[#c9c3b8]">Playlists · all teams</h2><Link href="/filmroom/playlists" aria-label="View all playlists" className="flex h-11 w-11 items-center justify-center text-[#e49269]"><ArrowUpRight className="h-5 w-5" /></Link></div>
             {playlistError ? <p className="text-sm text-[#c9c3b8]">Playlists could not be loaded. Open Playlists to try again.</p> : playlists.length ? <div className="divide-y divide-[#eee9df]/10">{playlists.slice(0, 3).map(p => <Link key={p.id} href={`/filmroom/playlists/${p.id}`} className="flex min-h-[65px] items-center gap-3 py-3"><ListVideo className="h-5 w-5 shrink-0 text-[#c66a3e]" /><div className="min-w-0"><h3 className="truncate text-sm font-semibold">{p.name}</h3><p className="mt-1 text-xs text-[#aaa89f]">{p.clip_count} {p.clip_count === 1 ? 'clip' : 'clips'}</p></div></Link>)}</div> : <><ListVideo className="mb-3 h-6 w-6 text-[#c66a3e]" /><p className="text-lg font-semibold">Build your next film session.</p><p className="mt-2 text-sm leading-relaxed text-[#aaa89f]">Collect clips across games, put them in order, and teach one point at a time.</p><Link href="/filmroom/playlists" className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#e49269]">Create a playlist<ArrowUpRight className="h-4 w-4" /></Link></>}
           </section>
         </div>
