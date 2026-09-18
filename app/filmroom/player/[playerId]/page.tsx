@@ -138,24 +138,27 @@ export default function PlayerPortal() {
 
   const [player, setPlayer] = useState<Player | null>(null)
   const [clips, setClips] = useState<Clip[]>([])
+  const [gamesList, setGamesList] = useState<{id:string;opponent:string;game_date:string;video_url:string|null}[]>([])
   const [stats, setStats] = useState<PlayerStats[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'clips' | 'stats'>('clips')
+  const [tab, setTab] = useState<'games' | 'clips' | 'stats'>('games')
 
   useEffect(() => {
     Promise.all([
       fetch(`/api/filmroom/players?team_id=00000000-0000-0000-0000-000000000010`).then(r => r.json()),
       fetch(`/api/filmroom/clips?team_id=00000000-0000-0000-0000-000000000010`).then(r => r.json()),
       fetch(`/api/filmroom/stats?player_id=${playerId}`).then(r => r.json()),
-    ]).then(([allPlayers, allClips, playerStats]) => {
+      fetch(`/api/filmroom/games?team_id=00000000-0000-0000-0000-000000000010`).then(r => r.json()),
+    ]).then(([allPlayers, allClips, playerStats, allGames]) => {
       const p = (Array.isArray(allPlayers) ? allPlayers : []).find((x: Player) => x.id === playerId)
       setPlayer(p || null)
-      // Filter clips that include this player
       const myClips = (Array.isArray(allClips) ? allClips : []).filter(
         (c: Clip) => c.players?.some((cp: Player) => cp.id === playerId)
       )
       setClips(myClips)
       setStats(Array.isArray(playerStats) ? playerStats : [])
+      // Show all games that have a video uploaded
+      setGamesList((Array.isArray(allGames) ? allGames : []).filter((g: {video_url:string|null}) => !!g.video_url))
       setLoading(false)
     })
   }, [playerId])
@@ -217,7 +220,8 @@ export default function PlayerPortal() {
         {/* Tabs */}
         <div className="flex gap-1 bg-white/4 border border-white/8 rounded-xl p-0.5 mb-4">
           {([
-            ['clips', 'My Clips', Film],
+            ['games', 'Games', Film],
+            ['clips', 'My Clips', Scissors],
             ['stats', 'Stats', BarChart2],
           ] as const).map(([t, label, Icon]) => (
             <button key={t} onClick={() => setTab(t)}
@@ -226,6 +230,32 @@ export default function PlayerPortal() {
             </button>
           ))}
         </div>
+
+        {/* Games */}
+        {tab === 'games' && (
+          <div className="space-y-3">
+            {gamesList.length === 0 ? (
+              <div className="text-center py-12">
+                <Film className="w-8 h-8 mx-auto text-white/15 mb-2" />
+                <p className="text-sm text-white/30">No game film available yet.</p>
+              </div>
+            ) : (
+              gamesList.map(g => (
+                <a key={g.id} href={`/filmroom/game/${g.id}`}
+                  className="flex items-center gap-4 rounded-2xl border border-white/8 bg-white/3 hover:border-white/15 hover:bg-white/5 transition-all p-4">
+                  <div className="w-12 h-12 rounded-xl bg-white/6 flex items-center justify-center shrink-0">
+                    <Film className="w-5 h-5 text-white/40" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-white text-sm truncate">vs {g.opponent}</p>
+                    <p className="text-xs text-white/40 mt-0.5">{new Date(g.game_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</p>
+                  </div>
+                  <Play className="w-4 h-4 text-white/30 shrink-0" />
+                </a>
+              ))
+            )}
+          </div>
+        )}
 
         {/* Clips */}
         {tab === 'clips' && (
