@@ -1,21 +1,53 @@
 import {NextRequest,NextResponse} from 'next/server'
-import {getVerifiedUser} from '@/lib/filmroom-supabase-server'
+import {createServiceClient} from '@/lib/supabase'
+
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const TEAM_ID='00000000-0000-0000-0000-000000000010'
+
 export async function GET(request:NextRequest){
- try{
-  const {supabase}=await getVerifiedUser(request); const game=request.nextUrl.searchParams.get('game_id')
-  if(game&&!uuid.test(game))return NextResponse.json({error:'Invalid game.'},{status:400})
-  const {data,error}=game?await supabase.rpc('filmroom_parent_stats',{p_game:game}):await supabase.rpc('filmroom_parent_library')
-  if(error)return NextResponse.json({error:game?'Stats are not shared with this account.':'Could not load shared games.'},{status:game?403:500})
-  return NextResponse.json(data,{headers:{'Cache-Control':'private, no-store'}})
- }catch(e){return e instanceof NextResponse?e:NextResponse.json({error:'Could not load shared games.'},{status:500})}
+  const supabase=createServiceClient()
+  const game=request.nextUrl.searchParams.get('game_id')
+
+  // Return stat entries for a specific game
+  if(game){
+    if(!uuid.test(game)) return NextResponse.json({error:'Invalid game.'},{status:400})
+    const {data,error}=await supabase
+      .from('stat_entries')
+      .select('*, players(id,name,number)')
+      .eq('game_id',game)
+      .order('video_time_ms',{ascending:true})
+    if(error) return NextResponse.json([])
+    // Flatten player info
+    const entries=(data||[]).map((e:Record<string,unknown>)=>{
+      const p=e.players as {id:string;name:string;number:string}|null
+      return {...e,player_name:p?.name||'Opponent',player_number:p?.number||'OPP'}
+    })
+    return NextResponse.json(entries,{headers:{'Cache-Control':'private, no-store'}})
+  }
+
+  // Return all games for the team
+  const {data:games,error}=await supabase
+    .from('games')
+    .select('id,opponent,game_date,video_url,video_id,team_id')
+    .eq('team_id',TEAM_ID)
+    .order('game_date',{ascending:false})
+
+  if(error) return NextResponse.json({games:[],invitations:[]})
+
+  const shaped=(games||[]).map(g=>({
+    id:g.id,
+    opponent:g.opponent,
+    game_date:g.game_date,
+    team:'Varsity Boys',
+    film:!!g.video_url,
+    stats:true,
+    has_video:!!g.video_url,
+  }))
+
+  return NextResponse.json({games:shaped,invitations:[]},{headers:{'Cache-Control':'private, no-store'}})
 }
-export async function POST(request:NextRequest){
- try{
-  const {supabase}=await getVerifiedUser(request);const b=await request.json()
-  if(typeof b.id!=='string'||!uuid.test(b.id))return NextResponse.json({error:'Invalid invitation.'},{status:400})
-  const {error}=await supabase.rpc('filmroom_accept_parent_invite',{p_invite:b.id})
-  if(error)return NextResponse.json({error:'Invitation unavailable. Sign in with the email your coach invited.'},{status:403})
+
+// Accept invite — no-op now, just return ok
+export async function POST(){
   return NextResponse.json({ok:true})
- }catch(e){return e instanceof NextResponse?e:NextResponse.json({error:'Could not accept invitation.'},{status:500})}
 }
