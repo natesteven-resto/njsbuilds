@@ -185,6 +185,14 @@ await test('clips share by default, private clips are hidden, and only safe fiel
  await db.exec(`UPDATE filmroom_parent_shares SET film=true WHERE invite_id='${I}'; UPDATE clips SET parent_shared=false WHERE id='${ids.ca}'`);
  assert((await read()).length===0,'unshared clip still visible');
 });
+await test('parent box score includes zero-stat roster only for shared team',async()=>{
+ const d=(await as('authenticated',P,`SELECT filmroom_parent_box_score('${ids.ga}') AS data`)).rows[0].data;
+ assert(Array.isArray(d.entries),'missing entries');assert(d.players.some(p=>p.id===ids.pa),'zero-stat player omitted');assert(!d.players.some(p=>p.id===ids.pb),'foreign player leaked');
+ assert(Object.keys(d.players[0]).sort().join(',')==='id,name,number','private roster fields leaked');
+ await db.exec(`UPDATE filmroom_parent_shares SET stats=false WHERE invite_id='${I}'`);
+ let blocked=false;try{await as('authenticated',P,`SELECT filmroom_parent_box_score('${ids.ga}')`)}catch{blocked=true}assert(blocked,'film-only parent got box score');
+ await db.exec(`UPDATE filmroom_parent_shares SET stats=true WHERE invite_id='${I}'`);
+});
 await test('film and stats permissions are independent',async()=>{await db.exec(`UPDATE filmroom_parent_shares SET film=false WHERE invite_id='${I}'`);assert(!await access(P,ids.ga,'film'),'film not disabled');assert(await access(P,ids.ga,'stats'),'stats not retained');await as('authenticated',P,`SELECT filmroom_parent_stats('${ids.ga}')`);await db.exec(`UPDATE filmroom_parent_shares SET film=true,stats=false WHERE invite_id='${I}'`);let blocked=false;try{await as('authenticated',P,`SELECT filmroom_parent_stats('${ids.ga}')`)}catch{blocked=true}assert(blocked,'stats exposed after disable')});
 await test('cross-team malformed share fails closed',async()=>{await db.exec(`INSERT INTO filmroom_parent_shares(invite_id,game_id,film) VALUES('${I}','${ids.gb}',true)`);assert(!await access(P,ids.gb,'film'),'foreign game exposed');assert((await family(P)).games.length===1,'foreign game listed')});
 await test('changed email loses access',async()=>{await db.exec(`UPDATE auth.users SET email='changed@example.test' WHERE id='${P}'`);try{assert(!await access(P,ids.ga,'film'),'changed identity retained access')}finally{await db.exec(`UPDATE auth.users SET email='parent@example.test' WHERE id='${P}'`)}});

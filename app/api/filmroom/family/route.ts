@@ -3,9 +3,9 @@ import {getVerifiedUser} from '@/lib/filmroom-supabase-server'
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export async function GET(request:NextRequest){
  try{
-  const {user,supabase}=await getVerifiedUser(request); const game=request.nextUrl.searchParams.get('game_id'); const clips=request.nextUrl.searchParams.get('view')==='clips'
+  const {user,supabase}=await getVerifiedUser(request); const game=request.nextUrl.searchParams.get('game_id'); const view=request.nextUrl.searchParams.get('view')
   if(game&&!uuid.test(game))return NextResponse.json({error:'Invalid game.'},{status:400})
-  const {data,error}=game?await supabase.rpc(clips?'filmroom_parent_clips':'filmroom_parent_stats',{p_game:game}):await supabase.rpc('filmroom_parent_library')
+  const {data,error}=game?await supabase.rpc(view==='clips'?'filmroom_parent_clips':view==='box-score'?'filmroom_parent_box_score':'filmroom_parent_stats',{p_game:game}):await supabase.rpc('filmroom_parent_library')
   if(error)return NextResponse.json({error:game?'This content is not shared with this account.':'Could not load shared games.'},{status:game?403:500})
   return NextResponse.json(game?data:{...data,email:user.email},{headers:{'Cache-Control':'private, no-store'}})
  }catch(e){return e instanceof NextResponse?e:NextResponse.json({error:'Could not load shared games.'},{status:500})}
