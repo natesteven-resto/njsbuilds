@@ -14,6 +14,8 @@ const post=()=>new NextRequest('https://example.test/api/filmroom/family',{metho
  signedIn=true;let response=await exports_.GET(get());assert.equal(response.status,200);assert.equal((await response.json()).email,'parent@example.test');assert.equal(calls.at(-1).name,'filmroom_parent_library')
  assert.equal(response.headers.get('cache-control'),'private, no-store')
  rpcError={message:'Not shared'};assert.equal((await exports_.GET(get('?game_id='+id))).status,403);assert.equal(calls.at(-1).name,'filmroom_parent_stats');assert.equal(calls.at(-1).args.p_game,id)
+ assert.equal((await exports_.GET(get('?game_id='+id+'&view=clips'))).status,403);assert.equal(calls.at(-1).name,'filmroom_parent_clips')
+ rpcError=null;assert.equal((await exports_.GET(get('?game_id='+id+'&view=clips'))).status,200);rpcError={message:'Not shared'}
  assert.equal((await exports_.POST(post())).status,403);assert.equal(calls.at(-1).name,'filmroom_accept_parent_invite')
  rpcError=null;assert.equal((await exports_.POST(post())).status,200)
  console.log('PASS: authenticated parent library, private caching, own email, forbidden stats, verified invitation acceptance, no legacy database')

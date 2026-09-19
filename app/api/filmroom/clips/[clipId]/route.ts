@@ -3,7 +3,7 @@ import { getVerifiedUser, createServiceClient, assertOwner } from '@/lib/filmroo
 
 type Params = { params: Promise<{ clipId: string }> }
 
-const PATCH_ALLOWED = ['title', 'tags', 'category', 'is_highlight', 'drawing_data',
+const PATCH_ALLOWED = ['parent_shared', 'title', 'tags', 'category', 'is_highlight', 'drawing_data',
   'coaching_note', 'play_type', 'primary_player_id', 'start_time_ms', 'end_time_ms'] as const
 
 export async function PATCH(request: NextRequest, { params }: Params) {
@@ -24,6 +24,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: 'No patchable fields' }, { status: 400 })
     }
+
+    if (patch.parent_shared !== undefined && typeof patch.parent_shared !== 'boolean') return NextResponse.json({error:'Invalid clip sharing selection.'},{status:400})
 
     // Validate time bounds before use — must be finite non-negative integers
     if (patch.start_time_ms !== undefined) {

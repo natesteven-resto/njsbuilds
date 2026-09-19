@@ -112,6 +112,7 @@ export function normalizeDrawingData(raw: unknown): DrawingData | null {
 }
 
 export interface Clip {
+  parent_shared?: boolean
   id: string
   game_id: string
   team_id: string
