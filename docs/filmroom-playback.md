@@ -54,3 +54,13 @@ purchase more capacity. Original R2 storage remains a separate existing cost.
   sanitized errors.
 - Hosted generated video: encoding, Original/Auto switching, position/speed,
   seek, fullscreen toolbar, parent denial/revocation and disposable cleanup.
+
+## Safari parent playback (2026-09-18)
+
+Parent playback now uses controls below the video instead of native inline controls, avoiding Safari's hover dimming layer. The same video element handles play/pause, timeline seeking, +/-5 seconds, mute, speed, and fullscreen.
+
+Authorization still renews on the existing schedule (parents every 40 seconds, 60-second signed URLs). Successful renewals no longer replace a healthy media source or destroy its HLS instance. A server-provided source fingerprint detects actual video replacements. Media errors request fresh authorization and recover the current position, speed, and play/pause state; access denial stops and clears the player. This does not extend signed URL lifetimes or remove revocation checks. An expired range/manifest request may still require media recovery; continuous healthy playback no longer reloads on every authorization tick.
+
+Validation: simulated renewals keep the source/load count unchanged; expired-media recovery retains position/speed/play state; replacement sources reload; access revocation stops playback. Existing parent authorization and playback-route tests pass.
+
+The parent library now reuses the coach library's authorized VideoThumbnail component, featured latest-game card, game cards, and date/heading style. Thumbnails are generated only for games with Film permission; stats-only games show a neutral placeholder. The upgrade link is a compact footer.
