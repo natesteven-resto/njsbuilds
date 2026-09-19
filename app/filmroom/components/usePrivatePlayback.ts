@@ -51,7 +51,7 @@ export function usePrivatePlayback(video:RefObject<HTMLVideoElement|null>,gameId
      hls=new Hls({startPosition:saved.current.time,maxBufferLength:20,maxMaxBufferLength:30})
      hls.on(Hls.Events.ERROR,(_event,data)=>{if(data.fatal)recover()})
      hls.loadSource(d.src);hls.attachMedia(v!)
-    }else if(d.type!=='hls'||v!.canPlayType('application/vnd.apple.mpegurl')){v!.src=d.src;v!.load()}
+    }else if(d.type!=='hls'||v!.canPlayType('application/vnd.apple.mpegurl')){v!.src=d.type==='r2'?`/api/filmroom/video-stream?gameId=${encodeURIComponent(gameId!)}&source=${encodeURIComponent(nextVersion)}`:d.src;v!.load()}
     else{fatal();return}
     setError('')
 

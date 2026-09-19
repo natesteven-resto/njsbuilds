@@ -6,8 +6,8 @@ async function test(){let effect,cleanup,calls=0,status=200,version='same',timer
  exports_.usePrivatePlayback({current:v},'game','original',()=>{});cleanup=effect();await tick();v.emit('loadedmetadata');assert.equal(v.loads,1);
  v.currentTime=80;v.playbackRate=1.5;v.paused=false;v.emit('timeupdate');
  for(let i=0;i<3;i++){const [id,fn]=timers.entries().next().value;timers.delete(id);fn();await tick()}
- assert.equal(calls,4);assert.equal(v.loads,1);assert.equal(v.currentTime,80);assert.equal(v.paused,false);assert.equal(v.src,'signed-1');
- v.error={code:2};v.emit('error');await tick();assert.equal(v.loads,2);assert.equal(v.src,'signed-5');v.emit('loadedmetadata');assert.equal(v.currentTime,80);assert.equal(v.playbackRate,1.5);assert.equal(v.paused,false);
+ assert.equal(calls,4);assert.equal(v.loads,1);assert.equal(v.currentTime,80);assert.equal(v.paused,false);assert.equal(v.src,'/api/filmroom/video-stream?gameId=game&source=same');
+ v.error={code:2};v.emit('error');await tick();assert.equal(v.loads,2);assert.equal(v.src,'/api/filmroom/video-stream?gameId=game&source=same');v.emit('loadedmetadata');assert.equal(v.currentTime,80);assert.equal(v.playbackRate,1.5);assert.equal(v.paused,false);
  version='replacement';let [id,fn]=timers.entries().next().value;timers.delete(id);fn();await tick();assert.equal(v.loads,3);v.emit('loadedmetadata');
  status=403;[id,fn]=timers.entries().next().value;timers.delete(id);fn();await tick();assert.equal(v.src,'');assert.equal(v.paused,true);assert.equal(timers.size,0);cleanup();
  console.log('PASS: access renewals do not reload video; expired-media recovery preserves position/speed/play state; source replacement reloads; revoked access stops playback');
