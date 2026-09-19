@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         category,
         tags,
         is_highlight: isHighlight,
-        parent_shared: raw.parent_shared === true,
+        parent_shared: raw.parent_shared !== false,
         drawing_data: drawingData,
         coaching_note: coachingNote,
         play_type: playType,

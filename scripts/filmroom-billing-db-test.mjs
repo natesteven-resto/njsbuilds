@@ -171,8 +171,10 @@ await test('accepted parent receives only explicitly shared game and safe metada
 await test('parent cannot directly read private game, clips or roster',async()=>{for(const t of ['games','clips','players','stat_entries'])assert((await as('authenticated',P,`SELECT * FROM ${t}`)).rows.length===0,'private '+t+' exposed')});
 await test('parent cannot modify coach game',async()=>{assert((await as('authenticated',P,`UPDATE games SET notes='forged' WHERE id='${ids.ga}' RETURNING id`)).rows.length===0,'parent edit allowed')});
 await test('parent cannot forge invitation or sharing via direct tables',async()=>{for(const q of [`INSERT INTO filmroom_parent_invites(owner_id,team_id,email) VALUES('${P}','${ids.ta}','forged@example.test')`,`UPDATE filmroom_parent_shares SET film=true`,`SELECT * FROM filmroom_parent_invites`]){let blocked=false;try{await as('authenticated',P,q)}catch(e){blocked=/permission denied/.test(e.message)}assert(blocked,'direct access allowed')}});
-await test('clips are private by default and explicitly shared safe fields only',async()=>{
+await test('clips share by default, private clips are hidden, and only safe fields are returned',async()=>{
  const read=async()=> (await as('authenticated',P,`SELECT filmroom_parent_clips('${ids.ga}') AS clips`)).rows[0].clips;
+ assert((await read()).length===1,'new clip not shared by default');
+ await db.exec(`UPDATE clips SET parent_shared=false WHERE id='${ids.ca}'`);
  assert((await read()).length===0,'private clip exposed');
  await db.exec(`UPDATE clips SET parent_shared=true,title='Shared teaching clip',coaching_note='Private coaching notes' WHERE id='${ids.ca}'`);
  const clips=await read();assert(clips.length===1&&clips[0].id===ids.ca,'shared clip missing');

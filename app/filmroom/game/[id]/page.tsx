@@ -1478,7 +1478,7 @@ function SaveClipModal({
   }
   const [range,setRange]=useState({start:startMs/1000,end:endMs/1000})
   const [form, setForm] = useState({
-    parent_shared: existingClip?.parent_shared ?? false,
+    parent_shared: existingClip?.parent_shared ?? true,
     title: existingClip?.title ?? '', category: existingClip?.category ?? 'offense' as ClipCategory,
     tags: existingClip?.tags.join(', ') ?? '', is_highlight: existingClip?.is_highlight ?? false, player_ids: existingClip?.players?.map(p=>p.id) ?? [] as string[],
     coaching_note: existingClip?.coaching_note ?? '', play_type: existingClip?.play_type ?? '',
@@ -1618,7 +1618,7 @@ function SaveClipModal({
             </div>
           </div>
 
-          <label className="flex items-start gap-3 rounded border border-[#c66a3e]/40 p-3 text-sm"><input type="checkbox" checked={form.parent_shared} onChange={e=>setForm(f=>({...f,parent_shared:e.target.checked}))} className="mt-1"/><span>Share clip with parents<span className="mt-1 block text-xs text-white/60">Visible to invited parents who can watch this game. Your coaching notes stay private.</span></span></label>
+          <label className="flex items-start gap-3 rounded border border-[#c66a3e]/40 p-3 text-sm"><input type="checkbox" checked={!form.parent_shared} onChange={e=>setForm(f=>({...f,parent_shared:!e.target.checked}))} className="mt-1"/><span>Private — only me<span className="mt-1 block text-xs text-white/60">Clips are shared with parents who can watch this game unless marked private. Your coaching notes always stay private.</span></span></label>
           <CustomClipTags selected={form.tags.split(',').map(t=>t.trim())} toggle={tag=>setForm(f=>{const tags=f.tags.split(',').map(t=>t.trim()).filter(Boolean);return {...f,tags:(tags.includes(tag)?tags.filter(t=>t!==tag):[...tags,tag]).join(', ')}})}/>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -1748,7 +1748,7 @@ function ClipItem({
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              {clip.parent_shared&&<span className="text-[10px] text-[#e49269]">Shared with parents</span>}
+              <span className="text-[10px] text-[#e49269]">{clip.parent_shared===false?'Private · Only you':'Shared with parents'}</span>
               {clip.is_highlight && <Star className="w-3 h-3 text-yellow-400 fill-yellow-400 shrink-0" />}
               <span className="text-xs font-medium text-white truncate">{clip.title}</span>
             </div>
