@@ -1,4 +1,5 @@
 /** Private original/optimized playback. Always authorizes the viewer before signing. */
+import {playbackGatewayConfigured,renewPlaybackSession} from '@/lib/filmroom-playback-session'
 import {createHash} from 'node:crypto'
 import {streamEnabled,streamToken} from '@/lib/filmroom-stream'
 import { NextRequest, NextResponse } from 'next/server'
@@ -92,6 +93,13 @@ export async function GET(request: NextRequest) {
     if (!key) {
       // Unrecognized URL format — fail closed; never return raw URL
       return NextResponse.json({ error: 'Unsupported video storage format' }, { status: 400 })
+    }
+
+    if(searchParams.get('delivery')==='session'&&playbackGatewayConfigured()){
+      try{
+        const session=await renewPlaybackSession({viewer:user.id,game:gameId,key,session:searchParams.get('session')})
+        return NextResponse.json({type:'r2-session',...session,sourceVersion,expiresInSeconds:60,refreshAfterSeconds:40},{headers:{'Cache-Control':'private, no-store'}})
+      }catch{return NextResponse.json({error:'Private playback session unavailable.'},{status:503})}
     }
 
     const signedUrl = await getSignedUrl(

@@ -1,0 +1,16 @@
+name = "filmroom-private-playback"
+main = "worker.mjs"
+compatibility_date = "2026-09-18"
+workers_dev = true
+
+[[r2_buckets]]
+binding = "FILMROOM_VIDEOS"
+bucket_name = "filmroom-videos"
+
+[[durable_objects.bindings]]
+name = "PLAYBACK_SESSIONS"
+class_name = "PlaybackSession"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PlaybackSession"]

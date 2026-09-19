@@ -14,6 +14,7 @@ export function usePrivatePlayback(video:RefObject<HTMLVideoElement|null>,gameId
   if(saved.current.key!==key)saved.current={key,time:0,playing:false,rate:v.playbackRate||1,hasPosition:false}
   let cancelled=false,hls:Hls|null=null,timer:ReturnType<typeof setTimeout>|undefined,restore:(()=>void)|undefined
   const controller=new AbortController()
+  let sessionId=''
   let attached=false,version='',mediaType='',busy=false,recoverPending=false,denied=false,lastRecovery=0,swapping=false
   function capture(){if(v&&!swapping&&v.readyState>0)saved.current={key,time:v.currentTime,playing:!v.paused,rate:v.playbackRate,hasPosition:true}}
   function clear(){hls?.destroy();hls=null;if(restore)v?.removeEventListener('loadedmetadata',restore)}
@@ -26,18 +27,19 @@ export function usePrivatePlayback(video:RefObject<HTMLVideoElement|null>,gameId
    if(busy){recoverPending=recoverPending||force;return}
    busy=true;clearTimeout(timer);let delay=5000
    try{
-    const r=await fetch(`/api/filmroom/video-token?gameId=${encodeURIComponent(gameId!)}&quality=${quality}`,{cache:'no-store',signal:controller.signal})
+    const r=await fetch(`/api/filmroom/video-token?gameId=${encodeURIComponent(gameId!)}&quality=${quality}&delivery=session${sessionId?'&session='+encodeURIComponent(sessionId):''}`,{cache:'no-store',signal:controller.signal})
     const d=await r.json()
     if(cancelled)return
     if(!r.ok){
      if(r.status===401||r.status===403||r.status===404){denied=true;clear();v!.pause();v!.removeAttribute('src');v!.load();setError('Video access is no longer available.');setLoading(false);return}
      throw Error('Video could not be loaded.')
     }
+    if(d.sessionId)sessionId=d.sessionId
     delay=(d.refreshAfterSeconds||40)*1000
     // Authorization renewal must not replace a healthy media source. Existing
     // requests keep playing; expired range/manifest requests recover on error.
     const nextVersion=d.sourceVersion||gameId!
-    if(attached&&!force&&!v!.error&&version===nextVersion&&mediaType===d.type){setError('');return}
+    if(d.type==='r2-session'&&attached&&!force&&!v!.error&&version===nextVersion&&mediaType===d.type){setError('');return}
     capture();swapping=true;clear();attached=true;version=nextVersion;mediaType=d.type
     restore=()=>{
      if(cancelled)return
@@ -51,7 +53,7 @@ export function usePrivatePlayback(video:RefObject<HTMLVideoElement|null>,gameId
      hls=new Hls({startPosition:saved.current.time,maxBufferLength:20,maxMaxBufferLength:30})
      hls.on(Hls.Events.ERROR,(_event,data)=>{if(data.fatal)recover()})
      hls.loadSource(d.src);hls.attachMedia(v!)
-    }else if(d.type!=='hls'||v!.canPlayType('application/vnd.apple.mpegurl')){v!.src=d.type==='r2'?`/api/filmroom/video-stream?gameId=${encodeURIComponent(gameId!)}&source=${encodeURIComponent(nextVersion)}`:d.src;v!.load()}
+    }else if(d.type!=='hls'||v!.canPlayType('application/vnd.apple.mpegurl')){v!.src=d.src;v!.load()}
     else{fatal();return}
     setError('')
 
