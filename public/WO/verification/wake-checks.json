@@ -1,0 +1,20 @@
+{
+  "checks": [
+    {
+      "mode": "native",
+      "status": "Screen kept awake",
+      "result": "pass"
+    },
+    {
+      "mode": "granted",
+      "status": "Screen kept awake",
+      "result": "pass"
+    },
+    {
+      "mode": "denied",
+      "status": "Screen wake lock unavailable in this browser",
+      "result": "pass"
+    }
+  ],
+  "physical_phone_sleep_prevention": "Not tested on physical hardware; API behavior and fallback verified."
+}

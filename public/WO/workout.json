@@ -1,0 +1,350 @@
+{
+  "title": "Daily movement",
+  "source_video": "ScreenRecording_09-22-2026 09-40-53_1.mp4",
+  "source_sha256": "c7fbb12877639a0fb1957750746afc16f1dfb67b20cd84108371c7829a0de143",
+  "instructions_source": "On-screen exercise names and 1-minute durations; visually observed form. No spoken instructions.",
+  "website_settings": {
+    "transition_rest_seconds": 10,
+    "adjustable": true,
+    "source": "Website setting, not an instruction from the video",
+    "rest_after_final_exercise": false
+  },
+  "confidence_notes": [
+    "15 exercises at 60 seconds total 15 minutes of work. The headline says 20 minutes; the remaining 5 minutes are unexplained.",
+    "One pass is a website playback choice; sets are not prescribed."
+  ],
+  "exercises": [
+    {
+      "order": 1,
+      "name": "Lymphatic hops",
+      "clip": "01-lymphatic-hops.mp4",
+      "thumbnail": "01-lymphatic-hops.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Stand with feet apart and make small vertical bounces, arms relaxed at your sides."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 10.3333,
+      "source_end_seconds": 12.5
+    },
+    {
+      "order": 2,
+      "name": "Body waves",
+      "clip": "02-body-waves.mp4",
+      "thumbnail": "02-body-waves.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Use a wide stance. Reach overhead, bend your knees and lower your torso, then rise in a flowing wave."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 13.1667,
+      "source_end_seconds": 16.5
+    },
+    {
+      "order": 3,
+      "name": "Arm swings",
+      "clip": "03-arm-swings.mp4",
+      "thumbnail": "03-arm-swings.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Keep a soft bend in the knees. Swing your arms upward and across the body as your torso turns."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 17.4167,
+      "source_end_seconds": 20.3333
+    },
+    {
+      "order": 4,
+      "name": "Trunk twists",
+      "clip": "04-trunk-twists.mp4",
+      "thumbnail": "04-trunk-twists.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Bend the knees and lean slightly forward. Keep elbows bent and rotate the torso from side to side."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 20.5833,
+      "source_end_seconds": 23.75
+    },
+    {
+      "order": 5,
+      "name": "Forward arm circles",
+      "clip": "05-forward-arm-circles.mp4",
+      "thumbnail": "05-forward-arm-circles.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Stand upright and circle both extended arms forward through the shoulders."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 24.3333,
+      "source_end_seconds": 28.5
+    },
+    {
+      "order": 6,
+      "name": "Squats",
+      "clip": "06-squats.mp4",
+      "thumbnail": "06-squats.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Use a wide, toes-out stance with hands together at the chest. Bend hips and knees to lower, then stand."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 29.3333,
+      "source_end_seconds": 30.9167
+    },
+    {
+      "order": 7,
+      "name": "Dead arms",
+      "clip": "07-dead-arms.mp4",
+      "thumbnail": "07-dead-arms.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Turn the torso from side to side, letting relaxed arms wrap around and tap the body."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 31.8333,
+      "source_end_seconds": 33.9167
+    },
+    {
+      "order": 8,
+      "name": "Golf swings",
+      "clip": "08-golf-swings.mp4",
+      "thumbnail": "08-golf-swings.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Sweep your arms diagonally into an overhead follow-through, rotating the torso and pivoting a foot. The side-switch schedule is unclear."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain.",
+        "Side-switch schedule is unclear."
+      ],
+      "source_start_seconds": 35.4167,
+      "source_end_seconds": 37.6667
+    },
+    {
+      "order": 9,
+      "name": "Marches",
+      "clip": "09-marches.mp4",
+      "thumbnail": "09-marches.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Stand tall and alternate lifting the knees toward waist height. Hold arms out for balance."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 39.0,
+      "source_end_seconds": 40.8333
+    },
+    {
+      "order": 10,
+      "name": "Tiptoe arm swings",
+      "clip": "10-tiptoe-arm-swings.mp4",
+      "thumbnail": "10-tiptoe-arm-swings.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Swing both arms overhead while rising onto the balls of the feet. Lower the heels as the arms swing down."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 42.1667,
+      "source_end_seconds": 44.0
+    },
+    {
+      "order": 11,
+      "name": "Twist the waist",
+      "clip": "11-twist-the-waist.mp4",
+      "thumbnail": "11-twist-the-waist.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Use a wide stance with arms extended outward. Rotate the torso left and right while remaining upright."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 45.4167,
+      "source_end_seconds": 48.0
+    },
+    {
+      "order": 12,
+      "name": "Ballet squats",
+      "clip": "12-ballet-squats.mp4",
+      "thumbnail": "12-ballet-squats.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Use a wide, toes-out stance. Lower into a plie-style squat and rise, sweeping the arms outward and upward as demonstrated."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 48.5833,
+      "source_end_seconds": 52.5
+    },
+    {
+      "order": 13,
+      "name": "Wide arm step backs",
+      "clip": "13-wide-arm-step-backs.mp4",
+      "thumbnail": "13-wide-arm-step-backs.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Hold the arms open wide. Step one foot backward, return to center, and alternate legs."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 53.25,
+      "source_end_seconds": 55.8333
+    },
+    {
+      "order": 14,
+      "name": "Back step wave lunges",
+      "clip": "14-back-step-wave-lunges.mp4",
+      "thumbnail": "14-back-step-wave-lunges.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Step backward into a lunge while sweeping your arms overhead. Return to standing and alternate legs."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain."
+      ],
+      "source_start_seconds": 56.4167,
+      "source_end_seconds": 60.8333
+    },
+    {
+      "order": 15,
+      "name": "Pushups",
+      "clip": "15-pushups.mp4",
+      "thumbnail": "15-pushups.jpg",
+      "sets": null,
+      "repetitions": null,
+      "work_duration_seconds": 60,
+      "rest_duration_seconds": null,
+      "equipment": [],
+      "form_instructions": [
+        "Support yourself on hands and toes. Bend the elbows to lower the chest and press upward, keeping the body aligned."
+      ],
+      "confidence_notes": [
+        "Sets and rest are not stated.",
+        "Form describes visible movement; there is no spoken coaching.",
+        "Repetition count, breathing cues and per-side timing are not specified.",
+        "Loop endpoints are pose-matched; a small visible jump may remain.",
+        "The original pushup shot already has extremities at or beyond the picture edges; all available picture width and the bottom picture edge are preserved."
+      ],
+      "source_start_seconds": 61.6667,
+      "source_end_seconds": 65.75
+    }
+  ]
+}

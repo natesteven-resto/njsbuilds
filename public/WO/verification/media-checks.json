@@ -1,0 +1,140 @@
+{
+  "original_unchanged": true,
+  "clips": [
+    {
+      "clip": "01-lymphatic-hops.mp4",
+      "duration": 2.166667,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "02-body-waves.mp4",
+      "duration": 3.333333,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "03-arm-swings.mp4",
+      "duration": 2.9,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "04-trunk-twists.mp4",
+      "duration": 3.166667,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "05-forward-arm-circles.mp4",
+      "duration": 4.166667,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "06-squats.mp4",
+      "duration": 1.6,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "07-dead-arms.mp4",
+      "duration": 2.1,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "08-golf-swings.mp4",
+      "duration": 2.266667,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "09-marches.mp4",
+      "duration": 1.833333,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "10-tiptoe-arm-swings.mp4",
+      "duration": 1.833333,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "11-twist-the-waist.mp4",
+      "duration": 2.566667,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "12-ballet-squats.mp4",
+      "duration": 3.933333,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "13-wide-arm-step-backs.mp4",
+      "duration": 2.566667,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "14-back-step-wave-lunges.mp4",
+      "duration": 4.4,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "clip": "15-pushups.mp4",
+      "duration": 4.066667,
+      "decode": "pass",
+      "thumbnail": "pass",
+      "audio_streams": 0,
+      "width": 660,
+      "height": 1036
+    }
+  ]
+}

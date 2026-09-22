@@ -1,0 +1,139 @@
+{
+  "result": "pass",
+  "environment": "Headless Google Chrome; file://; 390x844 mobile viewport and 1280x900 desktop",
+  "media": [
+    {
+      "file": "01-lymphatic-hops.mp4",
+      "duration": 2.166667,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "02-body-waves.mp4",
+      "duration": 3.333333,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "03-arm-swings.mp4",
+      "duration": 2.9,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "04-trunk-twists.mp4",
+      "duration": 3.166667,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "05-forward-arm-circles.mp4",
+      "duration": 4.166667,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "06-squats.mp4",
+      "duration": 1.6,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "07-dead-arms.mp4",
+      "duration": 2.1,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "08-golf-swings.mp4",
+      "duration": 2.266667,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "09-marches.mp4",
+      "duration": 1.833333,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "10-tiptoe-arm-swings.mp4",
+      "duration": 1.833333,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "11-twist-the-waist.mp4",
+      "duration": 2.566667,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "12-ballet-squats.mp4",
+      "duration": 3.933333,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "13-wide-arm-step-backs.mp4",
+      "duration": 2.566667,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "14-back-step-wave-lunges.mp4",
+      "duration": 4.4,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    },
+    {
+      "file": "15-pushups.mp4",
+      "duration": 4.066667,
+      "loop": true,
+      "muted": true,
+      "width": 660,
+      "height": 1036
+    }
+  ],
+  "checks": [
+    "All 15 clips played and looped in real browser",
+    "Local file operation without server",
+    "No horizontal overflow at mobile/desktop sizes",
+    "Start, pause, resume, restart, previous, next",
+    "Full 15-work/14-rest sequence with accelerated clock",
+    "Completion stops timer and playback",
+    "Zero-second rest skips transition",
+    "Custom rest and next-transition-only setting changes",
+    "Pause during rest",
+    "No JavaScript page errors"
+  ],
+  "physical_phone_tested": false
+}
