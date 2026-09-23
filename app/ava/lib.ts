@@ -8,6 +8,7 @@ export type { Question }
 // If they don't exist yet, just export empty arrays.
 
 let HA_QUESTIONS: Question[] = []
+let HA2_QUESTIONS: Question[] = []
 let FN_QUESTIONS: Question[] = []
 let MATH_QUESTIONS: Question[] = []
 
@@ -15,6 +16,11 @@ try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ha = require('./questions-health-assessment')
   HA_QUESTIONS = ha.HEALTH_ASSESSMENT_QUESTIONS ?? []
+} catch {}
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ha2 = require('./questions-health-assessment-2')
+  HA2_QUESTIONS = ha2.HEALTH_ASSESSMENT_2_QUESTIONS ?? []
 } catch {}
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -30,6 +36,7 @@ try {
 export const ALL_QUESTIONS: Question[] = [
   ...QUESTIONS.map(q => ({ ...q, subject: q.subject ?? 'patho' as const })),
   ...HA_QUESTIONS,
+  ...HA2_QUESTIONS,
   ...FN_QUESTIONS,
   ...MATH_QUESTIONS,
 ]
@@ -59,7 +66,14 @@ export const SUBJECTS = {
       3: 'Physical Assessment Techniques',
       4: 'General Survey & Vital Signs',
       5: 'Nutritional Assessment',
-      6: 'Skin, Hair & Nails',
+      6: 'Genetic & Developmental Disorders',
+      7: 'Skin, Hair & Nails',
+      8: 'Altered Fluid & Electrolyte Balance',
+      9: 'Altered Acid-Base Balance',
+      13: 'Respiratory System',
+      14: 'Cardiovascular System',
+      15: 'Abdomen',
+      19: 'Degenerative Changes in Aging',
     },
   },
   foundations: {
