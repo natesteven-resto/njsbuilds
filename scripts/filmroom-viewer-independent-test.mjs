@@ -1,0 +1,45 @@
+// Independent adversarial checks of actual Viewer migrations; synthetic in-memory data only.
+import {PGlite} from '@electric-sql/pglite';
+import {readFileSync,readdirSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const db=new PGlite(),root=new URL('../supabase/migrations/',import.meta.url);
+const uid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const A=uid(1),B=uid(2),V=uid(3),U=uid(4),T=uid(10),TB=uid(11),G=uid(20),GB=uid(21),F=uid(22),P=uid(30),P2=uid(31),PB=uid(32),I=uid(40);
+await db.exec(`CREATE ROLE anon NOLOGIN;CREATE ROLE authenticated NOLOGIN;CREATE ROLE service_role NOLOGIN BYPASSRLS;CREATE SCHEMA auth;
+CREATE TABLE auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb default '{}');
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$SELECT coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;
+GRANT USAGE ON SCHEMA auth,public TO anon,authenticated,service_role;
+INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('${A}','natesteven@gmail.com',now()),('${B}','owner-b@example.test',now()),('${V}','viewer@example.test',now()),('${U}','stranger@example.test',now());`);
+for(const file of readdirSync(root).filter(f=>/^\d{3}_/.test(f)&&Number(f.slice(0,3))>=7).sort())await db.exec(readFileSync(new URL(file,root),'utf8'));
+await db.exec(`INSERT INTO coaches(id,email,name,auth_user_id) VALUES('${B}','owner-b@example.test','Synthetic B','${B}');
+INSERT INTO teams(id,coach_id,name,owner_id) VALUES('${T}','00000000-0000-0000-0000-000000000001','Same Name','${A}'),('${TB}','${B}','Same Name','${B}');
+INSERT INTO games(id,team_id,opponent,game_date,owner_id) VALUES('${G}','${T}','Synthetic',current_date,'${A}'),('${GB}','${TB}','Synthetic',current_date,'${B}');
+INSERT INTO players(id,team_id,name,owner_id) VALUES('${P}','${T}','Linked','${A}'),('${P2}','${T}','Unlinked','${A}'),('${PB}','${TB}','Foreign','${B}');
+INSERT INTO stat_entries(game_id,player_id,stat_type,owner_id) VALUES('${G}','${P}','AST','${A}'),('${G}','${P2}','AST','${A}');
+INSERT INTO filmroom_parent_invites(id,owner_id,team_id,email,accepted_by,accepted_at) VALUES('${I}','${A}','${T}','viewer@example.test','${V}',now());`);
+async function as(user,sql,role='authenticated',commit=false){await db.exec('BEGIN');try{await db.exec(`SET LOCAL ROLE ${role};SET LOCAL request.jwt.claim.sub='${user}';`);return await db.query(sql)}finally{await db.exec(commit?'COMMIT':'ROLLBACK')}}
+const access=async(user,game,kind)=>(await as(user,`SELECT filmroom_parent_access('${game}',${kind===null?'NULL':"'"+kind+"'"}) a`)).rows[0].a;
+const library=async user=>(await as(user,'SELECT filmroom_parent_library() d')).rows[0].d;
+const box=async user=>(await as(user,`SELECT filmroom_parent_box_score('${G}') d`)).rows[0].d;
+let failures=0;async function test(name,fn){try{await fn();console.log('PASS',name)}catch(e){failures++;console.error('FAIL',name,e.message)}}
+await test('membership grants film without legacy shares',async()=>{assert.equal(await access(V,G,'film'),true);assert.equal((await library(V)).games.length,1)});
+await test('default private denies unlinked stats',async()=>{assert.equal(await access(V,G,'stats'),false);await assert.rejects(()=>box(V),/Forbidden/)});
+await test('other team and uninvited user denied',async()=>{assert.equal(await access(V,GB,'film'),false);assert.equal(await access(U,G,'film'),false);assert.equal((await library(U)).games.length,0)});
+await test('future game appears without new shares',async()=>{await db.exec(`INSERT INTO games(id,team_id,opponent,game_date,owner_id) VALUES('${F}','${T}','Future',current_date,'${A}')`);assert.equal(await access(V,F,'film'),true);assert.equal((await library(V)).games.length,2)});
+await test('self-request grants no stats',async()=>{for(let n=0;n<2;n++)await as(V,`SELECT filmroom_request_connection('${I}','Linked','player')`,'authenticated',true);assert.equal(await access(V,G,'stats'),false);const requests=(await library(V)).invitations[0].requests;assert.equal(requests.length,1);assert.equal(requests[0].requested_player_name,'Linked')});
+await test('stale cross-team link cannot grant or reveal stats',async()=>{await db.exec(`INSERT INTO filmroom_viewer_player_links(invite_id,player_id) VALUES('${I}','${PB}')`);assert.equal(await access(V,G,'stats'),false);const l=await library(V);assert.equal(l.invitations[0].links.length,0);assert(l.games.every(g=>g.stats===false));await assert.rejects(()=>box(V),/Forbidden/);await db.exec(`DELETE FROM filmroom_viewer_player_links WHERE invite_id='${I}'`)});
+await test('stranger cannot request a connection on another invite',async()=>{await assert.rejects(()=>as(U,`SELECT filmroom_request_connection('${I}','Linked','player')`),/Invitation not accepted/)});
+await db.exec(`INSERT INTO filmroom_viewer_player_links(invite_id,player_id,relationship) VALUES('${I}','${P}','parent')`);
+await test('private box score contains only approved player and entry',async()=>{const b=await box(V);assert.equal(b.scope,'linked');assert.deepEqual(b.players.map(x=>x.id),[P]);assert.deepEqual(b.entries.map(x=>x.player_id),[P]);assert.deepEqual((await library(V)).invitations[0].links.map(x=>x.player_id),[P])});
+await test('archiving retains authorized historical stats',async()=>{await db.exec(`UPDATE players SET archived_at=now() WHERE id='${P}'`);assert.deepEqual((await box(V)).entries.map(x=>x.player_id),[P])});
+await test('invalid access kind fails closed',async()=>{for(const kind of ['bogus',null]){let granted=false;try{granted=await access(V,G,kind)}catch{}assert.notEqual(granted,true)}});
+await test('team mode explicitly includes team stats',async()=>{await db.exec(`UPDATE teams SET viewer_stats_mode='team' WHERE id='${T}'`);assert.equal((await box(V)).entries.length,2);await db.exec(`UPDATE teams SET viewer_stats_mode='private' WHERE id='${T}'`)});
+await test('approved link revocation removes private stats but keeps film',async()=>{await db.exec(`DELETE FROM filmroom_viewer_player_links WHERE invite_id='${I}'`);assert.equal(await access(V,G,'stats'),false);assert.equal(await access(V,G,'film'),true)});
+await test('email change immediately removes team membership',async()=>{await db.exec(`UPDATE auth.users SET email='changed@example.test' WHERE id='${V}'`);assert.equal(await access(V,G,'film'),false);await db.exec(`UPDATE auth.users SET email='viewer@example.test' WHERE id='${V}'`)});
+await test('unverified email cannot discover team games',async()=>{await db.exec(`UPDATE auth.users SET email_confirmed_at=NULL WHERE id='${V}'`);assert.equal((await library(V)).games.length,0);await db.exec(`UPDATE auth.users SET email_confirmed_at=now() WHERE id='${V}'`)});
+await test('viewer cannot write approvals or read private link table directly',async()=>{await assert.rejects(()=>as(V,`INSERT INTO filmroom_viewer_player_links(invite_id,player_id) VALUES('${I}','${P}')`),/permission denied/);await assert.rejects(()=>as(V,'SELECT * FROM filmroom_viewer_player_links'),/permission denied/)});
+await test('new request RPC and internal helper have restricted grants',async()=>{await assert.rejects(()=>as('',`SELECT filmroom_request_connection('${I}','Linked','parent')`,'anon'),/permission denied/);await assert.rejects(()=>as(V,`SELECT * FROM filmroom_viewer_context('${G}')`),/permission denied/)});
+await test('anonymous family RPC denied',async()=>{await assert.rejects(()=>as('', 'SELECT filmroom_parent_library()', 'anon'),/permission denied/)});
+await test('revoked membership removes all current and future film',async()=>{await db.exec(`DELETE FROM filmroom_parent_invites WHERE id='${I}'`);assert.equal(await access(V,G,'film'),false);assert.equal(await access(V,F,'film'),false);assert.equal((await library(V)).games.length,0)});
+await db.close();console.log(JSON.stringify({failures}));process.exitCode=failures?1:0;

@@ -197,7 +197,7 @@ function LoginForm() {
   // ── Normal sign-in form ──────────────────────────────────────────────────
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {next === '/filmroom/family' && <p className="text-sm text-[#e79568]">Parent access: sign in with the email your coach invited. No subscription is needed to view shared games.</p>}
+      {next === '/filmroom/family' && <p className="text-sm text-[#e79568]">Viewer access: sign in with the email your coach invited. Viewing is free — no subscription required.</p>}
       <div>
         <label htmlFor="email" className="block text-xs font-medium text-white/60 mb-1.5">Email address</label>
         <input id="email" type="email" autoComplete="email" required value={email}

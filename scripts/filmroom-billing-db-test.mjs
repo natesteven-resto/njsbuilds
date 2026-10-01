@@ -169,7 +169,7 @@ await test('verified invited account can accept',async()=>{await as('authenticat
 await test('unverified email cannot accept or discover invites',async()=>{await db.exec(`UPDATE auth.users SET email_confirmed_at=null WHERE id='${P}'`);try{assert((await family(P)).invitations.length===0,'unverified invite visible');let blocked=false;try{await as('authenticated',P,`SELECT filmroom_accept_parent_invite('${I}')`)}catch{blocked=true}assert(blocked,'unverified acceptance')}finally{await db.exec(`UPDATE auth.users SET email_confirmed_at=now() WHERE id='${P}'`)}});
 await test('expired pending invitation cannot be accepted',async()=>{await db.exec(`UPDATE filmroom_parent_invites SET expires_at=now()-interval '1 second' WHERE id='${I}'`);try{let blocked=false;try{await as('authenticated',P,`SELECT filmroom_accept_parent_invite('${I}')`)}catch{blocked=true}assert(blocked,'expired invite accepted')}finally{await db.exec(`UPDATE filmroom_parent_invites SET expires_at=now()+interval '14 days' WHERE id='${I}'`)}});
 await db.exec(`UPDATE filmroom_parent_invites SET accepted_by='${P}',accepted_at=now() WHERE id='${I}'`);
-await test('accepted parent receives only explicitly shared game and safe metadata',async()=>{const d=await family(P);assert(d.games.length===1&&d.games[0].id===ids.ga,'incorrect games');assert(!('video_url' in d.games[0])&&!('notes' in d.games[0])&&!('owner_id' in d.games[0]),'private fields leaked');assert(await access(P,ids.ga,'film'),'shared playback denied');assert(!await access(P,ids.gb,'film'),'unshared playback allowed')});
+await test('accepted viewer receives all team games (film) with safe metadata only',async()=>{const d=await family(P);const ga=d.games.find(g=>g.id===ids.ga);assert(ga,'team game missing from library');assert(!d.games.some(g=>g.id===ids.gb),'foreign-team game listed');assert(!('video_url' in ga)&&!('notes' in ga)&&!('owner_id' in ga),'private fields leaked');assert(ga.film===true&&ga.team_id===ids.ta,'film/team scope wrong');assert(await access(P,ids.ga,'film'),'team playback denied');assert(!await access(P,ids.gb,'film'),'foreign playback allowed')});
 await test('parent cannot directly read private game, clips or roster',async()=>{for(const t of ['games','clips','players','stat_entries'])assert((await as('authenticated',P,`SELECT * FROM ${t}`)).rows.length===0,'private '+t+' exposed')});
 await test('parent cannot modify coach game',async()=>{assert((await as('authenticated',P,`UPDATE games SET notes='forged' WHERE id='${ids.ga}' RETURNING id`)).rows.length===0,'parent edit allowed')});
 await test('parent cannot forge invitation or sharing via direct tables',async()=>{for(const q of [`INSERT INTO filmroom_parent_invites(owner_id,team_id,email) VALUES('${P}','${ids.ta}','forged@example.test')`,`UPDATE filmroom_parent_shares SET film=true`,`SELECT * FROM filmroom_parent_invites`]){let blocked=false;try{await as('authenticated',P,q)}catch(e){blocked=/permission denied/.test(e.message)}assert(blocked,'direct access allowed')}});
@@ -182,21 +182,41 @@ await test('clips share by default, private clips are hidden, and only safe fiel
  const clips=await read();assert(clips.length===1&&clips[0].id===ids.ca,'shared clip missing');
  assert(Object.keys(clips[0]).sort().join(',')==='category,end_time_ms,id,start_time_ms,title','private clip fields exposed');
  let blocked=false;try{await as('authenticated',B,`SELECT filmroom_parent_clips('${ids.ga}')`)}catch{blocked=true}assert(blocked,'uninvited clip access');
- await db.exec(`UPDATE filmroom_parent_shares SET film=false WHERE invite_id='${I}'`);
- blocked=false;try{await read()}catch{blocked=true}assert(blocked,'stats-only parent sees clips');
- await db.exec(`UPDATE filmroom_parent_shares SET film=true WHERE invite_id='${I}'; UPDATE clips SET parent_shared=false WHERE id='${ids.ca}'`);
+ // Film is now team-wide: clip visibility depends solely on parent_shared + membership.
+ await db.exec(`UPDATE clips SET parent_shared=false WHERE id='${ids.ca}'`);
  assert((await read()).length===0,'unshared clip still visible');
+ await db.exec(`UPDATE clips SET parent_shared=true WHERE id='${ids.ca}'`);
 });
-await test('parent box score includes zero-stat roster only for shared team',async()=>{
+await test('box score roster scope follows team stats policy',async()=>{
+ await db.exec(`UPDATE teams SET viewer_stats_mode='team' WHERE id='${ids.ta}'`);
  const d=(await as('authenticated',P,`SELECT filmroom_parent_box_score('${ids.ga}') AS data`)).rows[0].data;
- assert(Array.isArray(d.entries),'missing entries');assert(d.players.some(p=>p.id===ids.pa),'zero-stat player omitted');assert(!d.players.some(p=>p.id===ids.pb),'foreign player leaked');
- assert(Object.keys(d.players[0]).sort().join(',')==='id,name,number','private roster fields leaked');
- await db.exec(`UPDATE filmroom_parent_shares SET stats=false WHERE invite_id='${I}'`);
- let blocked=false;try{await as('authenticated',P,`SELECT filmroom_parent_box_score('${ids.ga}')`)}catch{blocked=true}assert(blocked,'film-only parent got box score');
- await db.exec(`UPDATE filmroom_parent_shares SET stats=true WHERE invite_id='${I}'`);
+ assert(Array.isArray(d.entries)&&d.stats_mode==='team'&&d.scope==='team','missing team-mode box score');
+ assert(d.players.some(p=>p.id===ids.pa),'team player omitted');assert(!d.players.some(p=>p.id===ids.pb),'foreign player leaked');
+ assert(Object.keys(d.players[0]).sort().join(',')==='archived,id,name,number','private roster fields leaked');
+ await db.exec(`UPDATE teams SET viewer_stats_mode='private' WHERE id='${ids.ta}'`);
+ let blocked=false;try{await as('authenticated',P,`SELECT filmroom_parent_box_score('${ids.ga}')`)}catch{blocked=true}assert(blocked,'private viewer without link got box score');
 });
-await test('film and stats permissions are independent',async()=>{await db.exec(`UPDATE filmroom_parent_shares SET film=false WHERE invite_id='${I}'`);assert(!await access(P,ids.ga,'film'),'film not disabled');assert(await access(P,ids.ga,'stats'),'stats not retained');await as('authenticated',P,`SELECT filmroom_parent_stats('${ids.ga}')`);await db.exec(`UPDATE filmroom_parent_shares SET film=true,stats=false WHERE invite_id='${I}'`);let blocked=false;try{await as('authenticated',P,`SELECT filmroom_parent_stats('${ids.ga}')`)}catch{blocked=true}assert(blocked,'stats exposed after disable')});
-await test('cross-team malformed share fails closed',async()=>{await db.exec(`INSERT INTO filmroom_parent_shares(invite_id,game_id,film) VALUES('${I}','${ids.gb}',true)`);assert(!await access(P,ids.gb,'film'),'foreign game exposed');assert((await family(P)).games.length===1,'foreign game listed')});
+await test('film stays team-wide while stats follow policy and approved links',async()=>{
+ assert(await access(P,ids.ga,'film'),'team film denied');
+ assert(!await access(P,ids.ga,'stats'),'private stats granted without link');
+ let blocked=false;try{await as('authenticated',P,`SELECT filmroom_parent_stats('${ids.ga}')`)}catch{blocked=true}assert(blocked,'private stats exposed without link');
+ await db.exec(`INSERT INTO filmroom_viewer_player_links(invite_id,player_id) VALUES('${I}','${ids.pa}') ON CONFLICT DO NOTHING`);
+ assert(await access(P,ids.ga,'stats'),'linked stats denied');
+ const s=(await as('authenticated',P,`SELECT filmroom_parent_stats('${ids.ga}') AS d`)).rows[0].d;assert(s.scope==='linked','scope label wrong');
+ await db.exec(`DELETE FROM filmroom_viewer_player_links WHERE invite_id='${I}'`);
+ assert(!await access(P,ids.ga,'stats'),'stats retained after link revoke');assert(await access(P,ids.ga,'film'),'film wrongly tied to stats');
+});
+await test('self-claim request records but never grants stats',async()=>{
+ // Persist the authenticated definer call, then count as owner (table is REVOKEd from authenticated).
+ await db.exec(`SET ROLE authenticated; SET request.jwt.claim.sub='${P}';`);
+ await db.exec(`SELECT filmroom_request_connection('${I}','Kid Name','parent')`);
+ await db.exec(`RESET ROLE; SELECT set_config('request.jwt.claim.sub','',false)`);
+ const n=(await db.query(`SELECT count(*)::int n FROM filmroom_viewer_requests WHERE invite_id='${I}'`)).rows[0].n;
+ assert(Number(n)===1,'request not recorded');
+ assert(!await access(P,ids.ga,'stats'),'request granted stats');
+ await db.exec(`DELETE FROM filmroom_viewer_requests WHERE invite_id='${I}'`);
+});
+await test('legacy per-game share rows are ignored and fail closed',async()=>{await db.exec(`INSERT INTO filmroom_parent_shares(invite_id,game_id,film) VALUES('${I}','${ids.gb}',true)`);assert(!await access(P,ids.gb,'film'),'foreign game exposed via legacy share');assert(!(await family(P)).games.some(g=>g.id===ids.gb),'foreign game listed via legacy share')});
 await test('changed email loses access',async()=>{await db.exec(`UPDATE auth.users SET email='changed@example.test' WHERE id='${P}'`);try{assert(!await access(P,ids.ga,'film'),'changed identity retained access')}finally{await db.exec(`UPDATE auth.users SET email='parent@example.test' WHERE id='${P}'`)}});
 await test('revocation removes discovery, stats and future playback',async()=>{await db.exec(`DELETE FROM filmroom_parent_invites WHERE id='${I}'`);assert((await family(P)).games.length===0,'revoked game listed');assert(!await access(P,ids.ga,'film'),'revoked playback granted');assert((await db.query(`SELECT * FROM filmroom_parent_shares WHERE invite_id='${I}'`)).rows.length===0,'shares not cascaded')});
 await test('anonymous cannot invoke family RPC',async()=>{let blocked=false;try{await as('anon','',`SELECT filmroom_parent_library()`)}catch{blocked=true}assert(blocked,'anonymous family access')});

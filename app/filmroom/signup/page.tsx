@@ -91,12 +91,12 @@ export default function SignupPage() {
 
             {/* Sender / spam guidance */}
             <div className="bg-white/4 border border-white/8 rounded-md px-4 py-3 mb-5 text-left space-y-1.5">
-              <p className="text-[11px] font-semibold text-white/60 uppercase tracking-wider">If you don't see it</p>
+              <p className="text-[11px] font-semibold text-white/60 uppercase tracking-wider">If you don&apos;t see it</p>
               <p className="text-xs text-white/60">
                 From: <span className="text-white/70 font-mono">noreply@mail.njsbuilds.com</span>
               </p>
               <p className="text-xs text-white/60">• Check your spam or junk folder</p>
-              <p className="text-xs text-white/60">• Check "Promotions" or "Updates" tabs</p>
+              <p className="text-xs text-white/60">&bull; Check &ldquo;Promotions&rdquo; or &ldquo;Updates&rdquo; tabs</p>
               <p className="text-xs text-white/60">• Add the sender to your contacts to avoid future filtering</p>
             </div>
 
@@ -154,8 +154,8 @@ export default function SignupPage() {
     <AuthShell>
 
         <div className="w-full">
-          <h2 className="text-3xl font-semibold text-[#eee9df] mb-7">{next === '/filmroom/family' ? 'Create your parent account' : 'Create your account'}</h2>
-          {next === '/filmroom/family' && <p className="mb-5 text-sm text-[#e79568]">Use the email your coach invited. Parent viewing is free.</p>}
+          <h2 className="text-3xl font-semibold text-[#eee9df] mb-7">{next === '/filmroom/family' ? 'Create your viewer account' : 'Create your account'}</h2>
+          {next === '/filmroom/family' && <p className="mb-5 text-sm text-[#e79568]">Use the email your coach invited. Viewer access is free — no subscription required.</p>}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

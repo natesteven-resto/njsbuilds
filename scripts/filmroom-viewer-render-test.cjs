@@ -1,0 +1,17 @@
+// Render the actual components with synthetic props; no browser, network or real account.
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),ts=require('typescript'),React=require('react'),{renderToStaticMarkup}=require('react-dom/server');
+function load(file,mocks={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:n=>mocks[n]||require(n),Set,Math,console});return exports}
+const events=load('lib/filmroom-events.ts'),box=load('lib/filmroom-box-score.ts');
+const mocks={'@/lib/filmroom-events':events,'@/lib/filmroom-box-score':box};
+const {ParentBoxScore}=load('app/filmroom/family/ParentBoxScore.tsx',mocks);
+const props={entries:[{id:'e1',player_id:'p1',player_name:'Synthetic Player',stat_type:'AST',video_time_ms:1000},{id:'e2',player_id:'__opp__',player_name:'Opponent',stat_type:'AST',video_time_ms:2000}],players:[{id:'p1',name:'Synthetic Player',number:'1'}],playerId:'all',canPlay:false,onSeek:()=>{}};
+let failures=0;function test(name,fn){try{fn();console.log('PASS',name)}catch(e){failures++;console.error('FAIL',name,e.message)}}
+for(const scope of ['linked',null])test(`${scope??'unknown'} scope renders no team/opponent aggregate`,()=>{const html=renderToStaticMarkup(React.createElement(ParentBoxScore,{...props,scope}));assert(!html.includes('details for TEAM'));assert(!html.includes('details for OPPONENT'))});
+test('team scope renders explicit team and opponent aggregates',()=>{const html=renderToStaticMarkup(React.createElement(ParentBoxScore,{...props,scope:'team'}));assert(html.includes('details for TEAM'));assert(html.includes('details for OPPONENT'))});
+const {FamilyLibrary}=load('app/filmroom/family/FamilyLibrary.tsx',{'../components/cs-shared':{VideoThumbnail:()=>null,formatGameDate:d=>d}});
+test('identically named teams retain distinct filter values and empty states',()=>{const html=renderToStaticMarkup(React.createElement(FamilyLibrary,{games:[],invitations:[{id:'i1',team:'Same Name',team_id:'team-a',stats_mode:'private'},{id:'i2',team:'Same Name',team_id:'team-b',stats_mode:'team'}],onOpen:()=>{}}));assert(html.includes('value="team-a"'));assert(html.includes('value="team-b"'));assert.equal((html.match(/No games yet\./g)||[]).length,2)});
+// Seed only the existing tab selection to simulate a viewer whose Stats access was revoked.
+const staleTabReact={...React,useState:initial=>React.useState(typeof initial==='function'&&initial()==='clips'?'stats':initial)};
+const {ParentGameView}=load('app/filmroom/family/ParentGameView.tsx',{'react':staleTabReact,'./ParentBoxScore':{ParentBoxScore},'@/lib/filmroom-events':events,'../components/usePrivatePlayback':{usePrivatePlayback:()=>({error:'',loading:false})},'../components/PlaybackQualityControl':{PlaybackQualityControl:()=>null}});
+test('revoked Stats tab falls back to accessible clips',()=>{const html=renderToStaticMarkup(React.createElement(ParentGameView,{game:{id:'g',opponent:'Synthetic',game_date:'2026-01-01',team:'Synthetic Team',team_id:'t',film:true,stats:false,stats_mode:'private',has_video:false},onBack:()=>{}}));assert(html.includes('aria-labelledby="parent-tab-clips"'));assert(!html.includes('aria-labelledby="parent-tab-stats"'));assert(!html.includes('details for TEAM'))});
+console.log(JSON.stringify({failures}));process.exitCode=failures?1:0;
