@@ -11,7 +11,11 @@ CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$SELECT nullif(c
 CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$SELECT coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;
 GRANT USAGE ON SCHEMA auth,public TO anon,authenticated,service_role;
 INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('${A}','natesteven@gmail.com',now()),('${B}','owner-b@example.test',now()),('${V}','viewer@example.test',now()),('${U}','stranger@example.test',now());`);
-for(const file of readdirSync(root).filter(f=>/^\d{3}_/.test(f)&&Number(f.slice(0,3))>=7).sort())await db.exec(readFileSync(new URL(file,root),'utf8'));
+for(const file of readdirSync(root).filter(f=>/^\d{3}_/.test(f)&&Number(f.slice(0,3))>=7).sort()) {
+ // Mirror Supabase default function grants before creating the new Viewer helper.
+ if(file.startsWith('024_'))await db.exec('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO authenticated;');
+ await db.exec(readFileSync(new URL(file,root),'utf8'));
+}
 await db.exec(`INSERT INTO coaches(id,email,name,auth_user_id) VALUES('${B}','owner-b@example.test','Synthetic B','${B}');
 INSERT INTO teams(id,coach_id,name,owner_id) VALUES('${T}','00000000-0000-0000-0000-000000000001','Same Name','${A}'),('${TB}','${B}','Same Name','${B}');
 INSERT INTO games(id,team_id,opponent,game_date,owner_id) VALUES('${G}','${T}','Synthetic',current_date,'${A}'),('${GB}','${TB}','Synthetic',current_date,'${B}');
