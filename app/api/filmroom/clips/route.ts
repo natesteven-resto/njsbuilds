@@ -59,7 +59,11 @@ export async function POST(request: NextRequest) {
     const playerIds       = Array.isArray(raw.player_ids) ? raw.player_ids.filter((p: unknown) => typeof p === 'string') : []
     const coachingNote    = typeof raw.coaching_note    === 'string' ? raw.coaching_note.trim()    || null : null
     const playType        = typeof raw.play_type        === 'string' ? raw.play_type.trim()        || null : null
-    const primaryPlayerId = typeof raw.primary_player_id === 'string' ? raw.primary_player_id      : null
+    // primary_player_id must be absent, null, or a non-empty string — anything else is a 400
+    if (raw.primary_player_id !== undefined && raw.primary_player_id !== null && (typeof raw.primary_player_id !== 'string' || !raw.primary_player_id.trim())) {
+      return NextResponse.json({ error: 'primary_player_id must be a string or null' }, { status: 400 })
+    }
+    const primaryPlayerId = typeof raw.primary_player_id === 'string' ? raw.primary_player_id : null
 
     if (!gameId)           return NextResponse.json({ error: 'game_id required' }, { status: 400 })
     if (startMs === null)  return NextResponse.json({ error: 'start_time_ms required' }, { status: 400 })
@@ -75,15 +79,28 @@ export async function POST(request: NextRequest) {
     // Use service client for atomic insert + player links
     const svc = createServiceClient()
 
-    // Verify each player: owned by caller AND on game's team
+    // Validate primary_player_id separately (service role bypasses RLS; must check explicitly)
+    if (primaryPlayerId) {
+      const { data: pp } = await svc.from('players')
+        .select('owner_id, team_id, archived_at').eq('id', primaryPlayerId).single()
+      if (!pp || pp.owner_id !== user.id || pp.team_id !== game.team_id)
+        return NextResponse.json({ error: 'primary_player_id not owned or not on team' }, { status: 403 })
+      if (pp.archived_at)
+        return NextResponse.json({ error: 'Cannot set an archived player as primary. Restore them first.' }, { status: 409 })
+    }
+
+    // Verify each player: owned by caller, on game's team, and NOT archived (new associations only)
     if (playerIds.length > 0) {
       const { data: validPlayers } = await svc
-        .from('players').select('id, owner_id, team_id')
+        .from('players').select('id, owner_id, team_id, archived_at')
         .in('id', playerIds).eq('owner_id', user.id).eq('team_id', game.team_id)
       const validIds = new Set((validPlayers ?? []).map((p: { id: string }) => p.id))
       const invalid = playerIds.filter((id: string) => !validIds.has(id))
       if (invalid.length > 0)
         return NextResponse.json({ error: `Player(s) not owned or not on team: ${invalid.join(', ')}` }, { status: 403 })
+      const archived = (validPlayers ?? []).filter((p: { archived_at: string | null }) => p.archived_at)
+      if (archived.length > 0)
+        return NextResponse.json({ error: 'Cannot associate archived players with a new clip. Restore them first.' }, { status: 409 })
     }
 
     const { data: clip, error: clipErr } = await svc

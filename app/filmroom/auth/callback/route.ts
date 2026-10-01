@@ -12,13 +12,21 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code')
   const type = searchParams.get('type') // 'recovery' | undefined
 
+  // Calculate safe next before any early return so the missing-code redirect preserves it.
+  const validatedNext = safeFilmroomNext(searchParams.get('next'))
+
   if (!code) {
-    return NextResponse.redirect(new URL('/filmroom/login', request.url))
+    const loginUrl = new URL('/filmroom/login', request.url)
+    loginUrl.searchParams.set('next', validatedNext)
+    return NextResponse.redirect(loginUrl)
   }
 
+  const recoveryDest = validatedNext !== '/filmroom'
+    ? `/filmroom/reset-password?confirmed=true&next=${encodeURIComponent(validatedNext)}`
+    : '/filmroom/reset-password?confirmed=true'
   const response = NextResponse.redirect(
     new URL(
-      type === 'recovery' ? '/filmroom/reset-password?confirmed=true' : safeFilmroomNext(searchParams.get('next')),
+      type === 'recovery' ? recoveryDest : validatedNext,
       request.url
     )
   )
@@ -50,7 +58,7 @@ export async function GET(request: NextRequest) {
     else if (msg.includes('recovery') || msg.includes('reset')) slug = 'recovery_failed'
     const dest = new URL('/filmroom/login', request.url)
     dest.searchParams.set('error', slug)
-    dest.searchParams.set('next', safeFilmroomNext(searchParams.get('next')))
+    dest.searchParams.set('next', validatedNext)
     return NextResponse.redirect(dest)
   }
 

@@ -56,7 +56,9 @@ await test('cannot impersonate comment author',()=>denied(`INSERT INTO clip_comm
 await test('own player creation works',async()=>assert((await as('authenticated',A,`INSERT INTO players(team_id,name,number,owner_id) VALUES('${ids.ta}','Allowed',0,'${A}') RETURNING id`)).rows.length===1,'owner player failed'));
 await test('own clip creation works',async()=>assert((await as('authenticated',A,`INSERT INTO clips(game_id,team_id,start_time_ms,end_time_ms,owner_id) VALUES('${ids.ga}','${ids.ta}',0,1000,'${A}') RETURNING id`)).rows.length===1,'owner clip failed'));
 await test('own game edit works',async()=>assert((await as('authenticated',A,`UPDATE games SET notes='Allowed' WHERE id='${ids.ga}' RETURNING id`)).rows.length===1,'owner edit failed'));
-await test('own player deletion works',async()=>assert((await as('authenticated',A,`DELETE FROM players WHERE id='${ids.pa}' RETURNING id`)).rows.length===1,'owner delete failed'));
+// Migration 023 revokes DELETE ON players FROM authenticated — hard-delete is now denied.
+// Archive (soft-delete) is performed by the service-role API route only.
+await test('authenticated cannot hard-delete player (migration 023)',()=>denied(`DELETE FROM players WHERE id='${ids.pa}'`));
 const C='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 await db.exec(`INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('${C}','new@example.test',now())`);
 await test('fresh account gets own coach and library idempotently',async()=>{

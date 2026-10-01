@@ -12,7 +12,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const { clipId } = await params
     const svc = createServiceClient()
 
-    const { data: clip } = await svc.from('clips').select('owner_id, team_id, start_time_ms, end_time_ms').eq('id', clipId).single()
+    const { data: clip } = await svc.from('clips').select('owner_id, team_id, start_time_ms, end_time_ms, primary_player_id').eq('id', clipId).single()
     if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     assertOwner(clip.owner_id, user.id)
 
@@ -48,13 +48,22 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'end_time_ms must be > start_time_ms' }, { status: 400 })
     }
 
-    // Validate primary_player_id belongs to same team
-    if (patch.primary_player_id && typeof patch.primary_player_id === 'string') {
+    // Validate primary_player_id: must be absent, null, or a non-empty string — anything else is a 400.
+    if (patch.primary_player_id !== undefined && patch.primary_player_id !== null && (typeof patch.primary_player_id !== 'string' || !patch.primary_player_id.trim())) {
+      return NextResponse.json({ error: 'primary_player_id must be a string or null' }, { status: 400 })
+    }
+    // Validate string assignments: must be valid for new assignments; existing archived primary
+    // may be silently retained when the caller is not actively changing the field.
+    if (patch.primary_player_id !== undefined && typeof patch.primary_player_id === 'string') {
+      const existingPrimary = (clip as { primary_player_id?: string | null }).primary_player_id
+      const isRetainingExisting = patch.primary_player_id === existingPrimary
       const { data: pl } = await svc.from('players')
-        .select('owner_id, team_id').eq('id', patch.primary_player_id).single()
-      if (!pl || pl.owner_id !== user.id || pl.team_id !== clip.team_id) {
+        .select('owner_id, team_id, archived_at').eq('id', patch.primary_player_id).single()
+      if (!pl || pl.owner_id !== user.id || pl.team_id !== clip.team_id)
         return NextResponse.json({ error: 'primary_player_id not valid for this clip' }, { status: 403 })
-      }
+      // Reject newly setting an archived player as primary, but permit retaining the exact existing archived primary
+      if (pl.archived_at && !isRetainingExisting)
+        return NextResponse.json({ error: 'Cannot set an archived player as primary. Restore them first.' }, { status: 409 })
     }
 
     const { data, error } = await svc

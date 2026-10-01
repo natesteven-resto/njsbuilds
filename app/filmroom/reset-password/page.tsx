@@ -5,9 +5,10 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AuthShell } from '../components/AuthShell'
 import { getSupabaseBrowser } from '@/lib/filmroom-supabase-browser'
+import { safeFilmroomNext } from '@/lib/filmroom-auth-next'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 
-function RequestReset() {
+function RequestReset({ next }: { next: string }) {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -16,21 +17,26 @@ function RequestReset() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); setError(null)
     try {
-    const supabase = getSupabaseBrowser()
-    const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/filmroom/auth/callback?type=recovery`,
-    })
-    setLoading(false)
-    if (err) { setError(err.message); return }
-    setDone(true)
-    } catch {setError('Unable to complete this request. Please try again.')} finally {setLoading(false)}
+      const supabase = getSupabaseBrowser()
+      // Include validated next so auth/callback can forward to the original destination after recovery
+      const callbackUrl = `${window.location.origin}/filmroom/auth/callback?type=recovery&next=${encodeURIComponent(next)}`
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: callbackUrl,
+      })
+      if (err) { setError(err.message); return }
+      setDone(true)
+    } catch {
+      setError('Unable to complete this request. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (done) return (
     <div className="text-center">
       <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" aria-hidden />
       <p className="text-sm text-white/60">Reset link sent to <strong className="text-white/80">{email}</strong>.</p>
-      <Link href="/filmroom/login" className="mt-4 inline-block text-sm text-[#e79568] hover:text-[#f2b18c]">Back to sign in</Link>
+      <Link href={`/filmroom/login?next=${encodeURIComponent(next)}`} className="mt-4 inline-block text-sm text-[#e79568] hover:text-[#f2b18c]">Back to sign in</Link>
     </div>
   )
 
@@ -49,13 +55,13 @@ function RequestReset() {
         {loading ? 'Sending…' : 'Send reset link'}
       </button>
       <p className="text-center text-xs text-white/60">
-        <Link href="/filmroom/login" className="text-[#e79568] hover:text-[#f2b18c] transition-colors">Back to sign in</Link>
+        <Link href={`/filmroom/login?next=${encodeURIComponent(next)}`} className="text-[#e79568] hover:text-[#f2b18c] transition-colors">Back to sign in</Link>
       </p>
     </form>
   )
 }
 
-function ConfirmReset() {
+function ConfirmReset({ next }: { next: string }) {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -68,19 +74,22 @@ function ConfirmReset() {
     if (password.length < 8) { setError('Password must be at least 8 characters'); return }
     setLoading(true)
     try {
-    const supabase = getSupabaseBrowser()
-    const { error: err } = await supabase.auth.updateUser({ password })
-    setLoading(false)
-    if (err) { setError(err.message); return }
-    setDone(true)
-    } catch {setError('Unable to complete this request. Please try again.')} finally {setLoading(false)}
+      const supabase = getSupabaseBrowser()
+      const { error: err } = await supabase.auth.updateUser({ password })
+      if (err) { setError(err.message); return }
+      setDone(true)
+    } catch {
+      setError('Unable to complete this request. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (done) return (
     <div className="text-center">
       <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" aria-hidden />
       <p className="text-sm text-white/60 mb-4">Password updated.</p>
-      <Link href="/filmroom/login" className="text-sm text-[#e79568] hover:text-[#f2b18c]">Sign in</Link>
+      <Link href={`/filmroom/login?next=${encodeURIComponent(next)}`} className="text-sm text-[#e79568] hover:text-[#f2b18c]">Sign in</Link>
     </div>
   )
 
@@ -103,24 +112,30 @@ function ConfirmReset() {
         {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden />}
         {loading ? 'Updating…' : 'Update password'}
       </button>
+      <p className="text-center text-xs text-white/60">
+        <Link href={`/filmroom/login?next=${encodeURIComponent(next)}`} className="text-[#e79568] hover:text-[#f2b18c] transition-colors">Back to sign in</Link>
+      </p>
     </form>
   )
 }
 
 function ResetContent() {
   const searchParams = useSearchParams()
-  return searchParams.get('confirmed') === 'true' ? <ConfirmReset /> : <RequestReset />
+  const next = safeFilmroomNext(searchParams.get('next'))
+  return searchParams.get('confirmed') === 'true'
+    ? <ConfirmReset next={next} />
+    : <RequestReset next={next} />
 }
 
 export default function ResetPasswordPage() {
   return (
     <AuthShell>
-        <div className="w-full">
-          <h2 className="text-3xl font-semibold text-[#eee9df] mb-7">Reset your password</h2>
-          <Suspense fallback={<div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-white/60" /></div>}>
-            <ResetContent />
-          </Suspense>
-        </div>
-      </AuthShell>
+      <div className="w-full">
+        <h2 className="text-3xl font-semibold text-[#eee9df] mb-7">Reset your password</h2>
+        <Suspense fallback={<div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-white/60" /></div>}>
+          <ResetContent />
+        </Suspense>
+      </div>
+    </AuthShell>
   )
 }

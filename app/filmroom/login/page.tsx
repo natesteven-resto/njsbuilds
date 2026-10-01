@@ -5,16 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AuthShell } from '../components/AuthShell'
 import { getSupabaseBrowser } from '@/lib/filmroom-supabase-browser'
+import { safeFilmroomNext } from '@/lib/filmroom-auth-next'
 import { Loader2, AlertCircle, Mail, RefreshCw, CheckCircle2, Info } from 'lucide-react'
 
 const RESEND_COOLDOWN_SEC = 60
 
-function safeNext(raw: string | null): string {
-  if (!raw) return '/filmroom'
-  if (/[\x00-\x1f\\]/.test(raw) || raw.startsWith('//') || raw.includes(':') ||
-    (!raw.startsWith('/filmroom/') && raw !== '/filmroom')) return '/filmroom'
-  return raw
-}
+const safeNext = safeFilmroomNext
 
 type CallbackErrorInfo = { title: string; body: string; action: 'resend' | 'reset' | 'signin' }
 
@@ -161,7 +157,7 @@ function LoginForm() {
           </>
         )}
         {cbError.action === 'reset' && (
-          <Link href="/filmroom/reset-password"
+          <Link href={`/filmroom/reset-password?next=${encodeURIComponent(next)}`}
             className="block w-full text-center py-2.5 rounded-md bg-[#c66a3e] hover:bg-[#db8052] text-sm font-semibold text-[#181917] transition-colors">
             Request new password reset
           </Link>
@@ -183,7 +179,7 @@ function LoginForm() {
           <div className="space-y-1">
             <p className="text-xs font-semibold text-amber-300">Email not confirmed</p>
             <p className="text-xs text-amber-400/80">
-              <strong className="text-amber-300">{email}</strong> hasn't been confirmed yet.
+              <strong className="text-amber-300">{email}</strong> has not been confirmed yet.
               Click the link in your confirmation email, or request a new one below.
             </p>
           </div>
@@ -213,7 +209,7 @@ function LoginForm() {
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <label htmlFor="password" className="block text-xs font-medium text-white/60">Password</label>
-          <Link href="/filmroom/reset-password" className="text-xs text-[#e79568] hover:text-[#f2b18c] transition-colors">
+          <Link href={`/filmroom/reset-password?next=${encodeURIComponent(next)}`} className="text-xs text-[#e79568] hover:text-[#f2b18c] transition-colors">
             Forgot password?
           </Link>
         </div>

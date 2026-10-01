@@ -7,9 +7,17 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const teamId = searchParams.get('team_id')
 
+    // include_archived=true returns all players including archived (for historical display)
+    // Default (active roster, stat/clip modals): omit archived players
+    const includeArchived = searchParams.get('include_archived') === 'true'
+
     let query = supabase
       .from('players').select('*').eq('owner_id', user.id)
       .order('number', { ascending: true, nullsFirst: false })
+
+    if (!includeArchived) {
+      query = query.is('archived_at', null)
+    }
 
     if (teamId) {
       // Verify team ownership via RLS client

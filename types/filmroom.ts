@@ -27,6 +27,8 @@ export interface Player {
   position: string | null
   parent_email: string | null
   created_at: string
+  /** ISO timestamp set when player is archived; null/undefined = active */
+  archived_at?: string | null
 }
 
 export interface Game {

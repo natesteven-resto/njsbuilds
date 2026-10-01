@@ -2010,6 +2010,9 @@ export default function GameFilmRoom() {
   const [clipCategory,setClipCategory]=useState('')
   const [clipPlayer,setClipPlayer]=useState('')
   const [players, setPlayers] = useState<Player[]>([])
+  // activePlayers: only non-archived — used for roster/tag/new-stat choices.
+  // Full `players` (incl. archived) is passed to historical panels (BoxScore, ShotChart, clip edit).
+  const activePlayers = useMemo(() => players.filter(p => !p.archived_at), [players])
   const [loading, setLoading] = useState(true)
   const [gameError, setGameError] = useState<'not_found' | 'error' | null>(null)
   const [retryKey, setRetryKey] = useState(0)
@@ -2058,6 +2061,9 @@ export default function GameFilmRoom() {
   const [quickPending,setQuickPending]=useState(false)
   const [quickMessage,setQuickMessage]=useState('')
   const [quickError,setQuickError]=useState<string|null>(null)
+  const [statDeleteError,setStatDeleteError]=useState<string|null>(null)
+  const deletingStatIds=useRef<Set<string>>(new Set())
+  const deletingClipId=useRef<string|null>(null)
   const resumeAfterDetails=useRef(false)
   useEffect(()=>{setQuickPlayer('');setQuickMessage('');setQuickError(null);setQuickTagOpen(false)},[gameId])
   const [statsFullscreen, setStatsFullscreen] = useState(false)
@@ -2156,10 +2162,15 @@ export default function GameFilmRoom() {
           return
         }
 
-        // Fetch sections independently so one failure doesn't blank everything
+        // Fetch sections independently so one failure doesn't blank everything.
+        // Players are scoped to game.team_id so we never surface players from
+        // other teams in roster/quick-tags/stat/clip modals.
         const [cRes, pRes, seRes] = await Promise.all([
           fetch(`/api/filmroom/clips?game_id=${gameId}`, { signal }),
-          fetch(`/api/filmroom/players`, { signal }),
+          // include_archived=true: load ALL same-team players so historical
+          // stat tables and clip associations display correctly. Active-only
+          // subset is derived below for roster/tag choices.
+          fetch(`/api/filmroom/players?team_id=${encodeURIComponent(g.team_id)}&include_archived=true`, { signal }),
           fetch(`/api/filmroom/stat-entries?game_id=${gameId}`, { signal }),
         ])
 
@@ -2341,12 +2352,29 @@ export default function GameFilmRoom() {
   }, [])
 
   const handleDeleteEntry = useCallback(async (id: string) => {
+    if (deletingStatIds.current.has(id)) return // lock: prevent duplicate in-flight deletes
+    deletingStatIds.current.add(id)
+    setStatDeleteError(null)
     try {
-      await fetch(`/api/filmroom/stat-entries?id=${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/filmroom/stat-entries?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        // Do NOT remove from local state; surface error in both quick dock and BoxScore
+        const body = await res.json().catch(() => ({}))
+        const msg = body?.error ?? `Could not delete stat (${res.status}). Please try again.`
+        setQuickError(msg)
+        setStatDeleteError(msg)
+        return
+      }
+      // Only update local state on confirmed server success
       setStatEntries(prev => prev.filter(e => e.id !== id))
       setSessionStatEntries(prev => prev.filter(e => e.id !== id))
+      setStatDeleteError(null)
     } catch {
-      // ignore
+      const msg = 'Network error — stat was not deleted. Check your connection and try again.'
+      setQuickError(msg)
+      setStatDeleteError(msg)
+    } finally {
+      deletingStatIds.current.delete(id)
     }
   }, [])
 
@@ -2357,11 +2385,32 @@ export default function GameFilmRoom() {
     if (v && v.paused) { v.play(); setIsPlaying(true) }
   }, [seek])
 
-  // Delete clip
+  // Delete clip state for error display
+  const [clipDeleteError, setClipDeleteError] = useState<string | null>(null)
+
+  // Delete clip — only removes from local state if server confirms success.
+  // Prevents accidental local row removal on network/HTTP failures.
   const deleteClip = async (id: string) => {
-    if (!confirm('Delete this clip?')) return
-    await fetch(`/api/filmroom/clips/${id}`, { method: 'DELETE' })
-    setClips(c => c.filter(x => x.id !== id))
+    if (deletingClipId.current === id) return // lock: prevent duplicate in-flight deletes
+    if (!confirm('Delete this clip? This cannot be undone.')) return
+    deletingClipId.current = id
+    setClipDeleteError(null)
+    try {
+      const res = await fetch(`/api/filmroom/clips/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setClipDeleteError(body?.error ?? `Could not delete clip (${res.status}). Please try again.`)
+        return
+      }
+      // Only remove from local state after confirmed server delete
+      setClips(c => c.filter(x => x.id !== id))
+      if (activeClipId === id) setActiveClipId(null)
+      setClipDeleteError(null)
+    } catch {
+      setClipDeleteError('Network error — clip was not deleted. Check your connection and try again.')
+    } finally {
+      deletingClipId.current = null
+    }
   }
 
   // Playback speed — applied to <video> element
@@ -2492,7 +2541,11 @@ export default function GameFilmRoom() {
     }
     if (section === 'players') {
       setPlayersError(false)
-      const res = await fetch('/api/filmroom/players')
+      // Always scope to the game's team_id — no all-team fallback to prevent cross-team data leaks
+      const teamId = game?.team_id
+      if (!teamId) { setPlayersError(true); return }
+      const url = `/api/filmroom/players?team_id=${encodeURIComponent(teamId)}&include_archived=true`
+      const res = await fetch(url)
       if (res.ok) { const d = await res.json(); setPlayers(Array.isArray(d) ? d : []) }
       else setPlayersError(true)
     }
@@ -2505,7 +2558,7 @@ export default function GameFilmRoom() {
       } else setStatsError(true)
     }
     } catch { if(section==='clips')setClipsError(true);if(section==='players')setPlayersError(true);if(section==='stats')setStatsError(true) }
-  }, [gameId])
+  }, [gameId, game?.team_id])
 
   // Fetch playlists lazily when add-to-playlist is opened
   const fetchPlaylists = useCallback(async () => {
@@ -2863,7 +2916,7 @@ export default function GameFilmRoom() {
                 </ToolbarMenu>
               </div>}
             />}
-            {game.video_url&&quickTagOpen&&<QuickTagDock players={players} selectedPlayer={quickPlayer} onPlayer={setQuickPlayer} stats={STAT_DEFS} onTag={stat=>void quickTag(stat as StatType)} busy={quickPending||undoPending||redoPending} canUndo={undoStack.current.length>0} canRedo={redoStack.current.length>0} onUndo={()=>void handleUndo()} onRedo={()=>void handleRedo()} onClose={()=>setQuickTagOpen(false)} onDetails={openStatPanel} message={quickMessage} error={quickError||undoError||redoError} fullscreen={isFullscreen}/>}
+            {game.video_url&&quickTagOpen&&<QuickTagDock players={activePlayers} selectedPlayer={quickPlayer} onPlayer={setQuickPlayer} stats={STAT_DEFS} onTag={stat=>void quickTag(stat as StatType)} busy={quickPending||undoPending||redoPending} canUndo={undoStack.current.length>0} canRedo={redoStack.current.length>0} onUndo={()=>void handleUndo()} onRedo={()=>void handleRedo()} onClose={()=>setQuickTagOpen(false)} onDetails={openStatPanel} message={quickMessage} error={quickError||undoError||redoError} fullscreen={isFullscreen}/>}
             {game.video_url && (
               <div className="shrink-0 max-h-32 overflow-y-auto">
               <BookmarkBar
@@ -2952,6 +3005,13 @@ export default function GameFilmRoom() {
                       className="text-xs text-red-400 hover:text-red-300 font-medium underline underline-offset-2">Retry</button>
                   </div>
                 )}
+                {clipDeleteError && (
+                  <div role="alert" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
+                    <span className="text-xs text-red-300 flex-1">{clipDeleteError}</span>
+                    <button onClick={() => setClipDeleteError(null)} aria-label="Dismiss" className="text-xs text-red-400 hover:text-red-300 font-medium">Dismiss</button>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <select aria-label="Filter clips by tag" value={clipTag} onChange={e=>setClipTag(e.target.value)} className="min-h-11 bg-[#252621] border border-white/10 rounded-md px-2 text-xs"><option value="">All tags</option>{clipTags.map(t=><option key={t}>{t}</option>)}</select>
                   <select aria-label="Filter clips by category" value={clipCategory} onChange={e=>setClipCategory(e.target.value)} className="min-h-11 bg-[#252621] border border-white/10 rounded-md px-2 text-xs"><option value="">All categories</option>{Object.entries(CATEGORY_LABELS).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select>
@@ -3037,6 +3097,13 @@ export default function GameFilmRoom() {
                       <Maximize2 className="w-3 h-3" /> Full Screen
                     </button>
                   </div>
+                  {statDeleteError && (
+                    <div role="alert" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 mb-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
+                      <span className="text-xs text-red-300 flex-1">{statDeleteError}</span>
+                      <button onClick={() => setStatDeleteError(null)} aria-label="Dismiss" className="text-xs text-red-400 hover:text-red-300 font-medium">Dismiss</button>
+                    </div>
+                  )}
                   <BoxScorePanel
                     players={players}
                     statEntries={statEntries}
@@ -3064,6 +3131,13 @@ export default function GameFilmRoom() {
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-5">
+                  {statDeleteError && (
+                    <div role="alert" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 mb-3">
+                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
+                      <span className="text-xs text-red-300 flex-1">{statDeleteError}</span>
+                      <button onClick={() => setStatDeleteError(null)} aria-label="Dismiss" className="text-xs text-red-400 hover:text-red-300 font-medium">Dismiss</button>
+                    </div>
+                  )}
                   <BoxScorePanel
                     players={players}
                     statEntries={statEntries}
@@ -3090,7 +3164,17 @@ export default function GameFilmRoom() {
                       className="text-xs text-red-400 hover:text-red-300 font-medium underline underline-offset-2">Retry</button>
                   </div>
                 )}
-                <RosterPanel players={players} teamId={game.team_id} onPlayersChange={setPlayers} />
+                <RosterPanel
+                  players={activePlayers}
+                  teamId={game.team_id}
+                  onPlayerAdded={p => setPlayers(prev => [...prev, p])}
+                  onPlayerArchived={id => setPlayers(prev => prev.map(p =>
+                    p.id === id ? { ...p, archived_at: new Date().toISOString() } : p
+                  ))}
+                  onPlayerRestored={p => setPlayers(prev => prev.map(x =>
+                    x.id === p.id ? { ...x, archived_at: null } : x
+                  ))}
+                />
               </div>
             )}
           </div>
@@ -3112,6 +3196,13 @@ export default function GameFilmRoom() {
                     <Maximize2 className="w-3 h-3" /> Expand
                   </button>
                 </div>
+                {statDeleteError && (
+                  <div role="alert" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 mb-3">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
+                    <span className="text-xs text-red-300 flex-1">{statDeleteError}</span>
+                    <button onClick={() => setStatDeleteError(null)} aria-label="Dismiss" className="text-xs text-red-400 hover:text-red-300 font-medium">Dismiss</button>
+                  </div>
+                )}
                 <BoxScorePanel
                   players={players}
                   statEntries={statEntries}
@@ -3133,7 +3224,7 @@ export default function GameFilmRoom() {
           teamId={game.team_id}
           startMs={markIn}
           endMs={markOut}
-          players={players}
+          players={activePlayers}
           drawingData={drawingData}
           videoDurationMs={durationMs}
           onClose={() => setShowSaveClip(false)}
@@ -3160,7 +3251,7 @@ export default function GameFilmRoom() {
       {showStatPanel && (
         <StatEntryPanel
           gameId={gameId}
-          players={players}
+          players={activePlayers}
           currentMs={currentMs}
           sessionEntries={sessionStatEntries}
           userId={userId}
@@ -3371,52 +3462,154 @@ function AddToPlaylistModal({ clipId, onClose }: { clipId: string; onClose: () =
 }
 
 // ─── Inline Roster Panel ──────────────────────────────────────────────────────
+// Players are archived (soft-deleted) to preserve historical stat_entries and
+// clip_player associations. Archived players are hidden from the active roster,
+// stat/clip modals, and quick-tag dock, but their historical box score rows
+// remain valid. A Restore button reinstates archived players to the active
+// roster without losing any history.
 
-function RosterPanel({ players, teamId, onPlayersChange }: { players: Player[]; teamId: string; onPlayersChange: (p: Player[]) => void }) {
+function RosterPanel({ players, teamId, onPlayerAdded, onPlayerArchived, onPlayerRestored }: {
+  players: Player[] // active players only
+  teamId: string
+  onPlayerAdded: (p: Player) => void
+  onPlayerArchived: (id: string) => void
+  onPlayerRestored: (p: Player) => void
+}) {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ name: '', number: '', position: '', parent_email: '' })
   const [loading, setLoading] = useState(false)
+  // Archived players loaded lazily when "Show archived" is toggled
+  const [archivedPlayers, setArchivedPlayers] = useState<Player[]>([])
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedLoading, setArchivedLoading] = useState(false)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
+  const [actionInFlight, setActionInFlight] = useState<string | null>(null) // playerId
+  // Broad lock: prevent any concurrent archive/restore mutation while one is in-flight
+  const rosterMutating = useRef(false)
 
   const addPlayer = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    const res = await fetch('/api/filmroom/players', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        team_id: teamId,
-        name: form.name,
-        // jersey 0 is valid — only null when empty or non-numeric
-        number: form.number !== '' ? (isNaN(parseInt(form.number, 10)) ? null : parseInt(form.number, 10)) : null,
-        position: form.position || null,
-        parent_email: form.parent_email || null,
-      }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      alert(err.error ?? 'Failed to add player')
+    try {
+      const res = await fetch('/api/filmroom/players', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          team_id: teamId,
+          name: form.name,
+          // jersey 0 is valid — only null when empty or non-numeric
+          number: form.number !== '' ? (isNaN(parseInt(form.number, 10)) ? null : parseInt(form.number, 10)) : null,
+          position: form.position || null,
+          parent_email: form.parent_email || null,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error ?? 'Failed to add player')
+        return
+      }
+      const player = await res.json()
+      onPlayerAdded(player)
+      setForm({ name: '', number: '', position: '', parent_email: '' })
+      setAdding(false)
+    } catch {
+      alert('Network error — player was not added. Check your connection and try again.')
+    } finally {
       setLoading(false)
-      return
     }
-    const player = await res.json()
-    onPlayersChange([...players, player])
-    setForm({ name: '', number: '', position: '', parent_email: '' })
-    setAdding(false)
-    setLoading(false)
   }
 
-  const removePlayer = async (id: string) => {
-    const res = await fetch(`/api/filmroom/players/${id}`, { method: 'DELETE' })
-    if (res.ok) {
-      onPlayersChange(players.filter(p => p.id !== id))
-    } else {
-      const err = await res.json().catch(() => ({}))
-      alert(err.error ?? 'Failed to remove player')
+  // Archive (soft-delete): removes from active roster, preserves all stats/clips.
+  // Requires explicit confirmation. No destructive fallback if server lacks the
+  // archived_at column (migration 022 not applied) — server returns 500 and we
+  // surface that error; player is NOT removed from local state in that case.
+  const archivePlayer = async (id: string, name: string) => {
+    if (!window.confirm(
+      `Archive ${name}?\n\nThis removes them from the active roster and tag choices. ` +
+      `All historical stats and clip tags are preserved. You can restore them later.`
+    )) return
+    if (rosterMutating.current) return // block concurrent mutations
+    rosterMutating.current = true
+    setActionInFlight(id)
+    setArchiveError(null)
+    try {
+      const res = await fetch(`/api/filmroom/players/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setArchiveError(err.error ?? 'Could not archive player. Please try again.')
+        return
+      }
+      // Update parent state: mark archived_at (preserves historical data in full state)
+      onPlayerArchived(id)
+      // Refresh archived list if panel is open; otherwise invalidate so it reloads fresh
+      if (showArchived) {
+        void loadArchived()
+      } else {
+        setArchivedPlayers([])
+      }
+    } catch {
+      setArchiveError('Network error — player was not archived. Check your connection and try again.')
+    } finally {
+      setActionInFlight(null)
+      rosterMutating.current = false
+    }
+  }
+
+  const loadArchived = async () => {
+    setArchivedLoading(true)
+    try {
+      const res = await fetch(`/api/filmroom/players?team_id=${teamId}&include_archived=true`)
+      if (!res.ok) throw new Error('Failed to load archived players')
+      const all: Player[] = await res.json()
+      // Filter to archived only (have archived_at)
+      setArchivedPlayers(all.filter((p: Player & { archived_at?: string | null }) => p.archived_at))
+    } catch (e) {
+      setArchiveError(e instanceof Error ? e.message : 'Could not load archived players')
+    } finally {
+      setArchivedLoading(false)
+    }
+  }
+
+  const handleToggleArchived = () => {
+    const next = !showArchived
+    setShowArchived(next)
+    if (next && archivedPlayers.length === 0) loadArchived()
+  }
+
+  const restorePlayer = async (id: string) => {
+    if (rosterMutating.current) return // block concurrent mutations
+    rosterMutating.current = true
+    setActionInFlight(id)
+    setArchiveError(null)
+    try {
+      const res = await fetch(`/api/filmroom/players/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restore: true }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setArchiveError(err.error ?? 'Could not restore player. Please try again.')
+        return
+      }
+      const restored: Player = await res.json()
+      onPlayerRestored(restored)
+      setArchivedPlayers(prev => prev.filter(p => p.id !== id))
+    } catch {
+      setArchiveError('Network error — player was not restored. Check your connection and try again.')
+    } finally {
+      setActionInFlight(null)
+      rosterMutating.current = false
     }
   }
 
   return (
     <div className="space-y-2">
+      {archiveError && (
+        <div role="alert" className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300">
+          {archiveError}
+        </div>
+      )}
       {players.map(p => (
         <div key={p.id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/3 border border-white/6">
           <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-300">
@@ -3426,13 +3619,64 @@ function RosterPanel({ players, teamId, onPlayersChange }: { players: Player[]; 
             <p className="text-xs font-medium text-white/80 truncate">{p.name}</p>
             {p.position && <p className="text-[10px] text-white/35">{p.position}</p>}
           </div>
-          <button onClick={() => removePlayer(p.id)}
-            aria-label={`Remove ${p.name} (#${p.number ?? '?'})`}
-            className="p-1 rounded-lg text-white/20 hover:text-red-400 transition-colors">
-            <X className="w-3 h-3" aria-hidden />
+          <button
+            onClick={() => archivePlayer(p.id, p.name)}
+            disabled={actionInFlight === p.id}
+            aria-label={`Archive ${p.name} (#${p.number ?? '?'}) — preserves stats and clips`}
+            className="p-1 rounded-lg text-white/20 hover:text-amber-400 transition-colors disabled:opacity-40"
+            title="Archive player (stats and clips are preserved)">
+            {actionInFlight === p.id
+              ? <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+              : <X className="w-3 h-3" aria-hidden />}
           </button>
         </div>
       ))}
+
+      {/* Archived players section */}
+      <div className="pt-1">
+        <button
+          onClick={handleToggleArchived}
+          className="text-[10px] text-white/30 hover:text-white/55 underline underline-offset-2 transition-colors">
+          {showArchived ? 'Hide archived players' : 'Show archived players'}
+        </button>
+      </div>
+      {showArchived && (
+        <div className="space-y-1.5">
+          {archivedLoading && (
+            <div className="flex items-center gap-2 text-xs text-white/40 px-1">
+              <Loader2 className="w-3 h-3 animate-spin" /> Loading archived…
+            </div>
+          )}
+          {!archivedLoading && archivedPlayers.length === 0 && (
+            <p className="text-xs text-white/25 px-1">No archived players.</p>
+          )}
+          {archivedPlayers.map(p => (
+            <div key={p.id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/2 border border-white/5 opacity-60">
+              <div className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center text-xs font-bold text-white/40">
+                {p.number ?? '?'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-white/50 truncate">{p.name}</p>
+                <p className="text-[10px] text-white/30">Archived · stats preserved</p>
+              </div>
+              <button
+                onClick={() => restorePlayer(p.id)}
+                disabled={actionInFlight === p.id}
+                aria-label={`Restore ${p.name} to active roster`}
+                className="px-2 py-1 rounded-lg text-[10px] font-medium border border-white/15 text-white/40 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40">
+                {actionInFlight === p.id
+                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                  : 'Restore'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Divider: stats/clip note */}
+      <p className="text-[10px] text-white/20 px-1 leading-relaxed">
+        Archiving removes a player from the active roster and tag choices. Historical stats and clip tags are always preserved.
+      </p>
 
       {adding ? (
         <form onSubmit={addPlayer} className="space-y-2 p-3 rounded-xl bg-white/3 border border-blue-500/25">

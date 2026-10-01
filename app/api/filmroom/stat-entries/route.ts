@@ -57,14 +57,16 @@ export async function POST(request: NextRequest) {
     if (gameErr || !game || game.owner_id !== user.id)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    // Verify player: owned + same team as game
+    // Verify player: owned + same team as game + not archived (new stats must not associate archived players)
     if (playerId) {
       const { data: player } = await supabase
-        .from('players').select('id, owner_id, team_id').eq('id', playerId).single()
+        .from('players').select('id, owner_id, team_id, archived_at').eq('id', playerId).single()
       if (!player || player.owner_id !== user.id)
         return NextResponse.json({ error: 'Forbidden: player not owned' }, { status: 403 })
       if (player.team_id !== game.team_id)
         return NextResponse.json({ error: 'Forbidden: player not on game team' }, { status: 403 })
+      if (player.archived_at)
+        return NextResponse.json({ error: 'Cannot log stats for an archived player. Restore them first.' }, { status: 409 })
     }
 
     // Shot coordinates: only for shot stat types; both or neither
