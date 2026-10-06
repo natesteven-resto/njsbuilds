@@ -20,7 +20,7 @@
     ],
     "paths": {
       "@/*": ["./*"],
-      "@midwest/*": ["./lib/midwest-engine/*"]
+      "@midwest/*": ["./midwest-job/src/*"]
     }
   },
   "include": [
