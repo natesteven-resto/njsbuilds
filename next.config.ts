@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
       { source: '/winterizations', destination: '/winterizations.html' },
     ]
   },
-  serverExternalPackages: ['@react-pdf/renderer'],
+  serverExternalPackages: ['@react-pdf/renderer', 'better-sqlite3'],
 
   images: {
     remotePatterns: [

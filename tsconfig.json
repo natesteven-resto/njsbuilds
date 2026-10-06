@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@midwest/*": ["./midwest-job/src/*"]
     }
   },
   "include": [
@@ -30,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "chalk-app", "fleet-app", "the-x", "restoreports-v2", "njsbuilds", "deadass", "assistant-coach"]
+  "exclude": ["node_modules", "chalk-app", "fleet-app", "the-x", "restoreports-v2", "njsbuilds", "deadass", "assistant-coach", "midwest-job/node_modules", "midwest-job/dist", "midwest-job/src/checks", "midwest-job/server", "midwest-job/scripts"]
 }
