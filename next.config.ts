@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       { source: '/winterizations', destination: '/winterizations.html' },
+      { source: '/pheasanthunt2026', destination: '/PheasantHunt2026' },
+      { source: '/pheasanthunt', destination: '/PheasantHunt2026' },
     ]
   },
   serverExternalPackages: ['@react-pdf/renderer'],
