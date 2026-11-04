@@ -331,3 +331,11 @@
   .tripDetails p,.supplyCard>p,.supplyCard>small,.supplyNumbers span,.timeline p,.sources p{font-size:12px}
   .saved{font-size:10px}
 }
+/* Keep the bird's head in the frame at every viewport width. */
+.heroImage{background-position:right 54%}
+@media(max-width:800px){.heroImage{background-position:right center}}
+@media(max-width:500px){
+  .heroImage{inset:0;background-position:right center}
+  .headerButton{letter-spacing:0;padding:8px}
+  .headerButton>svg{flex-shrink:0;width:16px;height:16px}
+}
