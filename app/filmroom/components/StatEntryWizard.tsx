@@ -42,7 +42,7 @@ const ZONES = [
   { id: 'free_throw', label: 'FT', x: 36, y: 68, w: 28, h: 14 },
 ]
 
-interface Player { id: string; name: string; number: string | null; position: string | null; team_id: string; parent_email: string | null; created_at: string }
+interface WizardPlayer { id: string; name: string; number: string | null; position: string | null; team_id: string; parent_email: string | null; created_at: string }
 interface WizardStatEntry { id: string; player_id: string | null; player_name: string; player_number: string; stat_type: string; video_time_ms: number; shot_location?: string | null; game_id?: string; team_id?: string; created_at?: string }
 
 export function StatEntryWizard({
@@ -50,7 +50,7 @@ export function StatEntryWizard({
   onLog, onUndo, onRedo, canUndo, canRedo,
   undoPending, redoPending, undoError, redoError, onClose,
 }: {
-  gameId: string; players: Player[]; currentMs: number; sessionEntries: WizardStatEntry[]; userId: string
+  gameId: string; players: WizardPlayer[]; currentMs: number; sessionEntries: WizardStatEntry[]; userId: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onLog: (entry: any) => void; onUndo: () => void; onRedo: () => void
   canUndo: boolean; canRedo: boolean; undoPending: boolean; redoPending: boolean
@@ -58,7 +58,7 @@ export function StatEntryWizard({
 }) {
   const [step, setStep] = useState<'stat'|'player'|'location'>('stat')
   const [selectedStat, setSelectedStat] = useState<string|null>(null)
-  const [selectedPlayer, setSelectedPlayer] = useState<Player|null>(null)
+  const [selectedPlayer, setSelectedPlayer] = useState<WizardPlayer|null>(null)
   const [logging, setLogging] = useState(false)
   const [toast, setToast] = useState<string|null>(null)
   const [visible, setVisible] = useState(false)
@@ -68,7 +68,7 @@ export function StatEntryWizard({
 
   const dismiss = () => { setVisible(false); setTimeout(onClose, 220) }
 
-  const saveEntry = async (stat: string, player: Player|null, location?: string) => {
+  const saveEntry = async (stat: string, player: WizardPlayer|null, location?: string) => {
     setLogging(true)
     const pid = player?.id ?? null
     const pname = !player ? 'Opponent' : player.name
@@ -90,7 +90,7 @@ export function StatEntryWizard({
   }
 
   const handleStat = (s: string) => { setSelectedStat(s); setStep('player') }
-  const handlePlayer = async (p: Player|null) => {
+  const handlePlayer = async (p: WizardPlayer|null) => {
     setSelectedPlayer(p)
     if (!selectedStat) return
     if (SHOT_TYPES.has(selectedStat)) setStep('location')
@@ -194,7 +194,7 @@ export function StatEntryWizard({
           </div>
         )}
 
-        {/* Step 2 — Player */}
+        {/* Step 2 — WizardPlayer */}
         {step === 'player' && (
           <div style={{ padding: '14px 16px 24px', overflowY: 'auto', flex: 1 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(88px,1fr))', gap: 10 }}>
