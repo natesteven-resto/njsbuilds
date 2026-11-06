@@ -51,7 +51,8 @@ export function StatEntryWizard({
   undoPending, redoPending, undoError, redoError, onClose,
 }: {
   gameId: string; players: Player[]; currentMs: number; sessionEntries: WizardStatEntry[]; userId: string
-  onLog: (entry: WizardStatEntry) => void; onUndo: () => void; onRedo: () => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onLog: (entry: any) => void; onUndo: () => void; onRedo: () => void
   canUndo: boolean; canRedo: boolean; undoPending: boolean; redoPending: boolean
   undoError: string | null; redoError: string | null; onClose: () => void
 }) {

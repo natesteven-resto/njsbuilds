@@ -3256,7 +3256,8 @@ export default function GameFilmRoom() {
           currentMs={currentMs}
           sessionEntries={sessionStatEntries}
           userId={userId}
-          onLog={handleLogEntry}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onLog={handleLogEntry as (e: any) => void}
           onUndo={handleUndo}
           onRedo={handleRedo}
           canUndo={undoStack.current.length > 0 && !undoRedoInFlight.current}
