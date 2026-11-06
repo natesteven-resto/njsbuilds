@@ -232,19 +232,43 @@ function StatEntryPanel({
 }) {
   const [selectedStat, setSelectedStat] = useState<StatType | null>(null)
   const [logging, setLogging] = useState(false)
-  const [logError,setLogError]=useState<string|null>(null)
-  // Staged shot location: set by tapping the court SVG, cleared after player tap
+  const [logError, setLogError] = useState<string | null>(null)
+  // Staged shot location (normalised 0–1 court coords); stays on the court while the save is in flight
   const [stagedShot, setStagedShot] = useState<{ x: number; y: number } | null>(null)
-  const [showCourtCapture, setShowCourtCapture] = useState(false)
+  // ── Wizard state ──
+  // 1 = tap a stat · 2 = tap who · 3 = tap shot location (shot stats only)
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1)
+  const [wizardPlayer, setWizardPlayer] = useState<Player | null>(null)
+  // Drives the slide-up / blur transition: false on mount → true a frame later; false again while closing
+  const [wizardVisible, setWizardVisible] = useState(false)
+  // Last saved entry — drives the ✓ confirmation strip
+  const [lastLogged, setLastLogged] = useState<StatEntry | null>(null)
   // Quick-stat preferences — start empty, load from localStorage once userId is known
   const [quickPrefs, setQuickPrefs] = useState<StatType[]>([])
   const [editingPrefs, setEditingPrefs] = useState(false)
+  const closeTimer = useRef<number | null>(null)
 
   useEffect(() => {
     if (!userId) return
     const saved = readQuickStatPrefs(userId)
     if (saved) setQuickPrefs(saved)
   }, [userId])
+
+  // Slide up one frame after mount so the CSS transition actually runs
+  useEffect(() => {
+    const t = window.setTimeout(() => setWizardVisible(true), 16)
+    return () => {
+      window.clearTimeout(t)
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
+    }
+  }, [])
+
+  // Auto-clear the confirmation strip
+  useEffect(() => {
+    if (!lastLogged) return
+    const t = window.setTimeout(() => setLastLogged(null), 2200)
+    return () => window.clearTimeout(t)
+  }, [lastLogged])
 
   const togglePref = (stat: StatType) => {
     setQuickPrefs(prev => {
@@ -258,38 +282,85 @@ function StatEntryPanel({
 
   const allPlayers = [...players, OPP_PLAYER]
 
+  const made   = STAT_DEFS.filter(d => d.col === 'made')
+  const miss   = STAT_DEFS.filter(d => d.col === 'miss')
+  const other  = STAT_DEFS.filter(d => d.col === 'other')
+
+  const statLabel = (s: StatType) => STAT_DEFS.find(d => d.key === s)?.label ?? s
+  const isShotStat = !!selectedStat && SHOT_TYPES_SET.has(selectedStat)
+  const selectedDef = selectedStat ? STAT_DEFS.find(d => d.key === selectedStat) : undefined
+
+  const chipClass = (def: StatDef | undefined) =>
+    !def ? 'border-white/15 text-white/80 bg-white/8'
+    : def.col === 'miss' || def.redTint ? 'border-red-500/30 text-red-300 bg-red-950/30'
+    : def.col === 'made' ? 'border-emerald-500/30 text-emerald-200 bg-emerald-950/30'
+    : 'border-white/15 text-white/80 bg-white/8'
+
+  const playerShort = (p: Player) => p.id === OPP_ID ? 'Opponent' : p.name.split(' ')[0]
+  const playerTag = (p: Player) => p.id === OPP_ID ? 'OPP' : `#${p.number ?? '?'} ${p.name.split(' ')[0]}`
+
+  const sessionPts = (playerId: string) =>
+    sessionEntries.filter(e => e.player_id === playerId && e.stat_type === '2M').length * 2
+    + sessionEntries.filter(e => e.player_id === playerId && e.stat_type === '3M').length * 3
+    + sessionEntries.filter(e => e.player_id === playerId && e.stat_type === 'FTM').length
+
+  // Slide down, then let the parent unmount us once the transition has finished
+  const dismiss = () => {
+    if (closeTimer.current !== null) return
+    setWizardVisible(false)
+    closeTimer.current = window.setTimeout(onClose, 240)
+  }
+
+  const resetWizard = () => {
+    setSelectedStat(null)
+    setWizardPlayer(null)
+    setStagedShot(null)
+    setWizardStep(1)
+  }
+
+  const goBack = () => {
+    if (logging) return
+    setLogError(null)
+    if (wizardStep === 3) { setStagedShot(null); setWizardPlayer(null); setWizardStep(2) }
+    else if (wizardStep === 2) { setSelectedStat(null); setWizardStep(1) }
+  }
+
+  // Escape steps back; from step 1 it closes. (The page's own hotkeys are suspended while this panel is open.)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      if (wizardStep === 1) dismiss()
+      else goBack()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  // Step 1 → 2
   const handleStatTap = (stat: StatType) => {
-    const next = selectedStat === stat ? null : stat
-    setSelectedStat(next)
-    // Auto-show court when a shot stat is selected, hide for non-shots
-    if (next && SHOT_TYPES_SET.has(next)) setShowCourtCapture(true)
-    else { setShowCourtCapture(false); setStagedShot(null) }
+    if (logging) return
+    setLogError(null)
+    setSelectedStat(stat)
+    setWizardPlayer(null)
+    setStagedShot(null)
+    setWizardStep(2)
   }
 
-  const handleCourtTap = (e: React.MouseEvent<SVGSVGElement>) => {
-    const svg=e.currentTarget, matrix=svg.getScreenCTM()
-    if(!matrix)return
-    const point=svg.createSVGPoint();point.x=e.clientX;point.y=e.clientY
-    const local=point.matrixTransform(matrix.inverse())
-    const x=Math.max(0,Math.min(1,(local.x-1)/48))
-    const y=Math.max(0,Math.min(1,(local.y-1)/45))
-    setStagedShot({ x: parseFloat(x.toFixed(4)), y: parseFloat(y.toFixed(4)) })
-  }
-
-  const handlePlayerTap = async (player: Player) => {
-    if (!selectedStat || logging) return
-    setLogging(true);setLogError(null)
+  // POST the entry. Shot coords ride along only for shot stat types.
+  const commitEntry = async (stat: StatType, player: Player, shot: { x: number; y: number } | null) => {
+    if (logging) return
+    setLogging(true); setLogError(null)
     try {
       const body: Record<string, unknown> = {
         game_id: gameId,
         player_id: player.id === OPP_ID ? null : player.id,
-        stat_type: selectedStat,
+        stat_type: stat,
         video_time_ms: statMoment(currentMs),
       }
-      // Include staged shot coords only for shot stat types
-      if (stagedShot && SHOT_TYPES_SET.has(selectedStat)) {
-        body.shot_x = stagedShot.x
-        body.shot_y = stagedShot.y
+      if (shot && SHOT_TYPES_SET.has(stat)) {
+        body.shot_x = shot.x
+        body.shot_y = shot.y
       }
       const res = await fetch('/api/filmroom/stat-entries', {
         method: 'POST',
@@ -303,7 +374,8 @@ function StatEntryPanel({
         ? { ...rawToEntry(raw), player_id: OPP_ID, player_name: 'Opponent', player_number: 'OPP' }
         : rawToEntry(raw)
       onLog(entry)
-      setStagedShot(null) // clear after commit; keep stat selected for rapid entry
+      setLastLogged(entry)
+      resetWizard() // back to step 1 for the next stat; Done closes the sheet
     } catch {
       setLogError('The stat was not saved. Please try again.')
     } finally {
@@ -311,47 +383,123 @@ function StatEntryPanel({
     }
   }
 
+  // Step 2 → 3 for shots, otherwise save immediately
+  const handlePlayerTap = (player: Player) => {
+    if (!selectedStat || logging) return
+    setWizardPlayer(player)
+    if (SHOT_TYPES_SET.has(selectedStat)) { setStagedShot(null); setWizardStep(3) }
+    else void commitEntry(selectedStat, player, null)
+  }
+
+  // Step 3: one tap on the court places the marker and saves
+  const handleCourtTap = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!selectedStat || !wizardPlayer || logging) return
+    const svg = e.currentTarget, matrix = svg.getScreenCTM()
+    if (!matrix) return
+    const point = svg.createSVGPoint(); point.x = e.clientX; point.y = e.clientY
+    const local = point.matrixTransform(matrix.inverse())
+    const x = Math.max(0, Math.min(1, (local.x - 1) / 48))
+    const y = Math.max(0, Math.min(1, (local.y - 1) / 45))
+    const pt = { x: parseFloat(x.toFixed(4)), y: parseFloat(y.toFixed(4)) }
+    setStagedShot(pt)
+    void commitEntry(selectedStat, wizardPlayer, pt)
+  }
+
+  // Keyboard on the court: arrows nudge the marker, Enter / Space saves it
+  const handleCourtKey = (e: React.KeyboardEvent<SVGSVGElement>) => {
+    if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter',' '].includes(e.key)) return
+    e.preventDefault()
+    if (e.key === 'Enter' || e.key === ' ') {
+      if (selectedStat && wizardPlayer && stagedShot && !logging) void commitEntry(selectedStat, wizardPlayer, stagedShot)
+      return
+    }
+    setStagedShot(p => {
+      const x = p?.x ?? 0.5, y = p?.y ?? 0.5
+      return {
+        x: Math.max(0, Math.min(1, x + (e.key === 'ArrowRight' ? 0.025 : e.key === 'ArrowLeft' ? -0.025 : 0))),
+        y: Math.max(0, Math.min(1, y + (e.key === 'ArrowDown' ? 0.025 : e.key === 'ArrowUp' ? -0.025 : 0))),
+      }
+    })
+  }
+
+  const skipLocation = () => {
+    if (!selectedStat || !wizardPlayer || logging) return
+    void commitEntry(selectedStat, wizardPlayer, null)
+  }
+
   const handleUndo = () => { if (canUndo) onUndo() }
   const handleRedo = () => { if (canRedo) onRedo() }
 
-  const made   = STAT_DEFS.filter(d => d.col === 'made')
-  const miss   = STAT_DEFS.filter(d => d.col === 'miss')
-  const other  = STAT_DEFS.filter(d => d.col === 'other')
-
-  // Box score calculated from all session entries + existing entries passed in
-  const calcBoxRow = (entries: StatEntry[]) => ({
-    pts: entries.filter(e => e.stat_type === '2M').length * 2
-      + entries.filter(e => e.stat_type === '3M').length * 3
-      + entries.filter(e => e.stat_type === 'FTM').length,
-    reb: entries.filter(e => e.stat_type === 'OREB' || e.stat_type === 'DREB').length,
-    ast: entries.filter(e => e.stat_type === 'AST').length,
-    stl: entries.filter(e => e.stat_type === 'STL').length,
-    blk: entries.filter(e => e.stat_type === 'BLK').length,
-  })
-
-  const statLabel = (s: StatType) => STAT_DEFS.find(d => d.key === s)?.label ?? s
+  const stepTitle = wizardStep === 1
+    ? 'TAP A STAT'
+    : wizardStep === 2
+      ? `TAP WHO — ${selectedStat ? statLabel(selectedStat) : ''}`
+      : `TAP SHOT LOCATION — ${selectedStat ? statLabel(selectedStat) : ''}${wizardPlayer ? ` · ${playerTag(wizardPlayer)}` : ''}`
 
   return (
     <div
       className="fixed inset-0 z-[60] flex items-end justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.76)' }}
+      style={{
+        backgroundColor: wizardVisible ? 'rgba(0,0,0,0.72)' : 'rgba(0,0,0,0)',
+        backdropFilter: wizardVisible ? 'blur(18px)' : 'blur(0px)',
+        WebkitBackdropFilter: wizardVisible ? 'blur(18px)' : 'blur(0px)',
+        transition: 'background-color 220ms ease, backdrop-filter 220ms ease, -webkit-backdrop-filter 220ms ease',
+      }}
     >
       {/* Backdrop tap closes */}
-      <div className="absolute inset-0" onClick={onClose} />
+      <div className="absolute inset-0" onClick={dismiss} aria-hidden />
 
       <div
-        className="relative w-full max-w-3xl rounded-t-2xl flex flex-col overflow-y-auto overscroll-contain"
-        style={{ backgroundColor: '#15181f', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '90dvh' }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tag a stat"
+        className="filmroom-scroll-area relative w-full max-w-3xl rounded-t-2xl flex flex-col overflow-y-auto overscroll-contain"
+        style={{
+          backgroundColor: '#15181f',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderBottom: 'none',
+          maxHeight: '90dvh',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          boxShadow: '0 -24px 80px rgba(0,0,0,0.6)',
+          transform: wizardVisible ? 'translateY(0)' : 'translateY(100%)',
+          transition: 'transform 260ms cubic-bezier(0.32,0.72,0,1)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Header ── */}
-        <div className="shrink-0 flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/8">
-          <span className="text-sm font-semibold text-white/80 tracking-wide">
-            <span className="text-blue-400 font-bold">1</span>
-            <span className="text-white/40 mx-1.5">·</span>
-            TAP A STAT
-          </span>
-          <div className="flex items-center gap-2">
+        {/* Grab handle */}
+        <div className="shrink-0 flex justify-center pt-2.5" aria-hidden>
+          <div className="w-9 h-1 rounded-full bg-white/15" />
+        </div>
+
+        {/* ── Header: back · step title · undo/redo · done ── */}
+        <div className="shrink-0 flex items-center gap-2 px-4 pt-2 pb-3 border-b border-white/8">
+          {wizardStep > 1 && (
+            <button
+              onClick={goBack}
+              disabled={logging}
+              aria-label="Back"
+              className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-white/60 hover:text-white border border-white/10 hover:border-white/20 disabled:opacity-30 transition-all"
+              style={{ touchAction: 'manipulation' }}
+            >
+              <ChevronLeft className="w-4 h-4" aria-hidden />
+            </button>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 mb-1" aria-hidden>
+              {[1, 2, 3].map(s => (
+                <span key={s}
+                  className={`h-1 rounded-full transition-all ${s === wizardStep ? 'w-5' : 'w-2.5'}`}
+                  style={{ background: s === wizardStep ? '#c66a3e' : s < wizardStep ? 'rgba(198,106,62,0.5)' : 'rgba(255,255,255,0.12)' }} />
+              ))}
+            </div>
+            <span className="block text-sm font-semibold text-white/80 tracking-wide truncate">
+              <span className="text-[#c66a3e] font-bold">{wizardStep}</span>
+              {' '}<span className="text-white/40 mx-1">·</span>{' '}
+              {stepTitle}
+              {' '}<span className="ml-1.5 text-[11px] font-mono font-normal tabular-nums text-white/35">{msToDisplay(statMoment(currentMs))}</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleUndo}
               disabled={!canUndo || undoPending}
@@ -369,13 +517,23 @@ function StatEntryPanel({
               {redoPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Redo'}
             </button>
             <button
-              onClick={onClose}
+              onClick={dismiss}
               className="px-4 py-1.5 rounded-xl text-xs font-semibold transition-colors" style={{background:"#c66a3e",color:"#181917"}}
             >
               Done
             </button>
           </div>
         </div>
+
+        {/* ── Confirmation strip ── */}
+        {lastLogged && (
+          <div role="status" className="shrink-0 mx-4 mt-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-emerald-500/30 bg-emerald-950/30 text-emerald-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden />
+            <span className="truncate">
+              Saved {statLabel(lastLogged.stat_type)} · {lastLogged.player_number !== 'OPP' ? `#${lastLogged.player_number} ${lastLogged.player_name.split(' ')[0]}` : 'Opponent'} · {msToDisplay(lastLogged.video_time_ms)}
+            </span>
+          </div>
+        )}
 
         {(undoError || redoError) && (
           <p role="alert" className="px-4 py-1.5 text-xs text-red-300 border-b border-red-500/15">
@@ -384,213 +542,197 @@ function StatEntryPanel({
         )}
         {logError && <p role="alert" className="px-4 py-2 text-sm text-red-300">{logError}</p>}
 
-        {/* ── Quick-stat pinned row + preference toggle ── */}
-        {quickPrefs.length > 0 && !editingPrefs && (
-          <div className="shrink-0 px-4 pt-2 pb-1 border-b border-white/6">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[9px] font-semibold text-white/25 uppercase tracking-widest mr-1">Quick</span>
-              {quickPrefs.map(stat => {
-                const def = STAT_DEFS.find(d => d.key === stat)
-                if (!def) return null
-                return (
-                  <button key={stat}
-                    onClick={() => handleStatTap(stat)}
-                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
-                      selectedStat === stat
-                        ? 'bg-blue-500 text-white border-blue-400/50'
-                        : def.col === 'miss' ? 'border-red-500/25 text-red-300 bg-red-950/20'
-                        : def.redTint ? 'border-red-500/20 text-red-300/70 bg-red-950/15'
-                        : 'border-white/12 text-white/80 bg-white/6'
-                    }`}
-                    style={{ touchAction: 'manipulation' }}>
-                    {def.label}
-                  </button>
-                )
-              })}
-              <button onClick={() => setEditingPrefs(true)}
-                className="ml-auto text-[9px] text-white/25 hover:text-white/50 border border-white/8 rounded px-1.5 py-1 transition-all">
-                Edit
-              </button>
-            </div>
-          </div>
-        )}
+        {/* ══ Step 1 — MADE / MISS / OTHER ══ */}
+        {wizardStep === 1 && (
+          <div className="px-4 pt-3 pb-5 space-y-4">
 
-        {/* ── Pref editor: toggle which stats appear in quick bar ── */}
-        {editingPrefs && (
-          <div className="shrink-0 px-4 pt-2 pb-2 border-b border-white/6">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Quick-stat pins</span>
-              <button onClick={() => setEditingPrefs(false)}
-                className="text-[10px] text-[#c66a3e] hover:text-[#e07a4a] font-medium">Done</button>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {STAT_DEFS.map(def => (
-                <button key={def.key}
-                  onClick={() => togglePref(def.key)}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-medium border transition-all ${
-                    quickPrefs.includes(def.key)
-                      ? 'bg-[rgba(198,106,62,0.18)] border-[rgba(198,106,62,0.40)] text-[#c66a3e]'
-                      : 'border-white/10 text-white/40 hover:text-white/70'
-                  }`}
-                  style={{ touchAction: 'manipulation' }}>
-                  {def.label}
+            {/* Quick-stat pinned row + preference editor */}
+            {quickPrefs.length > 0 && !editingPrefs && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[9px] font-semibold text-white/25 uppercase tracking-widest mr-1">Quick</span>
+                {quickPrefs.map(stat => {
+                  const def = STAT_DEFS.find(d => d.key === stat)
+                  if (!def) return null
+                  return (
+                    <button key={stat}
+                      onClick={() => handleStatTap(stat)}
+                      className={`px-3 py-2 rounded-lg text-[11px] font-semibold border transition-all ${chipClass(def)}`}
+                      style={{ touchAction: 'manipulation' }}>
+                      {def.label}
+                    </button>
+                  )
+                })}
+                <button onClick={() => setEditingPrefs(true)}
+                  className="ml-auto text-[9px] text-white/25 hover:text-white/50 border border-white/8 rounded px-1.5 py-1 transition-all">
+                  Edit
                 </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {(!quickPrefs.length && !editingPrefs) && (
-          <div className="shrink-0 px-4 pt-2 flex justify-end">
-            <button onClick={() => setEditingPrefs(true)}
-              className="text-[9px] text-white/20 hover:text-white/40 underline underline-offset-2">Pin quick stats</button>
-          </div>
-        )}
-
-        {/* ── Stat grid ── */}
-        <div className="shrink-0 px-4 pt-3 pb-2">
-          <div className="grid grid-cols-3 gap-2 items-start">
-
-            {/* MADE + MISS span 2 cols, with Recent below */}
-            <div className="col-span-2 grid grid-cols-2 gap-2">
-              {/* MADE header + buttons */}
-              <div className="flex flex-col gap-1.5">
-                <p className="text-[10px] font-semibold text-white/35 uppercase tracking-widest text-center">Made</p>
-                {made.map(def => (
-                  <button key={def.key} onClick={() => handleStatTap(def.key)}
-                    className={`w-full h-10 rounded-xl text-xs font-semibold transition-all border ${
-                      selectedStat === def.key ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40 border-blue-400/50' : 'border-white/15 text-white/85'
-                    }`}
-                    style={{ touchAction: 'manipulation', background: selectedStat === def.key ? undefined : 'rgba(255,255,255,0.09)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
-                  >{def.label}</button>
-                ))}
               </div>
-              {/* MISS header + buttons */}
-              <div className="flex flex-col gap-1.5">
-                <p className="text-[10px] font-semibold text-red-400/60 uppercase tracking-widest text-center">Miss</p>
-                {miss.map(def => (
-                  <button key={def.key} onClick={() => handleStatTap(def.key)}
-                    className={`w-full h-10 rounded-xl text-xs font-semibold transition-all border ${
-                      selectedStat === def.key ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40 border-blue-400/50' : 'border-red-500/20 text-red-300'
-                    }`}
-                    style={{ touchAction: 'manipulation', background: selectedStat === def.key ? undefined : 'rgba(220,38,38,0.11)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
-                  >{def.label}</button>
-                ))}
-              </div>
-              {/* Recent — spans full 2-col width below the buttons */}
-              {sessionEntries.length > 0 && (
-                <div className="col-span-2 mt-0.5 space-y-1">
-                  <p className="text-[10px] font-semibold text-white/20 uppercase tracking-widest px-1">Recent</p>
-                  {[...sessionEntries].reverse().slice(0, 8).map(e => (
-                    <div key={e.id} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                      <span className="text-white/40 shrink-0 font-medium">{e.player_number !== 'OPP' ? `#${e.player_number}` : 'OPP'}</span>
-                      <span className="text-white/50 shrink-0">{e.player_number !== 'OPP' ? e.player_name.split(' ')[0] : 'Opponent'}</span>
-                      <span className="text-white/75 font-semibold truncate">{STAT_DEFS.find(d => d.key === e.stat_type)?.label ?? e.stat_type}</span>
-                    </div>
+            )}
+
+            {editingPrefs && (
+              <div className="rounded-xl border border-white/8 px-3 py-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Quick-stat pins</span>
+                  <button onClick={() => setEditingPrefs(false)}
+                    className="text-[10px] text-[#c66a3e] hover:text-[#e07a4a] font-medium">Done</button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {STAT_DEFS.map(def => (
+                    <button key={def.key}
+                      onClick={() => togglePref(def.key)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-medium border transition-all ${
+                        quickPrefs.includes(def.key)
+                          ? 'bg-[rgba(198,106,62,0.18)] border-[rgba(198,106,62,0.40)] text-[#c66a3e]'
+                          : 'border-white/10 text-white/40 hover:text-white/70'
+                      }`}
+                      style={{ touchAction: 'manipulation' }}>
+                      {def.label}
+                    </button>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* OTHER column */}
-            <div className="flex flex-col gap-1.5">
-              <p className="text-[10px] font-semibold text-white/35 uppercase tracking-widest text-center">Other</p>
-              {other.map(def => (
-                <button key={def.key} onClick={() => handleStatTap(def.key)}
-                  className={`w-full h-10 rounded-xl text-xs font-semibold transition-all border ${
-                    selectedStat === def.key
-                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40 border-blue-400/50'
-                      : def.redTint ? 'border-red-500/20 text-red-300/80'
-                      : 'border-white/10 text-white/75'
-                  }`}
-                  style={{ touchAction: 'manipulation', background: selectedStat === def.key ? undefined : def.redTint ? 'rgba(220,38,38,0.09)' : 'rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
-                >{def.label}</button>
-              ))}
-            </div>
+            {(!quickPrefs.length && !editingPrefs) && (
+              <div className="flex justify-end -mb-2">
+                <button onClick={() => setEditingPrefs(true)}
+                  className="text-[9px] text-white/20 hover:text-white/40 underline underline-offset-2">Pin quick stats</button>
+              </div>
+            )}
 
-          </div>
-        </div>
+            {/* MADE */}
+            <section aria-label="Made">
+              <p className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-[0.2em] mb-2">Made</p>
+              <div className="grid grid-cols-3 gap-2">
+                {made.map(def => (
+                  <button key={def.key} onClick={() => handleStatTap(def.key)}
+                    className="min-h-[60px] rounded-2xl text-sm font-bold border border-emerald-500/30 text-emerald-200 transition-all active:scale-[0.97]"
+                    style={{ touchAction: 'manipulation', background: 'rgba(16,185,129,0.12)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
+                  >{def.label}</button>
+                ))}
+              </div>
+            </section>
 
+            {/* MISS */}
+            <section aria-label="Miss">
+              <p className="text-[10px] font-bold text-red-400/80 uppercase tracking-[0.2em] mb-2">Miss</p>
+              <div className="grid grid-cols-3 gap-2">
+                {miss.map(def => (
+                  <button key={def.key} onClick={() => handleStatTap(def.key)}
+                    className="min-h-[60px] rounded-2xl text-sm font-bold border border-red-500/30 text-red-300 transition-all active:scale-[0.97]"
+                    style={{ touchAction: 'manipulation', background: 'rgba(220,38,38,0.12)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
+                  >{def.label}</button>
+                ))}
+              </div>
+            </section>
 
+            {/* OTHER */}
+            <section aria-label="Other">
+              <p className="text-[10px] font-bold text-white/35 uppercase tracking-[0.2em] mb-2">Other</p>
+              <div className="grid grid-cols-4 gap-2">
+                {other.map(def => (
+                  <button key={def.key} onClick={() => handleStatTap(def.key)}
+                    className={`min-h-[60px] rounded-2xl text-xs font-semibold border transition-all active:scale-[0.97] ${
+                      def.redTint ? 'border-red-500/20 text-red-300/80' : 'border-white/12 text-white/80'
+                    }`}
+                    style={{ touchAction: 'manipulation', background: def.redTint ? 'rgba(220,38,38,0.09)' : 'rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
+                  >{def.label}</button>
+                ))}
+              </div>
+            </section>
 
-        {/* ── Court shot capture — visible when a shot stat is selected ── */}
-        {showCourtCapture && (
-          <div className="shrink-0 border-t border-white/8 px-4 py-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-widest"
-                style={{ color: 'rgba(238,233,223,0.50)' }}>Tap court to place shot</span>
-              {stagedShot
-                ? <span className="text-[10px] font-semibold" style={{ color: '#c66a3e' }}>✓ Location set</span>
-                : <span className="text-[10px]" style={{ color: 'rgba(238,233,223,0.35)' }}>Optional</span>}
-            </div>
-            <svg viewBox="0 0 50 47" role="button" tabIndex={0} aria-label="Shot location. Click court or use arrow keys to position the shot."
-              onKeyDown={e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter',' '].includes(e.key))return;e.preventDefault();setStagedShot(p=>{const x=p?.x??.5,y=p?.y??.5;return{x:Math.max(0,Math.min(1,x+(e.key==='ArrowRight'?.025:e.key==='ArrowLeft'?-.025:0))),y:Math.max(0,Math.min(1,y+(e.key==='ArrowDown'?.025:e.key==='ArrowUp'?-.025:0)))}})}}
-              className="w-full rounded-lg cursor-crosshair"
-              style={{ background: '#1a1d23', border: '1px solid rgba(255,255,255,0.08)', maxHeight: 110, display: 'block' }}
-              onClick={handleCourtTap}>
-              <rect x="1" y="1" width="48" height="45" rx="1" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
-              <rect x="16" y="1" width="18" height="19" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
-              <circle cx="25" cy="20" r="6" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
-              <path d="M 4 1 Q 4 35 25 38 Q 46 35 46 1" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
-              <circle cx="25" cy="5" r="1.2" fill="none" stroke="rgba(255,255,255,0.40)" strokeWidth="0.5" />
-              {stagedShot && (
-                <circle cx={1 + stagedShot.x * 48} cy={1 + stagedShot.y * 45}
-                  r="1.8" fill="#c66a3e" stroke="#e07a4a" strokeWidth="0.4"
-                  style={{ pointerEvents: 'none' }} />
-              )}
-            </svg>
-            {stagedShot && (
-              <button onClick={() => setStagedShot(null)}
-                className="mt-1 w-full text-center text-[10px]"
-                style={{ color: 'rgba(238,233,223,0.40)' }}>Clear location</button>
+            {/* Recent — this session */}
+            {sessionEntries.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold text-white/20 uppercase tracking-widest px-1">Recent</p>
+                {[...sessionEntries].reverse().slice(0, 5).map(e => (
+                  <div key={e.id} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                    <span className="text-white/40 shrink-0 font-medium">{e.player_number !== 'OPP' ? `#${e.player_number}` : 'OPP'}</span>
+                    <span className="text-white/50 shrink-0">{e.player_number !== 'OPP' ? e.player_name.split(' ')[0] : 'Opponent'}</span>
+                    <span className="text-white/75 font-semibold truncate">{statLabel(e.stat_type)}</span>
+                    <span className="ml-auto font-mono tabular-nums text-white/30 shrink-0">{msToDisplay(e.video_time_ms)}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}
 
-        {/* ── Step 2 + Players — also NOT scrollable ── */}
-        <div className="shrink-0 border-t border-white/8">
-          <div className="px-5 py-2">
-            <span className="text-sm font-semibold">
-              <span className={selectedStat ? 'text-[#c66a3e]' : 'text-white/30'}>2 · </span>
-              <span className={selectedStat ? 'text-white/80' : 'text-white/30'}>
-                {selectedStat ? `TAP WHO — ${statLabel(selectedStat)}` : 'TAP WHO'}
-              </span>
-            </span>
-          </div>
-          <div className="px-4 pb-4">
-            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(allPlayers.length, 5)}, 1fr)` }}>
+        {/* ══ Step 2 — Player cards (jersey # huge) ══ */}
+        {wizardStep === 2 && selectedStat && (
+          <div className="px-4 pt-3 pb-5">
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${chipClass(selectedDef)}`}>{statLabel(selectedStat)}</span>
+              <span className="text-[11px] text-white/40">{isShotStat ? 'Tap the player, then place the shot' : 'Tap the player to save'}</span>
+              {logging && <Loader2 className="w-3.5 h-3.5 animate-spin text-white/50 ml-auto" aria-hidden />}
+            </div>
+            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))' }}>
               {allPlayers.map((p) => {
-                const pts = sessionEntries.filter(e => e.player_id === p.id && e.stat_type === '2M').length * 2
-                  + sessionEntries.filter(e => e.player_id === p.id && e.stat_type === '3M').length * 3
-                  + sessionEntries.filter(e => e.player_id === p.id && e.stat_type === 'FTM').length
                 const isOpp = p.id === OPP_ID
-                const enabled = !!selectedStat && !logging
                 return (
                   <button
                     key={p.id}
-                    onClick={() => { if (enabled) handlePlayerTap(p) }}
-                    disabled={!enabled}
-                    style={{ touchAction: 'manipulation', opacity: enabled ? 1 : 0.4 }}
-                    className={`flex flex-col items-center justify-center py-3 rounded-xl border min-h-[70px] ${
-                      enabled
-                        ? isOpp ? 'border-white/15 bg-white/6' : 'border-white/10 bg-white/5'
-                        : 'border-white/6 bg-white/3 cursor-not-allowed'
+                    onClick={() => handlePlayerTap(p)}
+                    disabled={logging}
+                    aria-label={isOpp ? 'Opponent' : `#${p.number ?? '?'} ${p.name}`}
+                    style={{ touchAction: 'manipulation' }}
+                    className={`flex flex-col items-center justify-center gap-1 py-3 px-1 rounded-2xl border min-h-[96px] transition-all active:scale-[0.97] disabled:opacity-50 ${
+                      isOpp ? 'border-white/15 bg-white/6' : 'border-white/10 bg-white/5 hover:border-[rgba(198,106,62,0.5)]'
                     }`}
                   >
-                    <span className={`font-black leading-none ${isOpp ? 'text-base text-white/50' : 'text-3xl text-white'}`}>
+                    <span className={`font-black leading-none tabular-nums ${isOpp ? 'text-xl text-white/50' : 'text-5xl text-white'}`}>
                       {isOpp ? 'OPP' : (p.number ?? '?')}
                     </span>
-                    <span className="text-[11px] mt-1 text-white/50 text-center px-1 truncate w-full">
-                      {isOpp ? 'Opponent' : p.name.split(' ')[0]}
-                    </span>
-                    <span className="text-[10px] text-white/30">{pts} pts</span>
+                    <span className="text-[11px] text-white/55 text-center truncate w-full">{playerShort(p)}</span>
+                    <span className="text-[10px] text-white/30 tabular-nums">{sessionPts(p.id)} pts</span>
                   </button>
                 )
               })}
             </div>
           </div>
-        </div>
+        )}
+
+        {/* ══ Step 3 — Shot location court ══ */}
+        {wizardStep === 3 && selectedStat && wizardPlayer && (
+          <div className="px-4 pt-3 pb-5 flex flex-col items-center gap-3">
+            <div className="w-full flex items-center gap-2 flex-wrap">
+              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${chipClass(selectedDef)}`}>{statLabel(selectedStat)}</span>
+              <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-white/15 bg-white/8 text-white/85">{playerTag(wizardPlayer)}</span>
+              <span className="ml-auto text-[11px] text-white/40 inline-flex items-center gap-1.5">
+                {logging && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />}
+                {logging ? 'Saving…' : 'Tap the court to save'}
+              </span>
+            </div>
+            <div className="w-full" style={{ maxWidth: 'min(100%, 50dvh)' }}>
+              <svg viewBox="0 0 50 47" role="button" tabIndex={0}
+                aria-label="Shot location. Tap the court, or use arrow keys to position the shot and Enter to save."
+                onKeyDown={handleCourtKey}
+                onClick={handleCourtTap}
+                className="w-full rounded-2xl cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-[rgba(198,106,62,0.6)]"
+                style={{ background: '#1a1d23', border: '1px solid rgba(255,255,255,0.08)', display: 'block', touchAction: 'manipulation', opacity: logging ? 0.7 : 1 }}>
+                <rect x="1" y="1" width="48" height="45" rx="1" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
+                <rect x="16" y="1" width="18" height="19" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
+                <circle cx="25" cy="20" r="6" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
+                <path d="M 4 1 Q 4 35 25 38 Q 46 35 46 1" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
+                <circle cx="25" cy="5" r="1.2" fill="none" stroke="rgba(255,255,255,0.40)" strokeWidth="0.5" />
+                {stagedShot && (
+                  <circle cx={1 + stagedShot.x * 48} cy={1 + stagedShot.y * 45}
+                    r="1.8" fill="#c66a3e" stroke="#e07a4a" strokeWidth="0.4"
+                    style={{ pointerEvents: 'none' }} />
+                )}
+              </svg>
+            </div>
+            <div className="w-full flex items-center justify-between">
+              <button onClick={goBack} disabled={logging}
+                className="px-3 py-2 rounded-xl text-xs font-medium text-white/50 hover:text-white border border-white/10 hover:border-white/20 disabled:opacity-30 transition-all"
+                style={{ touchAction: 'manipulation' }}>Back</button>
+              <button onClick={skipLocation} disabled={logging}
+                className="px-3 py-2 rounded-xl text-xs font-medium underline underline-offset-2 disabled:opacity-30 transition-all"
+                style={{ color: 'rgba(238,233,223,0.45)', touchAction: 'manipulation' }}>Save without location</button>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
