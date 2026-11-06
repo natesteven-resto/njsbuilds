@@ -1,7 +1,6 @@
 'use client'
 import {usePrivatePlayback,type PlaybackQuality} from '@/app/filmroom/components/usePrivatePlayback'
 import {PlaybackQualityControl} from '@/app/filmroom/components/PlaybackQualityControl'
-import {QuickTagDock} from '@/app/filmroom/components/QuickTagDock'
 import {ToolbarMenu} from '@/app/filmroom/components/ToolbarMenu'
 import { CustomClipTags } from '@/app/filmroom/components/CustomClipTags'
 
@@ -2198,16 +2197,10 @@ export default function GameFilmRoom() {
 
   // Stat entry state
   const [showStatPanel, setShowStatPanel] = useState(false)
-  const [quickTagOpen,setQuickTagOpen]=useState(false)
-  const [quickPlayer,setQuickPlayer]=useState('')
-  const [quickPending,setQuickPending]=useState(false)
-  const [quickMessage,setQuickMessage]=useState('')
-  const [quickError,setQuickError]=useState<string|null>(null)
   const [statDeleteError,setStatDeleteError]=useState<string|null>(null)
   const deletingStatIds=useRef<Set<string>>(new Set())
   const deletingClipId=useRef<string|null>(null)
   const resumeAfterDetails=useRef(false)
-  useEffect(()=>{setQuickPlayer('');setQuickMessage('');setQuickError(null);setQuickTagOpen(false)},[gameId])
   const [statsFullscreen, setStatsFullscreen] = useState(false)
   const [statEntries, setStatEntries] = useState<StatEntry[]>([])
   const [sessionStatEntries, setSessionStatEntries] = useState<StatEntry[]>([])
@@ -2306,7 +2299,7 @@ export default function GameFilmRoom() {
 
         // Fetch sections independently so one failure doesn't blank everything.
         // Players are scoped to game.team_id so we never surface players from
-        // other teams in roster/quick-tags/stat/clip modals.
+        // other teams in roster/stat/clip modals.
         const [cRes, pRes, seRes] = await Promise.all([
           fetch(`/api/filmroom/clips?game_id=${gameId}`, { signal }),
           // include_archived=true: load ALL same-team players so historical
@@ -2408,25 +2401,6 @@ export default function GameFilmRoom() {
     redoStack.current = []
   }, [])
 
-  const quickTag = useCallback(async (stat: StatType) => {
-    if (undoRedoInFlight.current || !quickPlayer || !videoRef.current || videoRef.current.readyState<1) return
-    const player=quickPlayer===OPP_ID?OPP_PLAYER:players.find(p=>p.id===quickPlayer)
-    if(!player)return
-    // Snapshot the player and the actual video moment before any network work.
-    const at=statMoment(videoRef.current.currentTime*1000)
-    undoRedoInFlight.current=true
-    setQuickPending(true);setQuickError(null);setUndoError(null);setRedoError(null)
-    try {
-      const res=await fetch('/api/filmroom/stat-entries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({game_id:gameId,player_id:player.id===OPP_ID?null:player.id,stat_type:stat,video_time_ms:at})})
-      if(!res.ok)throw Error('Could not save this stat. Please try again.')
-      const raw:RawStatEntry=await res.json()
-      const entry=player.id===OPP_ID?{...rawToEntry(raw),player_id:OPP_ID,player_name:'Opponent',player_number:'OPP'}:rawToEntry(raw)
-      handleLogEntry(entry)
-      setQuickMessage(`Saved ${player.id===OPP_ID?'Opponent':player.name} · ${STAT_NAMES[stat]} at ${msToDisplay(at)}`)
-    } catch {setQuickError('Could not confirm this stat was saved. Check the stats before trying again.')}
-    finally {undoRedoInFlight.current=false;setQuickPending(false)}
-  },[gameId,quickPlayer,players,handleLogEntry])
-
   // Undo last session entry — delete from DB, push to redo stack.
   // In-flight ref prevents double-click races.
   const handleUndo = useCallback(async () => {
@@ -2443,8 +2417,6 @@ export default function GameFilmRoom() {
       setSessionStatEntries(prev => prev.filter(e => e.id !== last.id))
       undoStack.current.pop()
       redoStack.current.push(last)
-      setQuickMessage(`Undid ${last.player_name} · ${STAT_NAMES[last.stat_type]}`)
-      setQuickError(null)
     } catch (e) {
       setUndoError(e instanceof Error ? e.message : 'Undo failed — try again')
     } finally {
@@ -2483,8 +2455,6 @@ export default function GameFilmRoom() {
       setSessionStatEntries(prev => [...prev, newEntry])
       redoStack.current.pop()
       undoStack.current.push(newEntry)
-      setQuickMessage(`Restored ${newEntry.player_name} · ${STAT_NAMES[newEntry.stat_type]}`)
-      setQuickError(null)
     } catch (e) {
       setRedoError(e instanceof Error ? e.message : 'Redo failed — try again')
     } finally {
@@ -2500,10 +2470,9 @@ export default function GameFilmRoom() {
     try {
       const res = await fetch(`/api/filmroom/stat-entries?id=${id}`, { method: 'DELETE' })
       if (!res.ok) {
-        // Do NOT remove from local state; surface error in both quick dock and BoxScore
+        // Do NOT remove from local state; surface error in BoxScore
         const body = await res.json().catch(() => ({}))
         const msg = body?.error ?? `Could not delete stat (${res.status}). Please try again.`
-        setQuickError(msg)
         setStatDeleteError(msg)
         return
       }
@@ -2513,7 +2482,6 @@ export default function GameFilmRoom() {
       setStatDeleteError(null)
     } catch {
       const msg = 'Network error — stat was not deleted. Check your connection and try again.'
-      setQuickError(msg)
       setStatDeleteError(msg)
     } finally {
       deletingStatIds.current.delete(id)
@@ -3013,7 +2981,7 @@ export default function GameFilmRoom() {
               markIn={markIn}
               markOut={markOut}
               isFullscreen={isFullscreen}
-              onStatTap={videoLoaded ? ()=>setQuickTagOpen(v=>!v) : undefined}
+              onStatTap={videoLoaded ? openStatPanel : undefined}
               coachingTools={<div className="flex flex-wrap items-center gap-1">
                 {/* Draw */}
                 <button
@@ -3058,7 +3026,6 @@ export default function GameFilmRoom() {
                 </ToolbarMenu>
               </div>}
             />}
-            {game.video_url&&quickTagOpen&&<QuickTagDock players={activePlayers} selectedPlayer={quickPlayer} onPlayer={setQuickPlayer} stats={STAT_DEFS} onTag={stat=>void quickTag(stat as StatType)} busy={quickPending||undoPending||redoPending} canUndo={undoStack.current.length>0} canRedo={redoStack.current.length>0} onUndo={()=>void handleUndo()} onRedo={()=>void handleRedo()} onClose={()=>setQuickTagOpen(false)} onDetails={openStatPanel} message={quickMessage} error={quickError||undoError||redoError} fullscreen={isFullscreen}/>}
             {game.video_url && (
               <div className="shrink-0 max-h-32 overflow-y-auto">
               <BookmarkBar
@@ -3606,7 +3573,7 @@ function AddToPlaylistModal({ clipId, onClose }: { clipId: string; onClose: () =
 // ─── Inline Roster Panel ──────────────────────────────────────────────────────
 // Players are archived (soft-deleted) to preserve historical stat_entries and
 // clip_player associations. Archived players are hidden from the active roster,
-// stat/clip modals, and quick-tag dock, but their historical box score rows
+// stat/clip modals, but their historical box score rows
 // remain valid. A Restore button reinstates archived players to the active
 // roster without losing any history.
 
