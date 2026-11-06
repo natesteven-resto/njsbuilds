@@ -2917,7 +2917,6 @@ export default function GameFilmRoom() {
                 </ToolbarMenu>
               </div>}
             />}
-          // @ts-expect-error pre-existing Player.number type mismatch
             {game.video_url&&quickTagOpen&&<QuickTagDock players={activePlayers as unknown as Parameters<typeof StatEntryWizard>[0]["players"]} selectedPlayer={quickPlayer} onPlayer={setQuickPlayer} stats={STAT_DEFS} onTag={stat=>void quickTag(stat as StatType)} busy={quickPending||undoPending||redoPending} canUndo={undoStack.current.length>0} canRedo={redoStack.current.length>0} onUndo={()=>void handleUndo()} onRedo={()=>void handleRedo()} onClose={()=>setQuickTagOpen(false)} onDetails={openStatPanel} message={quickMessage} error={quickError||undoError||redoError} fullscreen={isFullscreen}/>}
             {game.video_url && (
               <div className="shrink-0 max-h-32 overflow-y-auto">
@@ -3167,7 +3166,6 @@ export default function GameFilmRoom() {
                   </div>
                 )}
                 <RosterPanel
-          // @ts-expect-error pre-existing Player.number type mismatch
                   players={activePlayers as unknown as Parameters<typeof StatEntryWizard>[0]["players"]}
                   teamId={game.team_id}
                   onPlayerAdded={p => setPlayers(prev => [...prev, p])}
@@ -3227,7 +3225,6 @@ export default function GameFilmRoom() {
           teamId={game.team_id}
           startMs={markIn}
           endMs={markOut}
-          // @ts-expect-error pre-existing Player.number type mismatch
           players={activePlayers as unknown as Parameters<typeof StatEntryWizard>[0]["players"]}
           drawingData={drawingData}
           videoDurationMs={durationMs}
