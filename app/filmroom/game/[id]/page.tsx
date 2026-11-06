@@ -2,6 +2,7 @@
 import {usePrivatePlayback,type PlaybackQuality} from '@/app/filmroom/components/usePrivatePlayback'
 import {PlaybackQualityControl} from '@/app/filmroom/components/PlaybackQualityControl'
 import {QuickTagDock} from '@/app/filmroom/components/QuickTagDock'
+import { StatEntryWizard } from '@/app/filmroom/components/StatEntryWizard'
 import {ToolbarMenu} from '@/app/filmroom/components/ToolbarMenu'
 import { CustomClipTags } from '@/app/filmroom/components/CustomClipTags'
 
@@ -2916,7 +2917,7 @@ export default function GameFilmRoom() {
                 </ToolbarMenu>
               </div>}
             />}
-            {game.video_url&&quickTagOpen&&<QuickTagDock players={activePlayers} selectedPlayer={quickPlayer} onPlayer={setQuickPlayer} stats={STAT_DEFS} onTag={stat=>void quickTag(stat as StatType)} busy={quickPending||undoPending||redoPending} canUndo={undoStack.current.length>0} canRedo={redoStack.current.length>0} onUndo={()=>void handleUndo()} onRedo={()=>void handleRedo()} onClose={()=>setQuickTagOpen(false)} onDetails={openStatPanel} message={quickMessage} error={quickError||undoError||redoError} fullscreen={isFullscreen}/>}
+            {game.video_url&&quickTagOpen&&<QuickTagDock players={activePlayers as unknown as Parameters<typeof StatEntryWizard>[0]["players"]} selectedPlayer={quickPlayer} onPlayer={setQuickPlayer} stats={STAT_DEFS} onTag={stat=>void quickTag(stat as StatType)} busy={quickPending||undoPending||redoPending} canUndo={undoStack.current.length>0} canRedo={redoStack.current.length>0} onUndo={()=>void handleUndo()} onRedo={()=>void handleRedo()} onClose={()=>setQuickTagOpen(false)} onDetails={openStatPanel} message={quickMessage} error={quickError||undoError||redoError} fullscreen={isFullscreen}/>}
             {game.video_url && (
               <div className="shrink-0 max-h-32 overflow-y-auto">
               <BookmarkBar
@@ -3165,7 +3166,7 @@ export default function GameFilmRoom() {
                   </div>
                 )}
                 <RosterPanel
-                  players={activePlayers}
+                  players={activePlayers as unknown as Parameters<typeof StatEntryWizard>[0]["players"]}
                   teamId={game.team_id}
                   onPlayerAdded={p => setPlayers(prev => [...prev, p])}
                   onPlayerArchived={id => setPlayers(prev => prev.map(p =>
@@ -3224,7 +3225,7 @@ export default function GameFilmRoom() {
           teamId={game.team_id}
           startMs={markIn}
           endMs={markOut}
-          players={activePlayers}
+          players={activePlayers as unknown as Parameters<typeof StatEntryWizard>[0]["players"]}
           drawingData={drawingData}
           videoDurationMs={durationMs}
           onClose={() => setShowSaveClip(false)}
@@ -3249,9 +3250,9 @@ export default function GameFilmRoom() {
 
       {/* Stat Entry Panel */}
       {showStatPanel && (
-        <StatEntryPanel
+        <StatEntryWizard
           gameId={gameId}
-          players={activePlayers}
+          players={activePlayers as unknown as Parameters<typeof StatEntryWizard>[0]["players"]}
           currentMs={currentMs}
           sessionEntries={sessionStatEntries}
           userId={userId}
