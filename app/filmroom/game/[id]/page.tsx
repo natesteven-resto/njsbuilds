@@ -2,11 +2,11 @@
 import {usePrivatePlayback,type PlaybackQuality} from '@/app/filmroom/components/usePrivatePlayback'
 import {PlaybackQualityControl} from '@/app/filmroom/components/PlaybackQualityControl'
 import {ToolbarMenu} from '@/app/filmroom/components/ToolbarMenu'
-import { CustomClipTags } from '@/app/filmroom/components/CustomClipTags'
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import {
   Play, Pause, SkipBack, SkipForward, ChevronLeft,
   Scissors, Bookmark, Star, MessageSquare,
@@ -14,31 +14,22 @@ import {
   Plus, Trash2, Loader2, ChevronDown, ChevronUp, Upload,
   ZoomIn, AlertCircle, CheckCircle2, BarChart, Maximize2, Minimize2,
 } from 'lucide-react'
-import type { Game, Clip, Player, ClipCategory, ClipComment, Playlist } from '@/types/filmroom'
-import { CATEGORY_LABELS, CATEGORY_COLORS, PLAY_TYPES, normalizeDrawingData } from '@/types/filmroom'
+import type { Game, Clip, Player, ClipComment } from '@/types/filmroom'
+import { CATEGORY_LABELS, CATEGORY_COLORS } from '@/types/filmroom'
 import { DrawingOverlay, type DrawingData } from '@/app/filmroom/components/DrawingOverlay'
-import { STAT_NAMES, statMoment, reviewMoment, statDescription } from '@/lib/filmroom-events'
+import { STAT_NAMES, reviewMoment, statDescription } from '@/lib/filmroom-events'
 import { EventTimeline } from '@/app/filmroom/components/EventTimeline'
 import { JogWheel } from '@/app/filmroom/components/JogWheel'
 import { AccountBar } from '@/app/filmroom/components/AccountBar'
-import { PresentationMode, type PresentationClip } from '@/app/filmroom/components/PresentationMode'
+import type { PresentationClip } from '@/app/filmroom/components/PresentationMode'
+import { StatTagModal } from '@/app/filmroom/components/StatTagModal'
+import { SaveClipDialog } from '@/app/filmroom/components/SaveClipDialog'
+import { ClipBuilderTile, ClipHud, ClipToast, clipPhase, MIN_CLIP_MS, type ToastMessage } from '@/app/filmroom/components/ClipBuilder'
+import { Court, shotZone, type CourtMarker, type ZoneFamily } from '@/app/filmroom/components/Court'
+import { msToTimecode, msToDisplay, formatDuration } from '@/lib/filmroom-time'
+import { STAT_DEFS, OPP_ID, LOCATED_SHOT_TYPES, rawToEntry, statLabel, entryWho, type StatEntry, type RawStatEntry, type StatType } from '@/lib/filmroom-stats'
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
-
-function msToTimecode(ms: number): string {
-  const totalSec = Math.floor(ms / 1000)
-  const m = Math.floor(totalSec / 60)
-  const s = totalSec % 60
-  const frames = Math.floor((ms % 1000) / 33) // ~30fps
-  return `${m}:${String(s).padStart(2, '0')}.${String(frames).padStart(2, '0')}`
-}
-
-function msToDisplay(ms: number): string {
-  const totalSec = Math.floor(ms / 1000)
-  const m = Math.floor(totalSec / 60)
-  const s = totalSec % 60
-  return `${m}:${String(s).padStart(2, '0')}`
-}
 
 function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) => Promise<void> }) {
   const [editing, setEditing] = useState(false)
@@ -78,663 +69,6 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
       {value}
       <span className="opacity-0 group-hover:opacity-60 text-[10px] text-white/40">(edit)</span>
     </button>
-  )
-}
-
-function formatDuration(startMs: number, endMs: number): string {
-  const dur = endMs - startMs
-  const s = Math.floor(dur / 1000)
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
-}
-
-// ─── Stat Entry Types ─────────────────────────────────────────────────────────
-
-const STAT_TYPES = ['2M', '3M', 'FTM', '2X', '3X', 'FTX', 'OREB', 'DREB', 'AST', 'STL', 'BLK', 'DEF', 'TO', 'FOUL'] as const
-type StatType = typeof STAT_TYPES[number]
-
-// Legacy aliases for existing entries that used old stat types
-const LEGACY_STAT_MAP: Partial<Record<string, StatType>> = {
-  PTS: '2M', REB: 'OREB', AST: 'AST', STL: 'STL', BLK: 'BLK', TO: 'TO', '3M': '3M', FT: 'FTM',
-}
-
-function normaliseStatType(raw: string): StatType {
-  if ((STAT_TYPES as readonly string[]).includes(raw)) return raw as StatType
-  return (LEGACY_STAT_MAP[raw] ?? '2M') as StatType
-}
-
-interface StatDef {
-  key: StatType
-  label: string
-  col: 'made' | 'miss' | 'other'
-  redTint?: boolean
-}
-
-const STAT_DEFS: StatDef[] = [
-  { key: '2M',   label: '2PT Made',   col: 'made' },
-  { key: '3M',   label: '3PT Made',   col: 'made' },
-  { key: 'FTM',  label: 'FT Made',    col: 'made' },
-  { key: '2X',   label: '2PT Miss',   col: 'miss' },
-  { key: '3X',   label: '3PT Miss',   col: 'miss' },
-  { key: 'FTX',  label: 'FT Miss',    col: 'miss' },
-  { key: 'OREB', label: 'Off Reb',    col: 'other' },
-  { key: 'DREB', label: 'Def Reb',    col: 'other' },
-  { key: 'AST',  label: 'Assist',     col: 'other' },
-  { key: 'STL',  label: 'Steal',      col: 'other' },
-  { key: 'BLK',  label: 'Block',      col: 'other' },
-  { key: 'DEF',  label: 'Deflection', col: 'other' },
-  { key: 'TO',   label: 'Turnover',   col: 'other', redTint: true },
-  { key: 'FOUL', label: 'Foul',       col: 'other', redTint: true },
-]
-
-interface StatEntry {
-  id: string
-  player_id: string
-  player_name: string
-  player_number: string
-  stat_type: StatType
-  video_time_ms: number
-  game_id: string
-  created_at: string
-  shot_x?: number | null
-  shot_y?: number | null
-}
-
-// Raw entry from DB (includes nested players object)
-interface RawStatEntry {
-  id: string
-  player_id: string
-  stat_type: string
-  video_time_ms: number
-  game_id: string
-  created_at: string
-  players: { id: string; name: string; number: number | null } | null
-  shot_x?: number | null
-  shot_y?: number | null
-}
-
-function rawToEntry(raw: RawStatEntry): StatEntry {
-  return {
-    id: raw.id,
-    player_id: raw.player_id,
-    player_name: raw.players?.name ?? 'Unknown',
-    player_number: raw.players?.number != null ? String(raw.players.number) : '?',
-    stat_type: normaliseStatType(raw.stat_type),
-    video_time_ms: raw.video_time_ms,
-    game_id: raw.game_id,
-    created_at: raw.created_at,
-    shot_x: raw.shot_x ?? null,
-    shot_y: raw.shot_y ?? null,
-  }
-}
-
-// Quick-stat preference helpers — user-scoped localStorage key
-// Key is filmroom:quickStatPrefs:<userId>. No fallback to global key (avoids cross-user leakage).
-
-function quickStatPrefsKey(userId: string): string {
-  return `filmroom:quickStatPrefs:${userId}`
-}
-
-function readQuickStatPrefs(userId: string): StatType[] | null {
-  if (!userId) return null
-  try {
-    const v = localStorage.getItem(quickStatPrefsKey(userId))
-    if (!v) return null
-    const parsed = JSON.parse(v)
-    if (!Array.isArray(parsed)) return null
-    return parsed.filter((s): s is StatType => (STAT_TYPES as readonly string[]).includes(s))
-  } catch { return null }
-}
-
-function writeQuickStatPrefs(userId: string, prefs: StatType[]): void {
-  if (!userId) return
-  try { localStorage.setItem(quickStatPrefsKey(userId), JSON.stringify(prefs)) } catch {}
-}
-
-// Opponent pseudo-player constant
-const OPP_ID = '__opp__'
-const OPP_PLAYER: Player = { id: OPP_ID, name: 'Opponent', number: null, position: null, team_id: '', parent_email: null, created_at: '' }
-
-// ─── Stat Entry Panel ─────────────────────────────────────────────────────────
-
-function StatEntryPanel({
-  gameId,
-  players,
-  currentMs,
-  sessionEntries,
-  userId,
-  onLog,
-  onUndo,
-  onRedo,
-  canUndo,
-  canRedo,
-  undoPending,
-  redoPending,
-  undoError,
-  redoError,
-  onClose,
-}: {
-  gameId: string
-  players: Player[]
-  currentMs: number
-  sessionEntries: StatEntry[]
-  userId: string
-  onLog: (entry: StatEntry) => void
-  onUndo: () => void
-  onRedo: () => void
-  canUndo: boolean
-  canRedo: boolean
-  undoPending: boolean
-  redoPending: boolean
-  undoError: string | null
-  redoError: string | null
-  onClose: () => void
-}) {
-  const [selectedStat, setSelectedStat] = useState<StatType | null>(null)
-  const [logging, setLogging] = useState(false)
-  const [logError, setLogError] = useState<string | null>(null)
-  // Staged shot location (normalised 0–1 court coords); stays on the court while the save is in flight
-  const [stagedShot, setStagedShot] = useState<{ x: number; y: number } | null>(null)
-  // ── Wizard state ──
-  // 1 = tap a stat · 2 = tap who · 3 = tap shot location (shot stats only)
-  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1)
-  const [wizardPlayer, setWizardPlayer] = useState<Player | null>(null)
-  // Drives the slide-up / blur transition: false on mount → true a frame later; false again while closing
-  const [wizardVisible, setWizardVisible] = useState(false)
-  // Last saved entry — drives the ✓ confirmation strip
-  const [lastLogged, setLastLogged] = useState<StatEntry | null>(null)
-  // Quick-stat preferences — start empty, load from localStorage once userId is known
-  const [quickPrefs, setQuickPrefs] = useState<StatType[]>([])
-  const [editingPrefs, setEditingPrefs] = useState(false)
-  const closeTimer = useRef<number | null>(null)
-
-  useEffect(() => {
-    if (!userId) return
-    const saved = readQuickStatPrefs(userId)
-    if (saved) setQuickPrefs(saved)
-  }, [userId])
-
-  // Slide up one frame after mount so the CSS transition actually runs
-  useEffect(() => {
-    const t = window.setTimeout(() => setWizardVisible(true), 16)
-    return () => {
-      window.clearTimeout(t)
-      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
-    }
-  }, [])
-
-  // Auto-clear the confirmation strip
-  useEffect(() => {
-    if (!lastLogged) return
-    const t = window.setTimeout(() => setLastLogged(null), 2200)
-    return () => window.clearTimeout(t)
-  }, [lastLogged])
-
-  const togglePref = (stat: StatType) => {
-    setQuickPrefs(prev => {
-      const next = prev.includes(stat) ? prev.filter(s => s !== stat) : [...prev, stat]
-      writeQuickStatPrefs(userId, next)
-      return next
-    })
-  }
-
-  const SHOT_TYPES_SET = new Set(['2M','3M','FTM','2X','3X','FTX'])
-
-  const allPlayers = [...players, OPP_PLAYER]
-
-  const made   = STAT_DEFS.filter(d => d.col === 'made')
-  const miss   = STAT_DEFS.filter(d => d.col === 'miss')
-  const other  = STAT_DEFS.filter(d => d.col === 'other')
-
-  const statLabel = (s: StatType) => STAT_DEFS.find(d => d.key === s)?.label ?? s
-  const isShotStat = !!selectedStat && SHOT_TYPES_SET.has(selectedStat)
-  const selectedDef = selectedStat ? STAT_DEFS.find(d => d.key === selectedStat) : undefined
-
-  const chipClass = (def: StatDef | undefined) =>
-    !def ? 'border-white/15 text-white/80 bg-white/8'
-    : def.col === 'miss' || def.redTint ? 'border-red-500/30 text-red-300 bg-red-950/30'
-    : def.col === 'made' ? 'border-emerald-500/30 text-emerald-200 bg-emerald-950/30'
-    : 'border-white/15 text-white/80 bg-white/8'
-
-  const playerShort = (p: Player) => p.id === OPP_ID ? 'Opponent' : p.name.split(' ')[0]
-  const playerTag = (p: Player) => p.id === OPP_ID ? 'OPP' : `#${p.number ?? '?'} ${p.name.split(' ')[0]}`
-
-  const sessionPts = (playerId: string) =>
-    sessionEntries.filter(e => e.player_id === playerId && e.stat_type === '2M').length * 2
-    + sessionEntries.filter(e => e.player_id === playerId && e.stat_type === '3M').length * 3
-    + sessionEntries.filter(e => e.player_id === playerId && e.stat_type === 'FTM').length
-
-  // Slide down, then let the parent unmount us once the transition has finished
-  const dismiss = () => {
-    if (closeTimer.current !== null) return
-    setWizardVisible(false)
-    closeTimer.current = window.setTimeout(onClose, 240)
-  }
-
-  const resetWizard = () => {
-    setSelectedStat(null)
-    setWizardPlayer(null)
-    setStagedShot(null)
-    setWizardStep(1)
-  }
-
-  const goBack = () => {
-    if (logging) return
-    setLogError(null)
-    if (wizardStep === 3) { setStagedShot(null); setWizardPlayer(null); setWizardStep(2) }
-    else if (wizardStep === 2) { setSelectedStat(null); setWizardStep(1) }
-  }
-
-  // Escape steps back; from step 1 it closes. (The page's own hotkeys are suspended while this panel is open.)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      e.preventDefault()
-      if (wizardStep === 1) dismiss()
-      else goBack()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
-
-  // Step 1 → 2
-  const handleStatTap = (stat: StatType) => {
-    if (logging) return
-    setLogError(null)
-    setSelectedStat(stat)
-    setWizardPlayer(null)
-    setStagedShot(null)
-    setWizardStep(2)
-  }
-
-  // POST the entry. Shot coords ride along only for shot stat types.
-  const commitEntry = async (stat: StatType, player: Player, shot: { x: number; y: number } | null) => {
-    if (logging) return
-    setLogging(true); setLogError(null)
-    try {
-      const body: Record<string, unknown> = {
-        game_id: gameId,
-        player_id: player.id === OPP_ID ? null : player.id,
-        stat_type: stat,
-        video_time_ms: statMoment(currentMs),
-      }
-      if (shot && SHOT_TYPES_SET.has(stat)) {
-        body.shot_x = shot.x
-        body.shot_y = shot.y
-      }
-      const res = await fetch('/api/filmroom/stat-entries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) throw new Error('Failed to save')
-      const raw: RawStatEntry = await res.json()
-      // For OPP entries the DB returns player_id null — patch the name/number
-      const entry: StatEntry = player.id === OPP_ID
-        ? { ...rawToEntry(raw), player_id: OPP_ID, player_name: 'Opponent', player_number: 'OPP' }
-        : rawToEntry(raw)
-      onLog(entry)
-      setLastLogged(entry)
-      resetWizard() // back to step 1 for the next stat; Done closes the sheet
-    } catch {
-      setLogError('The stat was not saved. Please try again.')
-    } finally {
-      setLogging(false)
-    }
-  }
-
-  // Step 2 → 3 for shots, otherwise save immediately
-  const handlePlayerTap = (player: Player) => {
-    if (!selectedStat || logging) return
-    setWizardPlayer(player)
-    if (SHOT_TYPES_SET.has(selectedStat)) { setStagedShot(null); setWizardStep(3) }
-    else void commitEntry(selectedStat, player, null)
-  }
-
-  // Step 3: one tap on the court places the marker and saves
-  const handleCourtTap = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!selectedStat || !wizardPlayer || logging) return
-    const svg = e.currentTarget, matrix = svg.getScreenCTM()
-    if (!matrix) return
-    const point = svg.createSVGPoint(); point.x = e.clientX; point.y = e.clientY
-    const local = point.matrixTransform(matrix.inverse())
-    const x = Math.max(0, Math.min(1, (local.x - 1) / 48))
-    const y = Math.max(0, Math.min(1, (local.y - 1) / 45))
-    const pt = { x: parseFloat(x.toFixed(4)), y: parseFloat(y.toFixed(4)) }
-    setStagedShot(pt)
-    void commitEntry(selectedStat, wizardPlayer, pt)
-  }
-
-  // Keyboard on the court: arrows nudge the marker, Enter / Space saves it
-  const handleCourtKey = (e: React.KeyboardEvent<SVGSVGElement>) => {
-    if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter',' '].includes(e.key)) return
-    e.preventDefault()
-    if (e.key === 'Enter' || e.key === ' ') {
-      if (selectedStat && wizardPlayer && stagedShot && !logging) void commitEntry(selectedStat, wizardPlayer, stagedShot)
-      return
-    }
-    setStagedShot(p => {
-      const x = p?.x ?? 0.5, y = p?.y ?? 0.5
-      return {
-        x: Math.max(0, Math.min(1, x + (e.key === 'ArrowRight' ? 0.025 : e.key === 'ArrowLeft' ? -0.025 : 0))),
-        y: Math.max(0, Math.min(1, y + (e.key === 'ArrowDown' ? 0.025 : e.key === 'ArrowUp' ? -0.025 : 0))),
-      }
-    })
-  }
-
-  const skipLocation = () => {
-    if (!selectedStat || !wizardPlayer || logging) return
-    void commitEntry(selectedStat, wizardPlayer, null)
-  }
-
-  const handleUndo = () => { if (canUndo) onUndo() }
-  const handleRedo = () => { if (canRedo) onRedo() }
-
-  const stepTitle = wizardStep === 1
-    ? 'TAP A STAT'
-    : wizardStep === 2
-      ? `TAP WHO — ${selectedStat ? statLabel(selectedStat) : ''}`
-      : `TAP SHOT LOCATION — ${selectedStat ? statLabel(selectedStat) : ''}${wizardPlayer ? ` · ${playerTag(wizardPlayer)}` : ''}`
-
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center"
-      style={{
-        backgroundColor: wizardVisible ? 'rgba(0,0,0,0.72)' : 'rgba(0,0,0,0)',
-        backdropFilter: wizardVisible ? 'blur(18px)' : 'blur(0px)',
-        WebkitBackdropFilter: wizardVisible ? 'blur(18px)' : 'blur(0px)',
-        transition: 'background-color 220ms ease, backdrop-filter 220ms ease, -webkit-backdrop-filter 220ms ease',
-      }}
-    >
-      {/* Backdrop tap closes */}
-      <div className="absolute inset-0" onClick={dismiss} aria-hidden />
-
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Tag a stat"
-        className="filmroom-scroll-area relative w-full max-w-3xl rounded-t-2xl flex flex-col overflow-y-auto overscroll-contain"
-        style={{
-          backgroundColor: '#15181f',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderBottom: 'none',
-          maxHeight: '90dvh',
-          paddingBottom: 'env(safe-area-inset-bottom)',
-          boxShadow: '0 -24px 80px rgba(0,0,0,0.6)',
-          transform: wizardVisible ? 'translateY(0)' : 'translateY(100%)',
-          transition: 'transform 260ms cubic-bezier(0.32,0.72,0,1)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Grab handle */}
-        <div className="shrink-0 flex justify-center pt-2.5" aria-hidden>
-          <div className="w-9 h-1 rounded-full bg-white/15" />
-        </div>
-
-        {/* ── Header: back · step title · undo/redo · done ── */}
-        <div className="shrink-0 flex items-center gap-2 px-4 pt-2 pb-3 border-b border-white/8">
-          {wizardStep > 1 && (
-            <button
-              onClick={goBack}
-              disabled={logging}
-              aria-label="Back"
-              className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-white/60 hover:text-white border border-white/10 hover:border-white/20 disabled:opacity-30 transition-all"
-              style={{ touchAction: 'manipulation' }}
-            >
-              <ChevronLeft className="w-4 h-4" aria-hidden />
-            </button>
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 mb-1" aria-hidden>
-              {[1, 2, 3].map(s => (
-                <span key={s}
-                  className={`h-1 rounded-full transition-all ${s === wizardStep ? 'w-5' : 'w-2.5'}`}
-                  style={{ background: s === wizardStep ? '#c66a3e' : s < wizardStep ? 'rgba(198,106,62,0.5)' : 'rgba(255,255,255,0.12)' }} />
-              ))}
-            </div>
-            <span className="block text-sm font-semibold text-white/80 tracking-wide truncate">
-              <span className="text-[#c66a3e] font-bold">{wizardStep}</span>
-              {' '}<span className="text-white/40 mx-1">·</span>{' '}
-              {stepTitle}
-              {' '}<span className="ml-1.5 text-[11px] font-mono font-normal tabular-nums text-white/35">{msToDisplay(statMoment(currentMs))}</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleUndo}
-              disabled={!canUndo || undoPending}
-              className="px-3 py-1.5 rounded-xl text-xs font-medium text-white/50 hover:text-white border border-white/10 hover:border-white/20 disabled:opacity-30 transition-all"
-              title="Undo last stat entry"
-            >
-              {undoPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Undo'}
-            </button>
-            <button
-              onClick={handleRedo}
-              disabled={!canRedo || redoPending}
-              className="px-3 py-1.5 rounded-xl text-xs font-medium text-white/50 hover:text-white border border-white/10 hover:border-white/20 disabled:opacity-30 transition-all"
-              title="Redo last undone entry"
-            >
-              {redoPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Redo'}
-            </button>
-            <button
-              onClick={dismiss}
-              className="px-4 py-1.5 rounded-xl text-xs font-semibold transition-colors" style={{background:"#c66a3e",color:"#181917"}}
-            >
-              Done
-            </button>
-          </div>
-        </div>
-
-        {/* ── Confirmation strip ── */}
-        {lastLogged && (
-          <div role="status" className="shrink-0 mx-4 mt-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-emerald-500/30 bg-emerald-950/30 text-emerald-200">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden />
-            <span className="truncate">
-              Saved {statLabel(lastLogged.stat_type)} · {lastLogged.player_number !== 'OPP' ? `#${lastLogged.player_number} ${lastLogged.player_name.split(' ')[0]}` : 'Opponent'} · {msToDisplay(lastLogged.video_time_ms)}
-            </span>
-          </div>
-        )}
-
-        {(undoError || redoError) && (
-          <p role="alert" className="px-4 py-1.5 text-xs text-red-300 border-b border-red-500/15">
-            {undoError ?? redoError}
-          </p>
-        )}
-        {logError && <p role="alert" className="px-4 py-2 text-sm text-red-300">{logError}</p>}
-
-        {/* ══ Step 1 — MADE / MISS / OTHER ══ */}
-        {wizardStep === 1 && (
-          <div className="px-4 pt-3 pb-5 space-y-4">
-
-            {/* Quick-stat pinned row + preference editor */}
-            {quickPrefs.length > 0 && !editingPrefs && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[9px] font-semibold text-white/25 uppercase tracking-widest mr-1">Quick</span>
-                {quickPrefs.map(stat => {
-                  const def = STAT_DEFS.find(d => d.key === stat)
-                  if (!def) return null
-                  return (
-                    <button key={stat}
-                      onClick={() => handleStatTap(stat)}
-                      className={`px-3 py-2 rounded-lg text-[11px] font-semibold border transition-all ${chipClass(def)}`}
-                      style={{ touchAction: 'manipulation' }}>
-                      {def.label}
-                    </button>
-                  )
-                })}
-                <button onClick={() => setEditingPrefs(true)}
-                  className="ml-auto text-[9px] text-white/25 hover:text-white/50 border border-white/8 rounded px-1.5 py-1 transition-all">
-                  Edit
-                </button>
-              </div>
-            )}
-
-            {editingPrefs && (
-              <div className="rounded-xl border border-white/8 px-3 py-2">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Quick-stat pins</span>
-                  <button onClick={() => setEditingPrefs(false)}
-                    className="text-[10px] text-[#c66a3e] hover:text-[#e07a4a] font-medium">Done</button>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {STAT_DEFS.map(def => (
-                    <button key={def.key}
-                      onClick={() => togglePref(def.key)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-medium border transition-all ${
-                        quickPrefs.includes(def.key)
-                          ? 'bg-[rgba(198,106,62,0.18)] border-[rgba(198,106,62,0.40)] text-[#c66a3e]'
-                          : 'border-white/10 text-white/40 hover:text-white/70'
-                      }`}
-                      style={{ touchAction: 'manipulation' }}>
-                      {def.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {(!quickPrefs.length && !editingPrefs) && (
-              <div className="flex justify-end -mb-2">
-                <button onClick={() => setEditingPrefs(true)}
-                  className="text-[9px] text-white/20 hover:text-white/40 underline underline-offset-2">Pin quick stats</button>
-              </div>
-            )}
-
-            {/* MADE */}
-            <section aria-label="Made">
-              <p className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-[0.2em] mb-2">Made</p>
-              <div className="grid grid-cols-3 gap-2">
-                {made.map(def => (
-                  <button key={def.key} onClick={() => handleStatTap(def.key)}
-                    className="min-h-[60px] rounded-2xl text-sm font-bold border border-emerald-500/30 text-emerald-200 transition-all active:scale-[0.97]"
-                    style={{ touchAction: 'manipulation', background: 'rgba(16,185,129,0.12)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
-                  >{def.label}</button>
-                ))}
-              </div>
-            </section>
-
-            {/* MISS */}
-            <section aria-label="Miss">
-              <p className="text-[10px] font-bold text-red-400/80 uppercase tracking-[0.2em] mb-2">Miss</p>
-              <div className="grid grid-cols-3 gap-2">
-                {miss.map(def => (
-                  <button key={def.key} onClick={() => handleStatTap(def.key)}
-                    className="min-h-[60px] rounded-2xl text-sm font-bold border border-red-500/30 text-red-300 transition-all active:scale-[0.97]"
-                    style={{ touchAction: 'manipulation', background: 'rgba(220,38,38,0.12)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
-                  >{def.label}</button>
-                ))}
-              </div>
-            </section>
-
-            {/* OTHER */}
-            <section aria-label="Other">
-              <p className="text-[10px] font-bold text-white/35 uppercase tracking-[0.2em] mb-2">Other</p>
-              <div className="grid grid-cols-4 gap-2">
-                {other.map(def => (
-                  <button key={def.key} onClick={() => handleStatTap(def.key)}
-                    className={`min-h-[60px] rounded-2xl text-xs font-semibold border transition-all active:scale-[0.97] ${
-                      def.redTint ? 'border-red-500/20 text-red-300/80' : 'border-white/12 text-white/80'
-                    }`}
-                    style={{ touchAction: 'manipulation', background: def.redTint ? 'rgba(220,38,38,0.09)' : 'rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
-                  >{def.label}</button>
-                ))}
-              </div>
-            </section>
-
-            {/* Recent — this session */}
-            {sessionEntries.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold text-white/20 uppercase tracking-widest px-1">Recent</p>
-                {[...sessionEntries].reverse().slice(0, 5).map(e => (
-                  <div key={e.id} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                    <span className="text-white/40 shrink-0 font-medium">{e.player_number !== 'OPP' ? `#${e.player_number}` : 'OPP'}</span>
-                    <span className="text-white/50 shrink-0">{e.player_number !== 'OPP' ? e.player_name.split(' ')[0] : 'Opponent'}</span>
-                    <span className="text-white/75 font-semibold truncate">{statLabel(e.stat_type)}</span>
-                    <span className="ml-auto font-mono tabular-nums text-white/30 shrink-0">{msToDisplay(e.video_time_ms)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ══ Step 2 — Player cards (jersey # huge) ══ */}
-        {wizardStep === 2 && selectedStat && (
-          <div className="px-4 pt-3 pb-5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${chipClass(selectedDef)}`}>{statLabel(selectedStat)}</span>
-              <span className="text-[11px] text-white/40">{isShotStat ? 'Tap the player, then place the shot' : 'Tap the player to save'}</span>
-              {logging && <Loader2 className="w-3.5 h-3.5 animate-spin text-white/50 ml-auto" aria-hidden />}
-            </div>
-            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))' }}>
-              {allPlayers.map((p) => {
-                const isOpp = p.id === OPP_ID
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => handlePlayerTap(p)}
-                    disabled={logging}
-                    aria-label={isOpp ? 'Opponent' : `#${p.number ?? '?'} ${p.name}`}
-                    style={{ touchAction: 'manipulation' }}
-                    className={`flex flex-col items-center justify-center gap-1 py-3 px-1 rounded-2xl border min-h-[96px] transition-all active:scale-[0.97] disabled:opacity-50 ${
-                      isOpp ? 'border-white/15 bg-white/6' : 'border-white/10 bg-white/5 hover:border-[rgba(198,106,62,0.5)]'
-                    }`}
-                  >
-                    <span className={`font-black leading-none tabular-nums ${isOpp ? 'text-xl text-white/50' : 'text-5xl text-white'}`}>
-                      {isOpp ? 'OPP' : (p.number ?? '?')}
-                    </span>
-                    <span className="text-[11px] text-white/55 text-center truncate w-full">{playerShort(p)}</span>
-                    <span className="text-[10px] text-white/30 tabular-nums">{sessionPts(p.id)} pts</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ══ Step 3 — Shot location court ══ */}
-        {wizardStep === 3 && selectedStat && wizardPlayer && (
-          <div className="px-4 pt-3 pb-5 flex flex-col items-center gap-3">
-            <div className="w-full flex items-center gap-2 flex-wrap">
-              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${chipClass(selectedDef)}`}>{statLabel(selectedStat)}</span>
-              <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-white/15 bg-white/8 text-white/85">{playerTag(wizardPlayer)}</span>
-              <span className="ml-auto text-[11px] text-white/40 inline-flex items-center gap-1.5">
-                {logging && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />}
-                {logging ? 'Saving…' : 'Tap the court to save'}
-              </span>
-            </div>
-            <div className="w-full" style={{ maxWidth: 'min(100%, 50dvh)' }}>
-              <svg viewBox="0 0 50 47" role="button" tabIndex={0}
-                aria-label="Shot location. Tap the court, or use arrow keys to position the shot and Enter to save."
-                onKeyDown={handleCourtKey}
-                onClick={handleCourtTap}
-                className="w-full rounded-2xl cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-[rgba(198,106,62,0.6)]"
-                style={{ background: '#1a1d23', border: '1px solid rgba(255,255,255,0.08)', display: 'block', touchAction: 'manipulation', opacity: logging ? 0.7 : 1 }}>
-                <rect x="1" y="1" width="48" height="45" rx="1" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
-                <rect x="16" y="1" width="18" height="19" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
-                <circle cx="25" cy="20" r="6" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
-                <path d="M 4 1 Q 4 35 25 38 Q 46 35 46 1" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
-                <circle cx="25" cy="5" r="1.2" fill="none" stroke="rgba(255,255,255,0.40)" strokeWidth="0.5" />
-                {stagedShot && (
-                  <circle cx={1 + stagedShot.x * 48} cy={1 + stagedShot.y * 45}
-                    r="1.8" fill="#c66a3e" stroke="#e07a4a" strokeWidth="0.4"
-                    style={{ pointerEvents: 'none' }} />
-                )}
-              </svg>
-            </div>
-            <div className="w-full flex items-center justify-between">
-              <button onClick={goBack} disabled={logging}
-                className="px-3 py-2 rounded-xl text-xs font-medium text-white/50 hover:text-white border border-white/10 hover:border-white/20 disabled:opacity-30 transition-all"
-                style={{ touchAction: 'manipulation' }}>Back</button>
-              <button onClick={skipLocation} disabled={logging}
-                className="px-3 py-2 rounded-xl text-xs font-medium underline underline-offset-2 disabled:opacity-30 transition-all"
-                style={{ color: 'rgba(238,233,223,0.45)', touchAction: 'manipulation' }}>Save without location</button>
-            </div>
-          </div>
-        )}
-
-      </div>
-    </div>
   )
 }
 
@@ -868,7 +202,7 @@ function PlayerEventList({
 // ─── Stats Panel: desktop table + phone grouped cards ─────────────────────────
 // Desktop (md+): sticky-player-column table, full stat columns, no horizontal scroll.
 // Phone: stacked player cards with grouped stat pill counts, expandable event list.
-function BoxScorePanel({
+const BoxScorePanel = React.memo(function BoxScorePanel({
   players,
   statEntries,
   onSeek,
@@ -917,16 +251,16 @@ function BoxScorePanel({
     <>
       {/* ── Desktop table (md+) ── */}
       <div className="hidden lg:block">
-        <table className="w-full text-xs border-collapse">
+        <table className="fr-table">
           <thead>
-            <tr className="border-b border-white/10">
-              <th className="text-left text-white/65 font-medium pb-2 pr-4 min-w-[110px]">Player</th>
+            <tr>
+              <th className="min-w-[120px]">Player</th>
               {BOX_HEADERS.map(h => (
-                <th key={h} className="text-center text-white/65 font-medium pb-2 px-1 whitespace-nowrap">{h}</th>
+                <th key={h} className={h === 'pts' ? 'text-[12px]' : ''} style={h === 'pts' ? { color: 'var(--fr-ink)' } : undefined}>{h.toUpperCase()}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/4">
+          <tbody>
             {allRows.map(row => {
               const box = calcBoxRow(row.entries)
               const isExpanded = expandedPlayerId === row.id
@@ -938,16 +272,17 @@ function BoxScorePanel({
                     tabIndex={canExpand?0:undefined}
                     aria-expanded={canExpand?isExpanded:undefined}
                     onKeyDown={e=>{if(canExpand&&(e.key==='Enter'||e.key===' ')){e.preventDefault();setExpandedPlayerId(isExpanded?null:row.id)}}}
-                    className={`transition-colors ${canExpand ? 'cursor-pointer hover:bg-white/3' : ''} ${row.isTotal ? 'border-t-2 border-white/12' : ''} ${row.isOpp ? 'bg-red-950/10' : ''}`}
+                    className={`${canExpand ? 'clickable' : ''} ${row.isTotal ? 'is-total' : ''} ${row.entries.length === 0 ? 'is-dim' : ''}`}
                   >
-                    <td className="py-2 pr-4">
-                      <div className="flex items-center gap-1 min-w-0">
+                    <td>
+                      <div className="flex items-center gap-1.5 min-w-0">
                         {canExpand && (isExpanded
-                          ? <ChevronUp className="w-3 h-3 text-white/30 shrink-0" />
-                          : <ChevronDown className="w-3 h-3 text-white/20 shrink-0" />
+                          ? <ChevronUp className="w-3 h-3 shrink-0" style={{ color: 'var(--fr-ink3)' }} />
+                          : <ChevronDown className="w-3 h-3 shrink-0" style={{ color: 'var(--fr-ink3)' }} />
                         )}
-                        <span className={`font-medium truncate text-[11px] ${row.isOpp ? 'text-red-400/80' : row.isTotal ? 'text-white/60 uppercase tracking-wide' : 'text-white/80'}`}>
-                          {row.label}
+                        {row.player && <span className="fr-display text-[14px] w-7 shrink-0 tabular-nums" style={{ color: 'var(--fr-accent2)' }}>#{row.player.number ?? '?'}</span>}
+                        <span className="font-semibold truncate text-[12px]" style={{ color: row.isOpp ? 'var(--fr-bad)' : 'var(--fr-ink)' }}>
+                          {row.player ? row.player.name.split(' ')[0] : row.label}
                         </span>
                       </div>
                     </td>
@@ -965,8 +300,8 @@ function BoxScorePanel({
             })}
           </tbody>
         </table>
-        <p className="text-[10px] text-white/20 pt-2">
-          Click a player row to expand their event timeline. Click a timestamp to jump to that moment.
+        <p className="text-[11px] pt-2" style={{ color: 'var(--fr-ink3)' }}>
+          Click a player to list their plays; click a time to watch it.
         </p>
       </div>
 
@@ -1051,7 +386,7 @@ function BoxScorePanel({
       </div>
     </>
   )
-}
+})
 
 // ─── Video Upload Zone ───────────────────────────────────────────────────────
 
@@ -1428,7 +763,12 @@ function TransportBar({
   isPlaying, currentMs, durationMs,
   onPlayPause, onSeek, onSkip, onFrameStep,
   markIn, markOut,
-  isFullscreen, onStatTap, coachingTools,
+  isFullscreen, onStatTap,
+  onMarkIn, onMarkOut, onSaveClip,
+  playbackSpeed, onSpeed,
+  drawingActive, onToggleDrawing,
+  onToggleBookmark, bookmarkDisabled,
+  qualityControl,
 }: {
   isPlaying: boolean
   currentMs: number
@@ -1441,362 +781,143 @@ function TransportBar({
   markOut: number | null
   isFullscreen?: boolean
   onStatTap?: () => void
-  coachingTools?: React.ReactNode
+  onMarkIn: () => void
+  onMarkOut: () => void
+  onSaveClip?: () => void
+  playbackSpeed: number
+  onSpeed: (fn: (s: number) => number) => void
+  drawingActive: boolean
+  onToggleDrawing: () => void
+  onToggleBookmark: () => void
+  bookmarkDisabled?: boolean
+  qualityControl?: React.ReactNode
 }) {
   const pct = durationMs > 0 ? (currentMs / durationMs) * 100 : 0
   const inPct = (markIn != null && durationMs > 0) ? (markIn / durationMs) * 100 : null
   const outPct = (markOut != null && durationMs > 0) ? (markOut / durationMs) * 100 : null
+  const trackRef = useRef<HTMLDivElement>(null)
+  const scrubbing = useRef(false)
+
+  const seekFromPointer = (clientX: number) => {
+    const el = trackRef.current
+    if (!el || durationMs <= 0) return
+    const rect = el.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    onSeek(Math.round(ratio * durationMs))
+  }
 
   return (
-    <div className={`shrink-0 space-y-3 px-4 py-3 bg-[#13161b] border-t border-white/8 ${isFullscreen ? '' : 'rounded-b-xl border border-t-0 border-white/8'}`}>
-      {/* Scrubber */}
-      <div className="relative group">
-        <div className="relative h-1.5 bg-white/10 rounded-full cursor-pointer"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect()
-            const x = e.clientX - rect.left
-            const pct = x / rect.width
-            onSeek(Math.round(pct * durationMs))
-          }}>
-          {/* Clip region highlight */}
-          {inPct != null && outPct != null && (
-            <div className="absolute top-0 h-full rounded-full"
-              style={{ left: `${inPct}%`, width: `${outPct - inPct}%`, background: 'rgba(198,106,62,0.35)' }} />
+    <div className={`shrink-0 px-3 pt-2.5 pb-2 ${isFullscreen ? 'bg-black' : ''}`} style={isFullscreen ? undefined : { borderTop: '1px solid var(--fr-line)' }}>
+      {/* Scrubber — pointer-drag seeks; marks and the clip range are drawn on the track */}
+      <div
+        ref={trackRef}
+        role="slider"
+        aria-label="Video position"
+        aria-valuemin={0}
+        aria-valuemax={Math.max(0, Math.round(durationMs / 1000))}
+        aria-valuenow={Math.round(currentMs / 1000)}
+        aria-valuetext={msToTimecode(currentMs)}
+        tabIndex={0}
+        className="relative group h-6 flex items-center cursor-pointer select-none"
+        style={{ touchAction: 'none' }}
+        onPointerDown={(e) => { scrubbing.current = true; e.currentTarget.setPointerCapture(e.pointerId); seekFromPointer(e.clientX) }}
+        onPointerMove={(e) => { if (scrubbing.current) seekFromPointer(e.clientX) }}
+        onPointerUp={(e) => { scrubbing.current = false; e.currentTarget.releasePointerCapture(e.pointerId) }}
+        onPointerCancel={() => { scrubbing.current = false }}
+        onKeyDown={(e) => { if (e.key === 'ArrowLeft') { e.preventDefault(); onSkip(-5000) } if (e.key === 'ArrowRight') { e.preventDefault(); onSkip(5000) } }}
+      >
+        <div className="relative w-full h-1.5 rounded-full" style={{ background: 'rgba(238,233,223,0.14)' }}>
+          {inPct != null && outPct != null && outPct > inPct && (
+            <div className="absolute top-0 h-full rounded-full" style={{ left: `${inPct}%`, width: `${outPct - inPct}%`, background: 'rgba(198,106,62,0.45)' }} />
           )}
-          {/* Progress */}
-          <div className="absolute top-0 left-0 h-full rounded-full transition-none"
-            style={{ width: `${pct}%`, background: '#c66a3e' }} />
-          {/* Thumb */}
-          <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ left: `calc(${pct}% - 6px)` }} />
-          {/* Mark In */}
+          <div className="absolute top-0 left-0 h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--fr-accent)' }} />
+          <div className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full shadow transition-transform group-hover:scale-110"
+            style={{ left: `calc(${pct}% - 7px)`, background: '#fff4ea' }} />
           {inPct != null && (
-            <div className="absolute top-1/2 -translate-y-1/2 w-2 h-4 bg-green-400 rounded-sm"
-              style={{ left: `${inPct}%` }} title="Mark In" />
+            <div className="absolute -top-1.5 w-0.5 h-[18px] -translate-x-1/2" style={{ left: `${inPct}%`, background: 'var(--fr-good)' }} title={`In ${msToTimecode(markIn!)}`}>
+              <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold" style={{ color: 'var(--fr-good)' }}>IN</span>
+            </div>
           )}
-          {/* Mark Out */}
           {outPct != null && (
-            <div className="absolute top-1/2 -translate-y-1/2 w-2 h-4 bg-red-400 rounded-sm"
-              style={{ left: `${outPct}%` }} title="Mark Out" />
+            <div className="absolute -top-1.5 w-0.5 h-[18px] -translate-x-1/2" style={{ left: `${outPct}%`, background: 'var(--fr-bad)' }} title={`Out ${msToTimecode(markOut!)}`}>
+              <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold" style={{ color: 'var(--fr-bad)' }}>OUT</span>
+            </div>
           )}
         </div>
       </div>
 
       {/* Controls row */}
-      <div className="flex flex-wrap items-center gap-1">
-        {/* Frame back */}
-        <button onClick={() => onFrameStep(-1)}
-          className="p-2 min-w-9 min-h-11 text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Previous frame (← arrow)">
-          <SkipBack className="w-3.5 h-3.5" />
-        </button>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        <div className="flex items-center gap-1">
+          <button onClick={() => onFrameStep(-1)} className="fr-icon-btn" style={{ borderColor: 'transparent' }} title="Previous frame (←)" aria-label="Previous frame">
+            <SkipBack className="w-4 h-4" />
+          </button>
+          <button onClick={() => onSkip(-5000)} className="fr-btn fr-btn-ghost fr-mono" style={{ paddingInline: 8 }} title="Back 5s (J)">−5s</button>
+          <button onClick={onPlayPause}
+            className="w-11 h-11 shrink-0 rounded-full flex items-center justify-center transition-transform active:scale-95"
+            style={{ background: 'var(--fr-accent)', color: '#181917' }} title="Play/Pause (Space)" aria-label={isPlaying ? 'Pause' : 'Play'}>
+            {isPlaying ? <Pause className="w-4.5 h-4.5" /> : <Play className="w-4.5 h-4.5 ml-0.5" />}
+          </button>
+          <button onClick={() => onSkip(5000)} className="fr-btn fr-btn-ghost fr-mono" style={{ paddingInline: 8 }} title="Forward 5s (L)">+5s</button>
+          <button onClick={() => onFrameStep(1)} className="fr-icon-btn" style={{ borderColor: 'transparent' }} title="Next frame (→)" aria-label="Next frame">
+            <SkipForward className="w-4 h-4" />
+          </button>
+        </div>
 
-        {/* Skip -5s */}
-        <button onClick={() => onSkip(-5000)}
-          className="px-2 py-3 min-w-9 min-h-11 text-xs text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Back 5s (J)">
-          -5s
-        </button>
-
-        {/* Play/Pause */}
-        <button onClick={onPlayPause}
-          className="w-11 h-11 shrink-0 rounded-full flex items-center justify-center transition-colors" style={{background:"#c66a3e",color:"#181917"}} title="Play/Pause (Space)">
-          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-        </button>
-
-        {/* Skip +5s */}
-        <button onClick={() => onSkip(5000)}
-          className="px-2 py-3 min-w-9 min-h-11 text-xs text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Forward 5s (L)">
-          +5s
-        </button>
-
-        {/* Frame fwd */}
-        <button onClick={() => onFrameStep(1)}
-          className="p-2 min-w-9 min-h-11 text-white/65 hover:text-white rounded-lg hover:bg-white/6 transition-all" title="Next frame (→ arrow)">
-          <SkipForward className="w-3.5 h-3.5" />
-        </button>
-
-        {coachingTools}
-        <div className="hidden sm:block flex-1" />
-
-        {/* Timecode */}
-        <span className="w-full sm:w-auto whitespace-nowrap font-mono text-xs text-white/65 tabular-nums">
-          {msToTimecode(currentMs)} / {msToTimecode(durationMs)}
+        <span className="fr-display fr-mono text-[18px] leading-none ml-1 tabular-nums" style={{ color: 'var(--fr-ink)' }}>
+          {msToTimecode(currentMs)}<span style={{ color: 'var(--fr-ink3)' }}> / {msToTimecode(durationMs)}</span>
         </span>
 
-        <div className="flex items-center gap-1">
+        <div className="flex-1" />
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* Speed */}
+          <div className="flex items-center rounded-[10px]" style={{ border: '1px solid var(--fr-line2)', height: 36 }}>
+            <button onClick={() => onSpeed(s => Math.max(0.25, parseFloat((s - 0.25).toFixed(2))))} className="px-2 h-full" style={{ color: 'var(--fr-ink2)' }} aria-label="Decrease speed">−</button>
+            <span className="fr-mono text-[12px] font-semibold w-9 text-center tabular-nums">{playbackSpeed}×</span>
+            <button onClick={() => onSpeed(s => Math.min(2, parseFloat((s + 0.25).toFixed(2))))} className="px-2 h-full" style={{ color: 'var(--fr-ink2)' }} aria-label="Increase speed">+</button>
+          </div>
+          <button onClick={onToggleDrawing} className={`fr-btn ${drawingActive ? 'fr-btn-on' : ''}`} aria-pressed={drawingActive} title="Draw on the frame">
+            <Pencil className="w-3.5 h-3.5" aria-hidden /> <span className="hidden sm:inline">{drawingActive ? 'Drawing' : 'Draw'}</span>
+          </button>
+          <button onClick={onToggleBookmark} disabled={bookmarkDisabled} className="fr-icon-btn" aria-label="Add bookmark at current position" title="Add bookmark at current position">
+            <Bookmark className="w-4 h-4" aria-hidden />
+          </button>
+          {qualityControl && (
+            <ToolbarMenu label="Quality" startOnSmall>
+              {qualityControl}
+              <p style={{ color: 'var(--fr-ink3)' }}>Original keeps your full upload quality. Auto adapts to your connection, up to 1080p.</p>
+            </ToolbarMenu>
+          )}
+          {isFullscreen && (
+            <>
+              <button onClick={onMarkIn} className="fr-btn" title="Mark in (I)"><span style={{ color: 'var(--fr-good)' }}>●</span> In</button>
+              <button onClick={onMarkOut} className="fr-btn" title="Mark out (O)"><span style={{ color: 'var(--fr-bad)' }}>●</span> Out</button>
+              {onSaveClip && <button onClick={onSaveClip} className="fr-btn fr-btn-primary" title="Save clip (S)"><Scissors className="w-3.5 h-3.5" aria-hidden /> Save clip</button>}
+            </>
+          )}
           {onStatTap && (
-            <button
-              onClick={onStatTap}
-              className="flex items-center gap-1.5 px-2 py-3 rounded-lg active:scale-95 text-xs font-semibold transition-all ml-1 border"
-              style={{ touchAction: 'manipulation', background: '#c66a3e', color: '#181917', borderColor: 'rgba(198,106,62,0.5)' }}
-            >
-              <BarChart className="w-3 h-3" /> Tag Stat
+            <button onClick={onStatTap} className="fr-btn fr-btn-primary" style={{ height: 40, paddingInline: 14, fontSize: 13 }} title="Tag a stat (T)">
+              <BarChart className="w-3.5 h-3.5" aria-hidden /> Tag stat <kbd className="fr-kbd fr-kbd-dark">T</kbd>
             </button>
           )}
         </div>
       </div>
 
       {/* Keyboard shortcut hints */}
-      <div className="hidden md:flex flex-wrap gap-3 text-[10px] text-white/50 border-t border-white/5 pt-2">
-        <span><kbd className="font-mono bg-white/8 px-1 rounded">Space</kbd> play/pause</span>
-        <span><kbd className="font-mono bg-white/8 px-1 rounded">←</kbd><kbd className="font-mono bg-white/8 px-1 rounded">→</kbd> frame</span>
-        <span><kbd className="font-mono bg-white/8 px-1 rounded">J</kbd><kbd className="font-mono bg-white/8 px-1 rounded">L</kbd> ±5s</span>
-        <span><kbd className="font-mono bg-white/8 px-1 rounded">I</kbd> mark in</span>
-        <span><kbd className="font-mono bg-white/8 px-1 rounded">O</kbd> mark out</span>
-        <span><kbd className="font-mono bg-white/8 px-1 rounded">S</kbd> save clip</span>
+      <div className="hidden md:flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[11px]" style={{ color: 'var(--fr-ink3)' }}>
+        <span><kbd className="fr-kbd">Space</kbd> play</span>
+        <span><kbd className="fr-kbd">←</kbd><kbd className="fr-kbd">→</kbd> frame</span>
+        <span><kbd className="fr-kbd">J</kbd><kbd className="fr-kbd">L</kbd> ±5s</span>
+        <span><kbd className="fr-kbd">I</kbd> in · <kbd className="fr-kbd">O</kbd> out · <kbd className="fr-kbd">S</kbd> save clip</span>
+        <span><kbd className="fr-kbd">Q</kbd> last 10s</span>
+        <span><kbd className="fr-kbd">T</kbd> tag stat</span>
+        <span><kbd className="fr-kbd">F</kbd> fullscreen</span>
       </div>
     </div>
   )
 }
 
-// ─── Save Clip Modal ──────────────────────────────────────────────────────────
-
-function SaveClipModal({
-  gameId, teamId, startMs, endMs, players, drawingData, videoDurationMs,
-  onClose, onSave, existingClip,
-}: {
-  existingClip?: Clip
-  gameId: string
-  teamId: string
-  startMs: number
-  endMs: number
-  players: Player[]
-  drawingData?: DrawingData | null
-  videoDurationMs:number
-  onClose: () => void
-  onSave: (clip: Clip) => void
-}) {
-  const dialogRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    const surfaces = [...new Set([document.documentElement, document.body, document.fullscreenElement].filter(Boolean))] as HTMLElement[]
-    const styles = surfaces.map(el => ({el, overflow:el.style.overflow, overscroll:el.style.overscrollBehavior, background:el.style.backgroundColor}))
-    const body=document.body
-    const bodyStyle={position:body.style.position,top:body.style.top,left:body.style.left,width:body.style.width}
-    const scrollX=window.scrollX,scrollY=window.scrollY
-    surfaces.forEach(el => {el.style.overflow='hidden';el.style.overscrollBehavior='none';el.style.backgroundColor='#181917'})
-    // iPad can still pan the document with overflow:hidden alone.
-    Object.assign(body.style,{position:'fixed',top:`-${scrollY}px`,left:`-${scrollX}px`,width:'100%'})
-    let lastY=0
-    const touchStart=(e:TouchEvent)=>{if(e.touches.length===1)lastY=e.touches[0].clientY}
-    const touchMove=(e:TouchEvent)=>{
-      if(e.touches.length!==1)return // Preserve pinch zoom.
-      const y=e.touches[0].clientY,delta=y-lastY;lastY=y
-      const details=dialogRef.current?.querySelector('[aria-label="Clip details"]')
-      let el=e.target instanceof HTMLElement?e.target:null
-      // Allow an inner textarea or the details pane to consume the gesture.
-      while(el&&details?.contains(el)){
-        const overflow=getComputedStyle(el).overflowY
-        const max=el.scrollHeight-el.clientHeight
-        if(/auto|scroll/.test(overflow)&&max>1&&((delta>0&&el.scrollTop>0)||(delta<0&&el.scrollTop<max-1)))return
-        if(el===details)break
-        el=el.parentElement
-      }
-      if(e.cancelable)e.preventDefault()
-    }
-    document.addEventListener('touchstart',touchStart,{passive:true})
-    document.addEventListener('touchmove',touchMove,{passive:false})
-    dialogRef.current?.querySelector<HTMLInputElement>('[name="clip-title"]')?.focus({preventScroll:true})
-    return () => {
-      document.removeEventListener('touchstart',touchStart)
-      document.removeEventListener('touchmove',touchMove)
-      styles.forEach(({el,overflow,overscroll,background})=>{el.style.overflow=overflow;el.style.overscrollBehavior=overscroll;el.style.backgroundColor=background})
-      Object.assign(body.style,bodyStyle)
-      window.scrollTo({left:scrollX,top:scrollY,behavior:'instant'})
-      if (previous?.isConnected) previous.focus({preventScroll:true})
-    }
-  }, [])
-  const handleDialogKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    // Editing a clip must never reach the film's fullscreen/playback shortcuts.
-    e.stopPropagation()
-    if (e.key !== 'Tab') return
-    const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex="0"]'
-    ) ?? []).filter(el => el.getClientRects().length > 0)
-    const first = controls[0]
-    const last = controls[controls.length - 1]
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus() }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus() }
-  }
-  const [range,setRange]=useState({start:startMs/1000,end:endMs/1000})
-  const [form, setForm] = useState({
-    parent_shared: existingClip?.parent_shared ?? true,
-    title: existingClip?.title ?? '', category: existingClip?.category ?? 'offense' as ClipCategory,
-    tags: existingClip?.tags.join(', ') ?? '', is_highlight: existingClip?.is_highlight ?? false, player_ids: existingClip?.players?.map(p=>p.id) ?? [] as string[],
-    coaching_note: existingClip?.coaching_note ?? '', play_type: existingClip?.play_type ?? '',
-  })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if(!Number.isFinite(range.start)||!Number.isFinite(range.end)||range.start<0||range.end<=range.start||(videoDurationMs>0&&range.end*1000>videoDurationMs)){setError('Choose a valid start and end within the video.');return}
-    setLoading(true)
-    setError('')
-    try {
-      const res = await fetch(existingClip ? `/api/filmroom/clips/${existingClip.id}` : '/api/filmroom/clips', {
-        method: existingClip ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          game_id: gameId,
-          team_id: teamId,
-          start_time_ms: Math.round(range.start*1000),
-          end_time_ms: Math.round(range.end*1000),
-          title: form.title || `${msToTimecode(range.start*1000)} – ${msToTimecode(range.end*1000)}`,
-          tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
-          category: form.category,
-          is_highlight: form.is_highlight,
-          parent_shared: form.parent_shared,
-          player_ids: form.player_ids,
-          drawing_data: drawingData ?? null,
-          coaching_note: form.coaching_note.trim() || null,
-          play_type: form.play_type || null,
-        }),
-      })
-      if (!res.ok) throw new Error((await res.json()).error)
-      const clip = await res.json()
-      onSave(existingClip ? {...existingClip,...clip,players:existingClip.players} : clip)
-      onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const togglePlayer = (id: string) => {
-    setForm(f => ({
-      ...f,
-      player_ids: f.player_ids.includes(id)
-        ? f.player_ids.filter(p => p !== id)
-        : [...f.player_ids, id],
-    }))
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-3 sm:p-4 overflow-hidden overscroll-none" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={existingClip ? "Edit Clip" : "Save Clip"} onKeyDown={handleDialogKeyDown} className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex shrink-0 items-center justify-between p-4 border-b border-white/10">
-          <div>
-            <h2 className="text-sm font-semibold">{existingClip ? "Edit Clip" : "Save Clip"}</h2>
-            <p className="text-xs text-white/40 mt-0.5">{msToTimecode(range.start*1000)} → {msToTimecode(range.end*1000)} ({formatDuration(range.start*1000, range.end*1000)})</p>
-          </div>
-          <button aria-label="Close Save Clip" onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-white/60 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-col overflow-hidden">
-          <div aria-label="Clip details" className="filmroom-scroll-area min-h-0 overflow-y-auto overscroll-contain p-4 space-y-3" style={{touchAction:"pan-y"}}>
-          <div className="grid grid-cols-2 gap-3">{(['start','end'] as const).map(k=><label key={k} className="text-xs text-white/65">{k==='start'?'Clip start (seconds)':'Clip end (seconds)'}<input type="number" min={0} step="any" required value={range[k]} onChange={e=>setRange(r=>({...r,[k]:Number(e.target.value)}))} className="block w-full bg-black/30 border border-white/15 rounded-md p-2 mt-1 text-[#eee9df]"/></label>)}</div>
-          <div>
-            <label className="block text-xs text-white/50 mb-1">Clip Title</label>
-            <input name="clip-title" type="text" placeholder="e.g. Pick and roll coverage"
-              value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
-          </div>
-
-          <div>
-            <label className="block text-xs text-white/50 mb-1">Category</label>
-            <div className="grid grid-cols-2 gap-1.5">
-              {(Object.keys(CATEGORY_LABELS) as ClipCategory[]).map(cat => (
-                <button key={cat} type="button" onClick={() => setForm(f => ({ ...f, category: cat }))}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${form.category === cat ? CATEGORY_COLORS[cat] : 'border-white/8 text-white/40 hover:text-white/70'}`}>
-                  {CATEGORY_LABELS[cat]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs text-white/50 mb-1">Tags <span className="text-white/25">(comma-separated)</span></label>
-            <input type="text" placeholder="closeout, help-D, zone"
-              value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
-          </div>
-
-          {players.length > 0 && (
-            <div>
-              <label className="block text-xs text-white/50 mb-1">Tag Players</label>
-              <div className="flex flex-wrap gap-1.5">
-                {players.map(p => (
-                  <button key={p.id} type="button" disabled={!!existingClip} onClick={() => togglePlayer(p.id)}
-                    className={`px-2.5 py-1 rounded-xl text-xs transition-all border ${form.player_ids.includes(p.id) ? 'bg-[rgba(198,106,62,0.15)] text-[#eee9df] border-[rgba(198,106,62,0.35)]' : 'border-white/8 text-white/50 hover:text-white/80'}`}>
-                    #{p.number} {p.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Coaching note */}
-          <div>
-            <label className="block text-xs text-white/50 mb-1">Coaching note <span className="text-white/25">(optional)</span></label>
-            <textarea
-              value={form.coaching_note}
-              onChange={e => setForm(f => ({ ...f, coaching_note: e.target.value }))}
-              placeholder="What to watch for…"
-              rows={2}
-              maxLength={500}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20 resize-none"
-            />
-          </div>
-
-          {/* Play type */}
-          <div>
-            <label className="block text-xs text-white/50 mb-1">Play type</label>
-            <div className="flex flex-wrap gap-1.5">
-              {PLAY_TYPES.map(pt => (
-                <button key={pt} type="button"
-                  onClick={() => setForm(f => {const next=f.play_type===pt?'':pt;return{...f,play_type:next,tags:Array.from(new Set([...f.tags.split(',').map(t=>t.trim()).filter(t=>t&&t!==f.play_type),...(next?[next]:[])])).join(', ')}})}
-                  className={`px-2 py-1 rounded-lg text-xs transition-all border ${
-                    form.play_type === pt
-                      ? 'border-[rgba(198,106,62,0.5)] bg-[rgba(198,106,62,0.15)] text-[#c66a3e]'
-                      : 'border-white/8 text-white/40 hover:text-white/70'
-                  }`}>
-                  {pt}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <label className="flex items-start gap-3 rounded border border-[#c66a3e]/40 p-3 text-sm"><input type="checkbox" checked={!form.parent_shared} onChange={e=>setForm(f=>({...f,parent_shared:!e.target.checked}))} className="mt-1"/><span>Private — only me<span className="mt-1 block text-xs text-white/60">Clips are shared with parents who can watch this game unless marked private. Your coaching notes always stay private.</span></span></label>
-          <CustomClipTags selected={form.tags.split(',').map(t=>t.trim())} toggle={tag=>setForm(f=>{const tags=f.tags.split(',').map(t=>t.trim()).filter(Boolean);return {...f,tags:(tags.includes(tag)?tags.filter(t=>t!==tag):[...tags,tag]).join(', ')}})}/>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              className="sr-only"
-              checked={form.is_highlight}
-              onChange={e => setForm(f => ({ ...f, is_highlight: e.target.checked }))}
-              aria-label="Mark as highlight"
-            />
-            <span
-              aria-hidden
-              className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${form.is_highlight ? 'bg-yellow-500 border-yellow-500' : 'border-white/20'}`}>
-              {form.is_highlight && <Star className="w-2.5 h-2.5 text-black fill-black" aria-hidden />}
-            </span>
-            <span className="text-xs text-white/60">Mark as highlight</span>
-          </label>
-
-          </div>
-          <div className="shrink-0 border-t border-white/10 bg-[#1a1d23] p-4">
-          {error && <p role="alert" className="text-xs text-red-400 mb-3">{error}</p>}
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose}
-              className="flex-1 min-h-11 py-2 rounded-xl border border-white/10 text-xs text-white/60 hover:bg-white/5 transition-colors">
-              Cancel
-            </button>
-            <button type="submit" disabled={loading}
-              className="flex-1 min-h-11 py-2 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50" style={{background:"#c66a3e",color:"#181917"}}>
-              {loading && <Loader2 className="w-3 h-3 animate-spin" />}
-              {existingClip ? "Save Changes" : "Save Clip"}
-            </button>
-          </div>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
 
 // ─── Clip Comment Thread ──────────────────────────────────────────────────────
 
@@ -1864,37 +985,38 @@ function CommentThread({ clipId }: { clipId: string }) {
 
 // ─── Clip List Item ───────────────────────────────────────────────────────────
 
-function ClipItem({
+const ClipItem = React.memo(function ClipItem({
   clip, isActive, onSelect, onDelete, onJumpTo, onAddToPlaylist, onEdit,
 }: {
   clip: Clip
   isActive: boolean
-  onSelect: () => void
+  onSelect: (id: string) => void
   onEdit: (clip: Clip) => void
   onDelete: (id: string) => void
-  onJumpTo: (ms: number) => void
+  onJumpTo: (clip: Clip) => void
   onAddToPlaylist?: (clipId: string) => void
 }) {
   const [showComments, setShowComments] = useState(false)
 
   return (
-    <div className={`rounded-xl border transition-all ${isActive ? 'border-[rgba(198,106,62,0.40)] bg-[rgba(198,106,62,0.08)]' : 'border-white/6 bg-white/3 hover:bg-white/5'}`}>
-      <div className="p-3 cursor-pointer" onClick={onSelect}>
+    <div className="rounded-xl transition-colors" style={{ border: `1px solid ${isActive ? 'rgba(198,106,62,0.55)' : 'var(--fr-line)'}`, background: isActive ? 'rgba(198,106,62,0.08)' : 'var(--fr-tile2)' }}>
+      <div className="p-3 cursor-pointer" onClick={() => onSelect(clip.id)}>
         <div className="flex items-start gap-2">
           <button
-            onClick={(e) => { e.stopPropagation(); onJumpTo(clip.start_time_ms) }}
-            className="shrink-0 mt-0.5 w-6 h-6 rounded-lg bg-white/8 hover:bg-[rgba(198,106,62,0.25)] flex items-center justify-center transition-colors"
+            onClick={(e) => { e.stopPropagation(); onJumpTo(clip) }}
+            className="shrink-0 mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+            style={{ background: 'var(--fr-accent)', color: '#181917' }}
             aria-label={`Jump to clip: ${clip.title}`}>
-            <Play className="w-2.5 h-2.5 ml-0.5" aria-hidden />
+            <Play className="w-3 h-3 ml-0.5" aria-hidden />
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] text-[#e49269]">{clip.parent_shared===false?'Private · Only you':'Shared with parents'}</span>
               {clip.is_highlight && <Star className="w-3 h-3 text-yellow-400 fill-yellow-400 shrink-0" />}
-              <span className="text-xs font-medium text-white truncate">{clip.title}</span>
+              <span className="text-[13px] font-semibold truncate" style={{ color: 'var(--fr-ink)' }}>{clip.title}</span>
             </div>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <span className="text-[10px] text-white/40 font-mono">{msToTimecode(clip.start_time_ms)}</span>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className="fr-mono text-[11px]" style={{ color: 'var(--fr-ink3)' }}>{msToTimecode(clip.start_time_ms)} · {formatDuration(clip.start_time_ms, clip.end_time_ms)}</span>
+              <span className="text-[10px]" style={{ color: clip.parent_shared===false ? 'var(--fr-ink3)' : 'var(--fr-accent2)' }}>{clip.parent_shared===false?'Private':'Shared'}</span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-md border ${CATEGORY_COLORS[clip.category]}`}>
                 {CATEGORY_LABELS[clip.category]}
               </span>
@@ -1941,7 +1063,7 @@ function ClipItem({
       {showComments && <div className="px-3 pb-3"><CommentThread clipId={clip.id} /></div>}
     </div>
   )
-}
+})
 
 // ─── Video URL Modal ──────────────────────────────────────────────────────────
 
@@ -2133,7 +1255,7 @@ function BookmarkBar({
 
 const FRAME_MS = 33 // ~30fps
 
-type PanelTab = 'clips' | 'stats' | 'roster' | 'shot-chart'
+const PresentationModeLazy = dynamic(() => import('@/app/filmroom/components/PresentationMode').then(m => m.PresentationMode), { ssr: false })
 
 export default function GameFilmRoom() {
   const params = useParams()
@@ -2142,6 +1264,8 @@ export default function GameFilmRoom() {
 
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
+  // The black frame around the <video>; the Tag Stat card centres on it.
+  const videoFrameRef = useRef<HTMLDivElement>(null)
   // Initial seek: one-shot ref so token refreshes / retries don't re-seek
   const initialSeekDoneRef = useRef(false)
   const onDrawingChange=useCallback((data:DrawingData)=>setDrawingData({...data,time_ms:Math.round((videoRef.current?.currentTime??0)*1000)}),[])
@@ -2168,12 +1292,19 @@ export default function GameFilmRoom() {
   const [editingClip,setEditingClip]=useState<Clip|null>(null)
   const [showVideoUrl, setShowVideoUrl] = useState(false)
   const [activeClipId, setActiveClipId] = useState<string | null>(null)
-  const [panelTab, setPanelTab] = useState<PanelTab>('clips')
   const [uploadDone, setUploadDone] = useState(false)
   const [playbackQuality,setPlaybackQuality]=useState<PlaybackQuality>('original')
   const [isFullscreen, setIsFullscreen] = useState(false)
   const fullscreenRootRef = useRef<HTMLDivElement>(null)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
+  const [toast, setToast] = useState<ToastMessage | null>(null)
+  const toastSeq = useRef(0)
+  const showToast = useCallback((text: string, tone: 'ok' | 'warn' = 'ok') => {
+    toastSeq.current += 1
+    setToast({ id: toastSeq.current, text, tone })
+  }, [])
+  const clearToast = useCallback((id: number) => setToast(t => (t && t.id === id ? null : t)), [])
+
   const toggleFullscreen = useCallback(async () => {
     const root = fullscreenRootRef.current
     if (!root) return
@@ -2197,6 +1328,8 @@ export default function GameFilmRoom() {
 
   // Stat entry state
   const [showStatPanel, setShowStatPanel] = useState(false)
+  // Exact paused position captured when Tag stat opens (state lags the element by a timeupdate tick)
+  const [statAnchorMs, setStatAnchorMs] = useState(0)
   const [statDeleteError,setStatDeleteError]=useState<string|null>(null)
   const deletingStatIds=useRef<Set<string>>(new Set())
   const deletingClipId=useRef<string|null>(null)
@@ -2217,21 +1350,18 @@ export default function GameFilmRoom() {
 
   const [showPresentation, setShowPresentation] = useState(false)
   const [presentationClips, setPresentationClips] = useState<PresentationClip[]>([])
-  const [playlists, setPlaylists] = useState<Playlist[]>([])
   const [showAddToPlaylist, setShowAddToPlaylist] = useState<string | null>(null) // clipId
 
   // Section-level error states for retry without full page reload
   const [clipsError, setClipsError] = useState(false)
   const [playersError, setPlayersError] = useState(false)
   const [statsError, setStatsError] = useState(false)
-  const [sectionRetryKey, setSectionRetryKey] = useState(0)
 
   // Bookmarks (from game.review_meta — read on load, mutations queued to root API)
   type GameBookmark = NonNullable<NonNullable<Game['review_meta']>['bookmarks'][number]>
   const [bookmarks, setBookmarks] = useState<GameBookmark[]>([])
-  const [showBookmarkBar, setShowBookmarkBar] = useState(false)
 
-  // Undo/Redo stacks (lifted from StatEntryPanel so Redo can re-POST)
+  // Undo/Redo stacks (lifted from the stat modal so Redo can re-POST)
   const undoStack = useRef<StatEntry[]>([])
   const redoStack = useRef<StatEntry[]>([])
   const undoRedoInFlight = useRef(false) // prevents double-click races
@@ -2240,23 +1370,19 @@ export default function GameFilmRoom() {
   const [undoError, setUndoError] = useState<string | null>(null)
   const [redoError, setRedoError] = useState<string | null>(null)
 
-  // Authenticated user ID — loaded once on mount for per-user localStorage scoping
-  const [userId, setUserId] = useState('')
-
-  // Load authenticated user ID once on mount (for per-user localStorage key scoping)
-  useEffect(() => {
-    import('@/lib/filmroom-supabase-browser').then(({ getSupabaseBrowser }) => {
-      getSupabaseBrowser().auth.getUser().then(({ data }) => {
-        if (data?.user?.id) setUserId(data.user.id)
-      })
-    })
-  }, [])
-
   // Bookmark optimistic state — serialize mutations to avoid lost-update races
   const [bookmarkPending, setBookmarkPending] = useState(false)
   const [bookmarkError, setBookmarkError] = useState<string | null>(null)
   // Serialization ref: latest committed bookmark list from a successful PATCH
   const lastCommittedBookmarks = useRef<GameBookmark[]>([])
+
+  // Latest values for event handlers, so hotkeys don't re-subscribe 4× a second on timeupdate.
+  const latest = useRef({ currentMs, durationMs, markIn, markOut, modalOpen: false })
+  latest.current.currentMs = currentMs
+  latest.current.durationMs = durationMs
+  latest.current.markIn = markIn
+  latest.current.markOut = markOut
+  latest.current.modalOpen = showStatPanel || showSaveClip || !!editingClip || showVideoUrl || !!showAddToPlaylist || statsFullscreen || showPresentation
 
   // Load data
   useEffect(() => {
@@ -2331,7 +1457,7 @@ export default function GameFilmRoom() {
           setStatEntries(se.map((raw: RawStatEntry) => rawToEntry(raw)))
         }
         setLoading(false)
-      } catch (err) {
+      } catch {
         if (signal.aborted) return // normal cleanup, not an error
         setGameError('error')
         setLoading(false)
@@ -2342,11 +1468,22 @@ export default function GameFilmRoom() {
   }, [gameId, router, retryKey])
 
   // Video controls
+  const nowMs = useCallback(() => {
+    const v = videoRef.current
+    return v && Number.isFinite(v.currentTime) ? Math.round(v.currentTime * 1000) : latest.current.currentMs
+  }, [])
+
   const playPause = useCallback(() => {
     const v = videoRef.current
     if (!v) return
-    if (v.paused) { v.play(); setIsPlaying(true) }
+    if (v.paused) { void v.play().catch(() => {}); setIsPlaying(true) }
     else { v.pause(); setIsPlaying(false) }
+  }, [])
+
+  const pauseVideo = useCallback(() => {
+    const v = videoRef.current
+    if (v && !v.paused) v.pause()
+    setIsPlaying(false)
   }, [])
 
   const seek = useCallback((ms: number) => {
@@ -2361,16 +1498,17 @@ export default function GameFilmRoom() {
     if (!v) return
     v.currentTime = ms / 1000
     setCurrentMs(ms)
-    v.play()
+    void v.play().catch(() => {})
     setIsPlaying(true)
   }, [])
 
   const skip = useCallback((deltaMs: number) => {
     const v = videoRef.current
     if (!v) return
-    const ms = Math.max(0, Math.min(durationMs, currentMs + deltaMs))
+    const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration * 1000 : latest.current.durationMs
+    const ms = Math.max(0, Math.min(dur, nowMs() + deltaMs))
     seek(ms)
-  }, [currentMs, durationMs, seek])
+  }, [seek, nowMs])
 
   const frameStep = useCallback((dir: 1 | -1) => {
     const v = videoRef.current
@@ -2378,18 +1516,19 @@ export default function GameFilmRoom() {
     skip(dir * FRAME_MS)
   }, [skip])
 
-  // Stat panel: pause video when opening
+  // Stat modal: pause video when opening
   const openStatPanel = useCallback(() => {
     const v = videoRef.current
     resumeAfterDetails.current=!!v&&!v.paused
     if (v && !v.paused) { v.pause(); setIsPlaying(false) }
+    setStatAnchorMs(v && Number.isFinite(v.currentTime) ? Math.round(v.currentTime * 1000) : latest.current.currentMs)
     setShowStatPanel(true)
   }, [])
 
-  // Close stat panel: only resume if video was playing before panel opened
+  // Close stat modal: only resume if video was playing before it opened
   const closeStatPanel = useCallback(() => {
     setShowStatPanel(false)
-    if (resumeAfterDetails.current) void videoRef.current?.play().catch(()=>{})
+    if (resumeAfterDetails.current) { void videoRef.current?.play().catch(()=>{}); setIsPlaying(true) }
     resumeAfterDetails.current=false
   }, [])
 
@@ -2489,18 +1628,22 @@ export default function GameFilmRoom() {
   }, [])
 
   // Jump to clip
-  const jumpToClip = useCallback((startMs: number) => {
-    seek(startMs)
+  const jumpToClip = useCallback((clip: Clip) => {
+    seek(clip.start_time_ms)
+    setActiveClipId(clip.id)
     const v = videoRef.current
-    if (v && v.paused) { v.play(); setIsPlaying(true) }
+    if (v && v.paused) { void v.play().catch(() => {}); setIsPlaying(true) }
   }, [seek])
+  const toggleActiveClip = useCallback((id: string) => setActiveClipId(cur => cur === id ? null : id), [])
+  const beginEditClip = useCallback((clip: Clip) => { pauseVideo(); setEditingClip(clip) }, [pauseVideo])
+  const openAddToPlaylist = useCallback((clipId: string) => setShowAddToPlaylist(clipId), [])
 
   // Delete clip state for error display
   const [clipDeleteError, setClipDeleteError] = useState<string | null>(null)
 
   // Delete clip — only removes from local state if server confirms success.
   // Prevents accidental local row removal on network/HTTP failures.
-  const deleteClip = async (id: string) => {
+  const deleteClip = useCallback(async (id: string) => {
     if (deletingClipId.current === id) return // lock: prevent duplicate in-flight deletes
     if (!confirm('Delete this clip? This cannot be undone.')) return
     deletingClipId.current = id
@@ -2514,14 +1657,14 @@ export default function GameFilmRoom() {
       }
       // Only remove from local state after confirmed server delete
       setClips(c => c.filter(x => x.id !== id))
-      if (activeClipId === id) setActiveClipId(null)
+      setActiveClipId(cur => (cur === id ? null : cur))
       setClipDeleteError(null)
     } catch {
       setClipDeleteError('Network error — clip was not deleted. Check your connection and try again.')
     } finally {
       deletingClipId.current = null
     }
-  }
+  }, [])
 
   // Playback speed — applied to <video> element
   useEffect(() => {
@@ -2540,15 +1683,62 @@ export default function GameFilmRoom() {
     return ()=>video.removeEventListener('play',pause)
   },[showSaveClip,editingClip])
 
+  // ── Clip marks: I / O / Q / S. Setting a mark on the wrong side of the other one clears the other,
+  //    so the builder always shows a state you can act on. ──
+  const markInAt = useCallback(() => {
+    const t = nowMs()
+    const out = latest.current.markOut
+    setMarkIn(t)
+    if (out !== null && t > out - MIN_CLIP_MS) {
+      setMarkOut(null)
+      showToast(`In · ${msToTimecode(t)} — Out cleared, press O at the end`)
+    } else {
+      showToast(out === null ? `In · ${msToTimecode(t)} — now press O at the end` : `In · ${msToTimecode(t)} · ${formatDuration(t, out)} clip ready`)
+    }
+  }, [nowMs, showToast])
+
+  const markOutAt = useCallback(() => {
+    const t = nowMs()
+    const inn = latest.current.markIn
+    setMarkOut(t)
+    if (inn !== null && t < inn + MIN_CLIP_MS) {
+      setMarkIn(null)
+      showToast(`Out · ${msToTimecode(t)} — In cleared, press I at the start`)
+    } else {
+      showToast(inn === null ? `Out · ${msToTimecode(t)} — press I where the play starts` : `Out · ${msToTimecode(t)} · ${formatDuration(inn, t)} clip ready — S to save`)
+    }
+  }, [nowMs, showToast])
+
+  const clearMarks = useCallback(() => { setMarkIn(null); setMarkOut(null) }, [])
+
   // Instant clip: mark last 10s → now, clamped to 0
   const instantClip = useCallback(() => {
-    const outMs = Math.round((videoRef.current?.currentTime ?? currentMs/1000)*1000)
+    const outMs = nowMs()
     const inMs = Math.max(0, outMs - 10_000)
-    if (outMs - inMs < 500) return // too short
+    if (outMs - inMs < MIN_CLIP_MS) return // too short
     setMarkIn(inMs)
     setMarkOut(outMs)
-    videoRef.current?.pause();setIsPlaying(false);setShowSaveClip(true)
-  }, [currentMs])
+    pauseVideo()
+    setShowSaveClip(true)
+  }, [nowMs, pauseVideo])
+
+  // S: save what is marked. With only an In point, the playhead becomes the Out point.
+  const requestSaveClip = useCallback(() => {
+    const { markIn: inn, markOut: out } = latest.current
+    if (inn !== null && out !== null) {
+      if (out - inn >= MIN_CLIP_MS) { pauseVideo(); setShowSaveClip(true) }
+      else showToast('Clip is too short — move the Out point later', 'warn')
+      return
+    }
+    if (inn !== null && out === null) {
+      const t = nowMs()
+      if (t - inn >= MIN_CLIP_MS) { setMarkOut(t); pauseVideo(); setShowSaveClip(true); return }
+      showToast('Play a little further, then press S to end the clip here', 'warn')
+      return
+    }
+    if (inn === null && out !== null) { showToast('Press I where the play starts first', 'warn'); return }
+    showToast('Press I where the play starts, then S', 'warn')
+  }, [nowMs, pauseVideo, showToast])
 
   // Helper: persist current video position via PATCH keepalive.
   // Skips flush if the initial seek hasn't fired yet (avoids writing position=0
@@ -2590,13 +1780,15 @@ export default function GameFilmRoom() {
     }
   }, [game?.id, isPlaying, flushResumePosition])
 
-  // Flush on video pause event
+  // Flush on video pause event; keep isPlaying honest when the element pauses/plays on its own (ended, PiP, OS controls)
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
-    const onPause = () => flushResumePosition()
+    const onPause = () => { flushResumePosition(); setIsPlaying(false) }
+    const onPlay = () => setIsPlaying(true)
     v.addEventListener('pause', onPause)
-    return () => v.removeEventListener('pause', onPause)
+    v.addEventListener('play', onPlay)
+    return () => { v.removeEventListener('pause', onPause); v.removeEventListener('play', onPlay) }
   }, [flushResumePosition, game?.id, durationMs])
 
   // Initial seek: clip param > resume_position_ms > 0
@@ -2670,20 +1862,13 @@ export default function GameFilmRoom() {
     } catch { if(section==='clips')setClipsError(true);if(section==='players')setPlayersError(true);if(section==='stats')setStatsError(true) }
   }, [gameId, game?.team_id])
 
-  // Fetch playlists lazily when add-to-playlist is opened
-  const fetchPlaylists = useCallback(async () => {
-    if (playlists.length > 0) return
-    const res = await fetch('/api/filmroom/playlists')
-    if (res.ok) setPlaylists(await res.json())
-  }, [playlists.length])
-
   // Start presentation for all clips in the game
   const startPresentation = useCallback(async () => {
     if (clips.length === 0) return
-    videoRef.current?.pause();setIsPlaying(false)
+    pauseVideo()
     setPresentationClips(clips.map(clip => ({ clip, gameId, src:'' })))
     setShowPresentation(true)
-  }, [clips, gameId])
+  }, [clips, gameId, pauseVideo])
 
   // Bookmark persistence helper — serialized, checks HTTP success, no setState side effects
   const persistBookmarks = useCallback(async (next: GameBookmark[]) => {
@@ -2725,7 +1910,7 @@ export default function GameFilmRoom() {
     persistBookmarks(next)
   }, [bookmarkPending, bookmarks, persistBookmarks])
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — one stable listener; reads live values from `latest`.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Ignore when focus is in any interactive form element or a modal is open
@@ -2735,18 +1920,18 @@ export default function GameFilmRoom() {
       if (e.target instanceof HTMLSelectElement) return
       if (e.target instanceof HTMLAnchorElement) return
       if ((e.target as HTMLElement)?.closest('summary')) return
-      if (showStatPanel || showSaveClip || editingClip || showVideoUrl || showAddToPlaylist) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (latest.current.modalOpen) return
       switch (e.key) {
         case ' ': e.preventDefault(); playPause(); break
         case 'ArrowLeft': e.preventDefault(); frameStep(-1); break
         case 'ArrowRight': e.preventDefault(); frameStep(1); break
         case 'j': case 'J': skip(-5000); break
         case 'l': case 'L': skip(5000); break
-        case 'i': case 'I': setMarkIn(currentMs); break
-        case 'o': case 'O': setMarkOut(currentMs); break
-        case 's': case 'S':
-          if (markIn !== null && markOut !== null && markOut > markIn) setShowSaveClip(true)
-          break
+        case 'i': case 'I': markInAt(); break
+        case 'o': case 'O': markOutAt(); break
+        case 's': case 'S': requestSaveClip(); break
+        case 't': case 'T': if (videoRef.current) openStatPanel(); break
         case 'f': case 'F': void toggleFullscreen(); break
         case 'Escape': if (document.fullscreenElement) void document.exitFullscreen(); break
         // Instant clip: last 10s (Q key) — guard against input elements above
@@ -2758,17 +1943,25 @@ export default function GameFilmRoom() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [playPause, frameStep, skip, currentMs, markIn, markOut, showStatPanel, showSaveClip, editingClip, showVideoUrl, showAddToPlaylist, toggleFullscreen, instantClip])
+  }, [playPause, frameStep, skip, markInAt, markOutAt, requestSaveClip, openStatPanel, toggleFullscreen, instantClip])
+
+  // Derived lists — memoised so the 4Hz timeupdate re-render doesn't rebuild them.
+  const clipTags = useMemo(() => Array.from(new Set(clips.flatMap(c=>[...(c.tags??[]),...(c.play_type?[c.play_type]:[])]))).sort(), [clips])
+  const filteredClips = useMemo(() => clips.filter(c=>(!clipTag||(c.tags??[]).includes(clipTag)||c.play_type===clipTag)&&(!clipCategory||c.category===clipCategory)&&(!clipPlayer||c.primary_player_id===clipPlayer||c.players?.some(p=>p.id===clipPlayer))), [clips, clipTag, clipCategory, clipPlayer])
+  const highlights = useMemo(() => clips.filter(c => c.is_highlight), [clips])
+  const matchingStats = useMemo(() => statEntries.filter(s=>(!eventPlayer||(eventPlayer==='opponent'?!s.player_id||s.player_id===OPP_ID:s.player_id===eventPlayer))&&(!eventType||s.stat_type===eventType)), [statEntries, eventPlayer, eventType])
+  const matchingClips = useMemo(() => eventType||eventPlayer==='opponent'?[]:clips.filter(c=>!eventPlayer||c.primary_player_id===eventPlayer||c.players?.some(p=>p.id===eventPlayer)), [clips, eventType, eventPlayer])
+  const reviewEvents = useMemo(() => [...matchingStats.map(s=>({id:s.id,at:s.video_time_ms,clip:null as Clip|null})),...matchingClips.map(c=>({id:c.id,at:c.start_time_ms,clip:c}))].sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id)), [matchingStats, matchingClips])
 
   if (loading) return (
-    <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center">
+    <div className="cs min-h-screen flex items-center justify-center" style={{ background: 'var(--fr-bg)' }}>
       <Loader2 className="w-6 h-6 animate-spin text-white/30" />
     </div>
   )
 
   // 'unauthorized' variant removed — 401 redirects immediately in the effect
   if (gameError === 'not_found') return (
-    <div className="cs min-h-screen bg-[#181917] text-[#eee9df] flex flex-col items-center justify-center gap-4 text-center px-6">
+    <div className="cs min-h-screen text-[#eee9df] flex flex-col items-center justify-center gap-4 text-center px-6" style={{ background: 'var(--fr-bg)' }}>
       <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-1">
         <AlertCircle className="w-6 h-6 text-white/30" />
       </div>
@@ -2776,17 +1969,12 @@ export default function GameFilmRoom() {
         <p className="text-white/70 font-medium">Game unavailable</p>
         <p className="text-sm text-white/35 mt-1">This game doesn&apos;t exist or you don&apos;t have access to it.</p>
       </div>
-      <Link
-        href="/filmroom"
-        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/8 hover:bg-white/12 text-sm text-white/70 hover:text-white transition-colors border border-white/10"
-      >
-        <ChevronLeft className="w-4 h-4" /> Back to library
-      </Link>
+      <Link href="/filmroom" className="fr-btn"><ChevronLeft className="w-4 h-4" /> Back to library</Link>
     </div>
   )
 
   if (gameError === 'error') return (
-    <div className="cs min-h-screen bg-[#181917] text-[#eee9df] flex flex-col items-center justify-center gap-4 text-center px-6">
+    <div className="cs min-h-screen text-[#eee9df] flex flex-col items-center justify-center gap-4 text-center px-6" style={{ background: 'var(--fr-bg)' }}>
       <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-1">
         <AlertCircle className="w-6 h-6 text-red-400/60" />
       </div>
@@ -2795,107 +1983,109 @@ export default function GameFilmRoom() {
         <p className="text-sm text-white/35 mt-1">Failed to load game data. Check your connection and try again.</p>
       </div>
       <div className="flex items-center gap-2">
-        <Link
-          href="/filmroom"
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/8 hover:bg-white/12 text-sm text-white/70 hover:text-white transition-colors border border-white/10"
-        >
-          <ChevronLeft className="w-4 h-4" /> Back to library
-        </Link>
-        <button
-          onClick={() => { setGameError(null); setLoading(true); setRetryKey(k => k + 1) }}
-          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white transition-colors"
-        >
-          Retry
-        </button>
+        <Link href="/filmroom" className="fr-btn"><ChevronLeft className="w-4 h-4" /> Back to library</Link>
+        <button onClick={() => { setGameError(null); setLoading(true); setRetryKey(k => k + 1) }} className="fr-btn fr-btn-primary">Retry</button>
       </div>
     </div>
   )
 
   if (!game) return (
-    <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center text-white/40">
+    <div className="cs min-h-screen flex items-center justify-center text-white/40" style={{ background: 'var(--fr-bg)' }}>
       <Loader2 className="w-6 h-6 animate-spin text-white/30" />
     </div>
   )
 
-  const clipTags=Array.from(new Set(clips.flatMap(c=>[...(c.tags??[]),...(c.play_type?[c.play_type]:[])]))).sort()
-  const filteredClips=clips.filter(c=>(!clipTag||(c.tags??[]).includes(clipTag)||c.play_type===clipTag)&&(!clipCategory||c.category===clipCategory)&&(!clipPlayer||c.primary_player_id===clipPlayer||c.players?.some(p=>p.id===clipPlayer)))
-  const highlights = clips.filter(c => c.is_highlight)
-  const canSave = markIn !== null && markOut !== null && markOut > markIn
+  const canSave = markIn !== null && markOut !== null && markOut - markIn >= MIN_CLIP_MS
   const videoLoaded = !!game.video_url
-  const matchingStats=statEntries.filter(s=>(!eventPlayer||(eventPlayer==='opponent'?!s.player_id:s.player_id===eventPlayer))&&(!eventType||s.stat_type===eventType))
-  const matchingClips=eventType||eventPlayer==='opponent'?[]:clips.filter(c=>!eventPlayer||c.primary_player_id===eventPlayer||c.players?.some(p=>p.id===eventPlayer))
-  const reviewEvents=[...matchingStats.map(s=>({id:s.id,at:s.video_time_ms,clip:null as Clip|null})),...matchingClips.map(c=>({id:c.id,at:c.start_time_ms,clip:c}))].sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id))
   const cursor=reviewEvents.findIndex(e=>e.id===reviewEventId&&currentMs>=reviewMoment(e.at,eventLead)-1000&&currentMs<=e.at+8000)
   const previousEvent=cursor>=0?reviewEvents[cursor-1]:[...reviewEvents].reverse().find(e=>e.at<currentMs-500)
   const nextEvent=cursor>=0?reviewEvents[cursor+1]:reviewEvents.find(e=>e.at>currentMs+500)
   const reviewAt=(at:number,id?:string)=>{setReviewEventId(id??matchingStats.find(s=>s.video_time_ms===at)?.id??null);seekAndPlay(reviewMoment(at,eventLead))}
   const visibleEvents=matchingStats.filter(s=>currentMs>=s.video_time_ms&&currentMs<s.video_time_ms+3500)
+  const gameDate = new Date(game.game_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
+  const sectionError = (text: string, onRetry: () => void) => (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-xl mb-2" style={{ background: 'rgba(224,112,105,0.08)', border: '1px solid rgba(224,112,105,0.25)' }}>
+      <AlertCircle className="w-4 h-4 shrink-0" style={{ color: 'var(--fr-bad)' }} aria-hidden />
+      <span className="text-xs flex-1" style={{ color: '#f3b3ae' }}>{text}</span>
+      <button onClick={onRetry} className="text-xs font-semibold underline underline-offset-2" style={{ color: 'var(--fr-bad)' }}>Retry</button>
+    </div>
+  )
+  const dismissable = (text: string, onDismiss: () => void) => (
+    <div role="alert" className="flex items-center gap-2 px-3 py-2 rounded-xl mb-2" style={{ background: 'rgba(224,112,105,0.08)', border: '1px solid rgba(224,112,105,0.25)' }}>
+      <AlertCircle className="w-4 h-4 shrink-0" style={{ color: 'var(--fr-bad)' }} aria-hidden />
+      <span className="text-xs flex-1" style={{ color: '#f3b3ae' }}>{text}</span>
+      <button onClick={onDismiss} aria-label="Dismiss" className="text-xs font-semibold" style={{ color: 'var(--fr-bad)' }}>Dismiss</button>
+    </div>
+  )
 
   return (
-    <div ref={fullscreenRootRef} className="cs min-h-screen bg-[#181917] text-[#eee9df] flex flex-col">
+    <div ref={fullscreenRootRef} className="cs min-h-screen text-[#eee9df] flex flex-col" style={{ background: 'var(--fr-bg)' }}>
       {/* Presentation mode — full-screen overlay */}
       {showPresentation && presentationClips.length > 0 && (
-        <PresentationMode
+        <PresentationModeLazy
           clips={presentationClips}
           onExit={() => setShowPresentation(false)}
         />
       )}
+
       {/* Top bar */}
-      <header className="shrink-0 border-b border-white/8 bg-[#181917] sticky top-0 z-40">
-        <div className="px-3 sm:px-4 h-12 flex items-center gap-3">
-          <Link href="/filmroom" className="p-1.5 rounded-lg hover:bg-white/8 text-white/60 hover:text-white transition-all">
+      <header className="shrink-0 sticky top-0 z-40" style={{ background: 'rgba(20,20,18,0.92)', borderBottom: '1px solid var(--fr-line)', backdropFilter: 'none' }}>
+        <div className="px-3 sm:px-4 h-14 flex items-center gap-3">
+          <Link href="/filmroom" className="fr-icon-btn" aria-label="Back to library" style={{ borderColor: 'transparent' }}>
             <ChevronLeft className="w-4 h-4" />
           </Link>
-          <div className="flex items-center gap-1 text-sm min-w-0">
-            <span className="text-white/40 shrink-0">Film Room</span>
-            <span className="text-white/20 mx-1">/</span>
-            <EditableTitle
-              value={game.opponent}
-              onSave={async (val) => {
-                await fetch(`/api/filmroom/games/${gameId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ opponent: val }) })
-                setGame(g => g ? { ...g, opponent: val } : g)
-              }}
-            />
-            <span className="text-white/30 text-xs ml-2 shrink-0">
-              {new Date(game.game_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="hidden sm:inline text-[12px] font-semibold shrink-0" style={{ color: 'var(--fr-ink3)' }}>Film Room</span>
+            <span className="hidden sm:inline" style={{ color: 'var(--fr-line2)' }}>/</span>
+            <span className="fr-display text-[20px] leading-none truncate">
+              <EditableTitle
+                value={game.opponent}
+                onSave={async (val) => {
+                  await fetch(`/api/filmroom/games/${gameId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ opponent: val }) })
+                  setGame(g => g ? { ...g, opponent: val } : g)
+                }}
+              />
             </span>
+            <span className="text-[12px] shrink-0 ml-1" style={{ color: 'var(--fr-ink3)' }}>{gameDate}{game.session_type && game.session_type !== 'game' ? ` · ${game.session_type}` : ''}</span>
           </div>
           <div className="flex-1" />
-          {/* Video action — grouped with highlights to the left of account controls */}
           <div className="flex items-center gap-1.5 shrink-0">
+            <span className="hidden md:inline-flex fr-chip" title="Clips saved for this game">{clips.length} clip{clips.length === 1 ? '' : 's'}</span>
             {highlights.length > 0 && (
-              <span className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-xl bg-yellow-500/15 text-yellow-400 text-xs border border-yellow-500/25">
-                <Star className="w-3 h-3 fill-yellow-400" aria-hidden /> {highlights.length} HL
+              <span className="hidden md:inline-flex fr-chip" style={{ color: '#fde68a', borderColor: 'rgba(250,204,21,0.35)' }}>
+                <Star className="w-3 h-3 fill-current mr-1" aria-hidden /> {highlights.length}
               </span>
             )}
+            <span className="hidden md:inline-flex fr-chip" title="Stats tagged for this game">{statEntries.length} stat{statEntries.length === 1 ? '' : 's'}</span>
             {game.video_url ? (
               <button onClick={() => setGame(g => g ? { ...g, video_url: null, video_id: null } : g)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs text-white/50 hover:text-white hover:bg-white/6 transition-all border border-white/8 hover:border-white/15"
-                aria-label="Replace game video (upload new file)">
-                <Upload className="w-3 h-3" aria-hidden />
-                <span className="hidden sm:inline">Replace Video</span>
+                className="fr-btn fr-btn-ghost" aria-label="Replace game video (upload new file)">
+                <Upload className="w-3.5 h-3.5" aria-hidden />
+                <span className="hidden sm:inline">Replace video</span>
               </button>
             ) : (
-              <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs text-orange-400/80 border border-orange-500/20 bg-orange-500/5">
-                <Upload className="w-3 h-3" aria-hidden />
-                <span className="hidden sm:inline">Drop video below</span>
-              </span>
+              <span className="fr-chip fr-chip-accent"><Upload className="w-3 h-3 mr-1" aria-hidden /><span className="hidden sm:inline">Drop video below</span></span>
             )}
-            {/* Account controls inline — no fixed overlay collision */}
             <AccountBar />
           </div>
         </div>
       </header>
 
-      {/* Main layout */}
-      <div className="flex-1 flex flex-col lg:flex-row">
-        {/* Left: Video + transport */}
-        <div className={`flex-1 flex flex-col min-w-0 overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 bg-black' : ''}`}>
-          <div className={`flex flex-col h-full ${isFullscreen ? 'p-0' : 'p-3 sm:p-4'}`}>
-            {/* Upload zone — shown when no video + not mid-upload */}
-            {!game.video_url && !uploadDone && (
-              <div className="rounded-xl overflow-hidden border border-white/8 mb-0">
+      {/* ── Bento ── */}
+      <main className="fr-bento flex-1">
+
+        {/* Video tile */}
+        <section
+          aria-label="Game film"
+          className={isFullscreen
+            ? 'fixed inset-0 z-50 bg-black flex flex-col'
+            : 'fr-tile overflow-hidden col-span-12 lg:col-span-8 flex flex-col'}
+        >
+          {/* Upload zone — shown when no video + not mid-upload */}
+          {!game.video_url && !uploadDone && (
+            <div className="p-3">
+              <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--fr-line)' }}>
                 <VideoUploadZone
                   gameId={gameId}
                   onComplete={async (url, videoId) => {
@@ -2909,125 +2099,91 @@ export default function GameFilmRoom() {
                   }}
                 />
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Video player — shown when video_url is set */}
-            {game.video_url && (
-              <div className={`relative bg-black ${isFullscreen ? 'flex-1 min-h-0' : 'rounded-t-xl overflow-hidden border border-b-0 border-white/8'}`}>
-                <VideoPlayer
-                  gameId={gameId}
-                  sourceKey={game.video_url}
-                  quality={playbackQuality}
-                  onFallback={()=>setPlaybackQuality('original')}
-                  onTimeUpdate={setCurrentMs}
-                  onDurationChange={setDurationMs}
-                  playerRef={videoRef}
-                  isFullscreen={isFullscreen}
-                />
-                {eventLabels && !drawingActive && visibleEvents.length>0 && <div className="absolute top-3 left-3 z-30 max-w-[75%] pointer-events-none space-y-1" aria-label="Current film events">
-                  {visibleEvents.slice(0,3).map(e=><div key={e.id} className="rounded-md border border-white/15 bg-black/80 px-3 py-2 text-sm text-white shadow">{statDescription(e)}</div>)}
-                  {visibleEvents.length>3&&<div className="text-xs text-white bg-black/80 px-3 py-1">+{visibleEvents.length-3} more events</div>}
-              </div>}
-                <DrawingOverlay
-                  active={drawingActive}
-                  onDataChange={onDrawingChange}
-                  initialData={null}
-                />
-
-                {/* Tap-to-pause overlay — invisible div over video, doesn't block drawing */}
-                {!drawingActive && (
-                  <div
-                    className="absolute inset-0 z-10"
-                    style={{ touchAction: 'manipulation' }}
-                    onClick={playPause}
-                  />
-                )}
-
-                {/* Jog wheel — appears when paused */}
-                <div className="hidden sm:block"><JogWheel
-                  visible={!isPlaying && durationMs > 0}
-                  currentMs={currentMs}
-                  onScrub={(deltaMs) => {
-                    const v = videoRef.current
-                    if (!v || !v.duration) return
-                    // Clamp to valid range but allow unlimited rotation direction
-                    const next = Math.max(0, Math.min(v.duration, v.currentTime + deltaMs / 1000))
-                    v.currentTime = next
-                    setCurrentMs(Math.round(next * 1000))
-                  }}
-                  onTap={playPause}
-                /></div>
-
-                {/* Fullscreen toggle */}
-                <button
-                  onClick={() => void toggleFullscreen()}
-                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 hover:bg-black/80 text-white/70 hover:text-white transition-all z-20"
-                  title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen (F)'}
-                >
-                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                </button>
-              </div>
-            )}
-            {fullscreenError && <p role="alert" className="shrink-0 px-4 py-2 text-sm text-red-300">{fullscreenError}</p>}
-            {/* Transport — only active with video */}
-            {game.video_url && <TransportBar
-              isPlaying={isPlaying}
-              currentMs={currentMs}
-              durationMs={durationMs}
-              onPlayPause={playPause}
-              onSeek={seek}
-              onSkip={skip}
-              onFrameStep={frameStep}
-              markIn={markIn}
-              markOut={markOut}
-              isFullscreen={isFullscreen}
-              onStatTap={videoLoaded ? openStatPanel : undefined}
-              coachingTools={<div className="flex flex-wrap items-center gap-1">
-                {/* Draw */}
-                <button
-                  onClick={() => setDrawingActive(a => !a)}
-                  className={`flex items-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium transition-all border ${
-                    drawingActive
-                      ? 'bg-orange-500/15 border-orange-500/30 text-orange-300'
-                      : 'border-white/8 bg-white/3 text-white/40 hover:text-white hover:bg-white/6'
-                  }`}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  {drawingActive ? 'Drawing On' : 'Draw'}
-                </button>
-
-                {/* Speed control */}
-                <div className="flex items-center gap-1 px-2 py-1.5 rounded-xl border border-white/8 bg-white/3">
-                  <button onClick={() => setPlaybackSpeed(s => Math.max(0.25, parseFloat((s - 0.25).toFixed(2))))}
-                    className="text-white/40 hover:text-white text-xs px-1" aria-label="Decrease speed">−</button>
-                  <span className="text-xs text-white/60 w-8 text-center tabular-nums">{playbackSpeed}x</span>
-                  <button onClick={() => setPlaybackSpeed(s => Math.min(2, parseFloat((s + 0.25).toFixed(2))))}
-                    className="text-white/40 hover:text-white text-xs px-1" aria-label="Increase speed">+</button>
+          {game.video_url && (
+            <div ref={videoFrameRef} className={`relative bg-black ${isFullscreen ? 'flex-1 min-h-0' : ''}`}>
+              <VideoPlayer
+                gameId={gameId}
+                sourceKey={game.video_url}
+                quality={playbackQuality}
+                onFallback={()=>setPlaybackQuality('original')}
+                onTimeUpdate={setCurrentMs}
+                onDurationChange={setDurationMs}
+                playerRef={videoRef}
+                isFullscreen={isFullscreen}
+              />
+              {eventLabels && !drawingActive && visibleEvents.length>0 && (
+                <div className={`absolute left-3 z-30 max-w-[75%] pointer-events-none space-y-1 ${clipPhase(markIn, markOut) === 'empty' ? 'top-3' : 'top-12'}`} aria-label="Current film events">
+                  {visibleEvents.slice(0,3).map(e=><div key={e.id} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold" style={{ background: 'rgba(12,12,12,0.78)', border: '1px solid rgba(238,233,223,0.14)' }}>{statDescription(e)}</div>)}
+                  {visibleEvents.length>3&&<div className="text-xs px-3 py-1 rounded-lg" style={{ background: 'rgba(12,12,12,0.78)' }}>+{visibleEvents.length-3} more</div>}
                 </div>
+              )}
+              <DrawingOverlay active={drawingActive} onDataChange={onDrawingChange} initialData={null} />
 
-                  <ToolbarMenu label="Create clip">
-                  <p className="text-white/55">Mark the start and end, or grab the last 10 seconds.</p>
-                  <div className="flex gap-2">
-                    <button onClick={()=>setMarkIn(currentMs)} className="min-h-10 border border-white/20 rounded px-3">Mark in{markIn!==null?' · '+msToTimecode(markIn):''}</button>
-                    <button onClick={()=>setMarkOut(currentMs)} className="min-h-10 border border-white/20 rounded px-3">Mark out{markOut!==null?' · '+msToTimecode(markOut):''}</button>
-                  </div>
-                  <button onClick={instantClip} disabled={currentMs<500} className="min-h-10 w-full border border-white/20 rounded px-3 disabled:opacity-40">Last 10 seconds</button>
-                  <button disabled={!canSave} onClick={()=>setShowSaveClip(true)} className="min-h-10 w-full bg-[#c66a3e] text-[#181917] rounded px-3 disabled:opacity-40">Save clip</button>
-                <button onClick={() => setAddingBookmark(a => !a)} disabled={bookmarkPending}
-                  aria-label="Add bookmark at current position" title="Add bookmark at current position"
-                  className="flex items-center gap-1 px-2 py-2 text-xs text-yellow-400/80 rounded-lg hover:bg-white/6 disabled:opacity-40">
-                  <Bookmark className="w-3 h-3" /> Add bookmark
-                </button>
-                {isFullscreen && clips.length>0 && <details><summary className="cursor-pointer py-2">Edit saved clips</summary><div className="max-h-48 overflow-y-auto space-y-1">{clips.map(clip=><button key={clip.id} onClick={()=>setEditingClip(clip)} className="block w-full text-left rounded px-2 py-2 hover:bg-white/10" aria-label={`Edit saved clip: ${clip.title}`}>{clip.title}</button>)}</div></details>}
-                </ToolbarMenu>
-                <ToolbarMenu label="Playback settings" startOnSmall>
-                  <PlaybackQualityControl gameId={gameId} sourceKey={game.video_url||''} quality={playbackQuality} onChange={setPlaybackQuality}/>
-                  <p className="text-white/55">Original keeps your full upload quality. Auto adapts to your connection, up to 1080p.</p>
-                </ToolbarMenu>
-              </div>}
-            />}
-            {game.video_url && (
-              <div className="shrink-0 max-h-32 overflow-y-auto">
+              {/* Tap-to-pause overlay — invisible div over video, doesn't block drawing */}
+              {!drawingActive && (
+                <div className="absolute inset-0 z-10" style={{ touchAction: 'manipulation' }} onClick={playPause} />
+              )}
+
+              {/* Jog wheel — appears when paused */}
+              <div className="hidden sm:block"><JogWheel
+                visible={!isPlaying && durationMs > 0}
+                currentMs={currentMs}
+                onScrub={(deltaMs) => {
+                  const v = videoRef.current
+                  if (!v || !v.duration) return
+                  const next = Math.max(0, Math.min(v.duration, v.currentTime + deltaMs / 1000))
+                  v.currentTime = next
+                  setCurrentMs(Math.round(next * 1000))
+                }}
+                onTap={playPause}
+              /></div>
+
+              {!showSaveClip && <ClipHud markIn={markIn} markOut={markOut} />}
+              <ClipToast toast={toast} onDone={clearToast} />
+
+              {/* Fullscreen toggle */}
+              <button
+                onClick={() => void toggleFullscreen()}
+                className="absolute top-3 right-3 z-20 fr-icon-btn"
+                style={{ background: 'rgba(12,12,12,0.7)', borderColor: 'rgba(238,233,223,0.14)' }}
+                title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen (F)'}
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              >
+                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
+          {fullscreenError && <p role="alert" className="shrink-0 px-4 py-2 text-sm" style={{ color: 'var(--fr-bad)' }}>{fullscreenError}</p>}
+
+          {game.video_url && <TransportBar
+            isPlaying={isPlaying}
+            currentMs={currentMs}
+            durationMs={durationMs}
+            onPlayPause={playPause}
+            onSeek={seek}
+            onSkip={skip}
+            onFrameStep={frameStep}
+            markIn={markIn}
+            markOut={markOut}
+            isFullscreen={isFullscreen}
+            onStatTap={videoLoaded ? openStatPanel : undefined}
+            onMarkIn={markInAt}
+            onMarkOut={markOutAt}
+            onSaveClip={canSave ? requestSaveClip : undefined}
+            playbackSpeed={playbackSpeed}
+            onSpeed={setPlaybackSpeed}
+            drawingActive={drawingActive}
+            onToggleDrawing={() => setDrawingActive(a => !a)}
+            onToggleBookmark={() => setAddingBookmark(a => !a)}
+            bookmarkDisabled={bookmarkPending}
+            qualityControl={<PlaybackQualityControl gameId={gameId} sourceKey={game.video_url||''} quality={playbackQuality} onChange={setPlaybackQuality}/>}
+          />}
+
+          {game.video_url && (bookmarks.length > 0 || addingBookmark || bookmarkError) && (
+            <div className="shrink-0 max-h-32 overflow-y-auto px-3 pb-2">
               <BookmarkBar
                 adding={addingBookmark}
                 setAdding={setAddingBookmark}
@@ -3040,295 +2196,169 @@ export default function GameFilmRoom() {
                 onAdd={handleAddBookmark}
                 onDelete={handleDeleteBookmark}
               />
-              </div>
-            )}
-            {!isFullscreen&&<EventTimeline actions={<button aria-expanded={showEventSettings} onClick={()=>setShowEventSettings(v=>!v)} className="px-3 py-2 rounded-lg border border-white/15 text-white/80">Events</button>} settings={showEventSettings && <section aria-label="Event display settings" className="shrink-0 max-h-48 overflow-y-auto bg-[#20211e] border-t border-white/10 p-3 flex flex-wrap items-center gap-3 text-xs">
-                <button aria-label="Previous event" title="Previous matching event" disabled={!previousEvent} onClick={()=>previousEvent&&reviewAt(previousEvent.at,previousEvent.id)} className="px-2 py-2 text-xs disabled:opacity-30">‹ Event</button>
-                <button aria-label="Next event" title="Next matching event" disabled={!nextEvent} onClick={()=>nextEvent&&reviewAt(nextEvent.at,nextEvent.id)} className="px-2 py-2 text-xs disabled:opacity-30">Event ›</button>
+            </div>
+          )}
 
-              <label className="flex items-center gap-2 min-h-9"><input type="checkbox" checked={eventLabels} onChange={e=>setEventLabels(e.target.checked)}/>Show event labels on video</label>
-              <select aria-label="Filter events by player" value={eventPlayer} onChange={e=>{setEventPlayer(e.target.value);setReviewEventId(null)}} className="bg-[#181917] border border-white/20 rounded p-2"><option value="">All players</option><option value="opponent">Opponent</option>{players.map(p=><option key={p.id} value={p.id}>#{p.number} {p.name}</option>)}</select>
-              <select aria-label="Filter events by stat" value={eventType} onChange={e=>{setEventType(e.target.value);setReviewEventId(null)}} className="bg-[#181917] border border-white/20 rounded p-2"><option value="">All stats and clips</option>{Object.entries(STAT_NAMES).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
-              <label>Review lead-in <select aria-label="Review lead-in" value={eventLead} onChange={e=>setEventLead(Number(e.target.value))} className="ml-2 bg-[#181917] border border-white/20 rounded p-2">{[3,5,10].map(n=><option key={n} value={n}>{n} seconds</option>)}</select></label>
-              <span className="text-white/60">New stats save 2 seconds before the tagging position.</span>
-            </section>} clips={matchingClips} stats={matchingStats} durationMs={durationMs} currentMs={currentMs} selectedId={activeClipId} leadIn={eventLead} onSeek={at=>reviewAt(at)} onClip={c=>{setActiveClipId(c.id);reviewAt(c.start_time_ms,c.id)}}/>}
-            {/* Upload success banner — hidden in fullscreen */}
-            {!isFullscreen && uploadDone && (
-              <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <p className="text-xs text-emerald-300">Video uploaded and ready — use the controls above to start marking clips.</p>
-              </div>
-            )}
+          {/* Upload success banner — hidden in fullscreen */}
+          {!isFullscreen && uploadDone && (
+            <div className="mx-3 mb-3 flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: 'rgba(108,196,154,0.08)', border: '1px solid rgba(108,196,154,0.25)' }}>
+              <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: 'var(--fr-good)' }} />
+              <p className="text-xs" style={{ color: '#a9e3c6' }}>Video uploaded and ready — use the controls above to start marking clips.</p>
+            </div>
+          )}
 
-            {/* Save clip CTA — hidden in fullscreen (use keyboard shortcuts instead) */}
-            {canSave && (
-              <div className="mt-3 flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-500/10 border border-blue-500/25">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-300">Clip marked</p>
-                  <p className="text-xs text-blue-400/60">
-                    {msToTimecode(markIn!)} → {msToTimecode(markOut!)} ({formatDuration(markIn!, markOut!)})
-                  </p>
-                </div>
-                <button onClick={() => { setMarkIn(null); setMarkOut(null) }}
-                  className="px-3 py-1.5 rounded-lg text-xs text-white/40 hover:text-white/70 transition-colors">
-                  Clear
+          {!isFullscreen && game.video_url && (
+            <div className="px-3 pb-3">
+              <EventTimeline actions={<button aria-expanded={showEventSettings} onClick={()=>setShowEventSettings(v=>!v)} className="fr-btn" style={{ height: 32 }}>Events</button>} settings={showEventSettings && <section aria-label="Event display settings" className="shrink-0 max-h-48 overflow-y-auto rounded-xl p-3 mb-3 flex flex-wrap items-center gap-3 text-xs" style={{ background: 'var(--fr-tile2)', border: '1px solid var(--fr-line)' }}>
+                <button aria-label="Previous event" title="Previous matching event" disabled={!previousEvent} onClick={()=>previousEvent&&reviewAt(previousEvent.at,previousEvent.id)} className="fr-btn" style={{ height: 32 }}>‹ Event</button>
+                <button aria-label="Next event" title="Next matching event" disabled={!nextEvent} onClick={()=>nextEvent&&reviewAt(nextEvent.at,nextEvent.id)} className="fr-btn" style={{ height: 32 }}>Event ›</button>
+                <label className="flex items-center gap-2 min-h-9"><input type="checkbox" checked={eventLabels} onChange={e=>setEventLabels(e.target.checked)}/>Show event labels on video</label>
+                <select aria-label="Filter events by player" value={eventPlayer} onChange={e=>{setEventPlayer(e.target.value);setReviewEventId(null)}} className="fr-select" style={{ width: 'auto', minHeight: 32 }}><option value="">All players</option><option value="opponent">Opponent</option>{players.map(p=><option key={p.id} value={p.id}>#{p.number} {p.name}</option>)}</select>
+                <select aria-label="Filter events by stat" value={eventType} onChange={e=>{setEventType(e.target.value);setReviewEventId(null)}} className="fr-select" style={{ width: 'auto', minHeight: 32 }}><option value="">All stats and clips</option>{Object.entries(STAT_NAMES).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
+                <label className="flex items-center gap-2">Lead-in <select aria-label="Review lead-in" value={eventLead} onChange={e=>setEventLead(Number(e.target.value))} className="fr-select" style={{ width: 'auto', minHeight: 32 }}>{[3,5,10].map(n=><option key={n} value={n}>{n} seconds</option>)}</select></label>
+                <span style={{ color: 'var(--fr-ink3)' }}>New stats save 2 seconds before the tagging position.</span>
+              </section>} clips={matchingClips} stats={matchingStats} durationMs={durationMs} currentMs={currentMs} selectedId={activeClipId} leadIn={eventLead} onSeek={at=>reviewAt(at)} onClip={c=>{setActiveClipId(c.id);reviewAt(c.start_time_ms,c.id)}}/>
+            </div>
+          )}
+        </section>
+
+        {/* Right column: clip builder + clips */}
+        <div className="col-span-12 lg:col-span-4 flex flex-col gap-3 min-h-0">
+          <ClipBuilderTile
+            markIn={markIn}
+            markOut={markOut}
+            currentMs={currentMs}
+            onSetIn={markInAt}
+            onSetOut={markOutAt}
+            onLast10={instantClip}
+            onClear={clearMarks}
+            onSave={requestSaveClip}
+            onSeek={seek}
+          />
+
+          <section className="fr-tile flex flex-col flex-1 min-h-0" aria-label="Saved clips" style={{ minHeight: 280 }}>
+            <header className="fr-tile-head">
+              <h2 className="fr-tile-title"><Scissors className="w-3.5 h-3.5" aria-hidden /> Clips <span className="fr-mono" style={{ color: 'var(--fr-ink3)' }}>{filteredClips.length}{filteredClips.length !== clips.length ? ` / ${clips.length}` : ''}</span></h2>
+              {clips.length > 0 && (
+                <button onClick={startPresentation} className="fr-btn fr-btn-ghost" style={{ height: 30, fontSize: 12 }} title="Play all saved clips in presentation mode">
+                  <Maximize2 className="w-3.5 h-3.5" aria-hidden /> Present
                 </button>
-                <button onClick={() => setShowSaveClip(true)}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-medium transition-colors">
-                  <Scissors className="w-3.5 h-3.5" /> Save Clip <kbd className="font-mono opacity-60 ml-1">S</kbd>
-                </button>
-              </div>
-            )}
-
-
-          </div>
-        </div>
-
-        {/* Right: Clip panel */}
-        <div className="w-full lg:w-80 xl:w-96 shrink-0 border-t lg:border-t-0 lg:border-l border-white/8 flex flex-col">
-          {/* Panel tabs */}
-          <div className="shrink-0 border-b border-white/8 flex">
-            {([
-              ['clips', 'Clips', Bookmark],
-              ['stats', 'Stats', BarChart2],
-              ['shot-chart', 'Shots', ZoomIn],
-              ['roster', 'Roster', Users],
-            ] as const).map(([tab, label, Icon]) => (
-              <button key={tab} onClick={() => setPanelTab(tab)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium border-b-2 transition-all ${panelTab === tab ? 'border-[#c66a3e] text-[#eee9df]' : 'border-transparent text-white/50 hover:text-white/80'}`}>
-                <Icon className="w-3.5 h-3.5" /> {label}
-
-              </button>
-            ))}
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {/* CLIPS tab */}
-            {panelTab === 'clips' && (
-              <div className="p-3 space-y-2">
-                {clipsError && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20">
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
-                    <span className="text-xs text-red-300 flex-1">Failed to load clips.</span>
-                    <button onClick={() => retrySection('clips')}
-                      className="text-xs text-red-400 hover:text-red-300 font-medium underline underline-offset-2">Retry</button>
-                  </div>
-                )}
-                {clipDeleteError && (
-                  <div role="alert" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20">
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
-                    <span className="text-xs text-red-300 flex-1">{clipDeleteError}</span>
-                    <button onClick={() => setClipDeleteError(null)} aria-label="Dismiss" className="text-xs text-red-400 hover:text-red-300 font-medium">Dismiss</button>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <select aria-label="Filter clips by tag" value={clipTag} onChange={e=>setClipTag(e.target.value)} className="min-h-11 bg-[#252621] border border-white/10 rounded-md px-2 text-xs"><option value="">All tags</option>{clipTags.map(t=><option key={t}>{t}</option>)}</select>
-                  <select aria-label="Filter clips by category" value={clipCategory} onChange={e=>setClipCategory(e.target.value)} className="min-h-11 bg-[#252621] border border-white/10 rounded-md px-2 text-xs"><option value="">All categories</option>{Object.entries(CATEGORY_LABELS).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select>
-                  <select aria-label="Filter clips by player" value={clipPlayer} onChange={e=>setClipPlayer(e.target.value)} className="col-span-2 min-h-11 bg-[#252621] border border-white/10 rounded-md px-2 text-xs"><option value="">All players</option>{players.map(p=><option key={p.id} value={p.id}>#{p.number} {p.name}</option>)}</select>
+              )}
+            </header>
+            <div className="px-3 pb-3 flex flex-col gap-2 flex-1 min-h-0">
+              {clipsError && sectionError('Failed to load clips.', () => retrySection('clips'))}
+              {clipDeleteError && dismissable(clipDeleteError, () => setClipDeleteError(null))}
+              {clips.length > 0 && (
+                <div className="grid grid-cols-2 gap-1.5 shrink-0">
+                  <select aria-label="Filter clips by tag" value={clipTag} onChange={e=>setClipTag(e.target.value)} className="fr-select" style={{ minHeight: 34, fontSize: 12 }}><option value="">All tags</option>{clipTags.map(t=><option key={t}>{t}</option>)}</select>
+                  <select aria-label="Filter clips by category" value={clipCategory} onChange={e=>setClipCategory(e.target.value)} className="fr-select" style={{ minHeight: 34, fontSize: 12 }}><option value="">All categories</option>{Object.entries(CATEGORY_LABELS).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select>
+                  <select aria-label="Filter clips by player" value={clipPlayer} onChange={e=>setClipPlayer(e.target.value)} className="fr-select col-span-2" style={{ minHeight: 34, fontSize: 12 }}><option value="">All players</option>{players.map(p=><option key={p.id} value={p.id}>#{p.number} {p.name}</option>)}</select>
                 </div>
-                {!!clips.length&&!filteredClips.length&&<p className="py-4 text-sm text-white/65">No clips match these filters.</p>}
-                {/* Presentation mode */}
-                {clips.length > 0 && (
-                  <button
-                    onClick={startPresentation}
-                    className="flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-xl text-xs font-medium border border-white/8 bg-white/3 text-white/75 hover:text-white hover:bg-white/6 transition-all"
-                    title="Play all saved clips in presentation mode"
-                  >
-                    <Maximize2 className="w-3.5 h-3.5" />
-                    Present clips
-                  </button>
-                )}
-                {/* Filter chips */}
-                <div className="flex flex-wrap gap-1.5 pb-1">
-                  <span className="text-xs text-white/30">{clips.length} clip{clips.length !== 1 ? 's' : ''}</span>
-                  {highlights.length > 0 && (
-                    <span className="text-xs text-yellow-400/70 flex items-center gap-1 ml-auto">
-                      <Star className="w-2.5 h-2.5 fill-yellow-400" /> {highlights.length} HL
-                    </span>
-                  )}
-                </div>
-
+              )}
+              <div className="fr-scroll flex-1 min-h-0 overflow-y-auto space-y-2 lg:max-h-[640px]">
                 {clips.length === 0 ? (
-                  <div className="text-center py-10">
-                    <Scissors className="w-8 h-8 mx-auto text-white/15 mb-2" />
-                    <p className="text-xs text-white/30">No clips yet.</p>
-                    <p className="text-xs text-white/50 mt-1">
-                      Open <strong className="text-white/35">Create clip</strong>, mark in and out, then save.
-                      On desktop use <kbd className="font-mono bg-white/8 px-1 rounded text-[10px]">I</kbd> and <kbd className="font-mono bg-white/8 px-1 rounded text-[10px]">O</kbd> keys.
+                  <div className="text-center py-10 px-4">
+                    <Scissors className="w-7 h-7 mx-auto mb-2" style={{ color: 'var(--fr-ink3)' }} />
+                    <p className="text-sm font-semibold" style={{ color: 'var(--fr-ink2)' }}>No clips yet</p>
+                    <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--fr-ink3)' }}>
+                      Press <kbd className="fr-kbd">I</kbd> where a play starts and <kbd className="fr-kbd">O</kbd> where it ends, then <kbd className="fr-kbd">S</kbd> to save. The clip builder above shows every step.
                     </p>
                   </div>
+                ) : !filteredClips.length ? (
+                  <p className="py-6 text-center text-sm" style={{ color: 'var(--fr-ink3)' }}>No clips match these filters.</p>
                 ) : (
                   filteredClips.map(clip => (
                     <ClipItem
                       key={clip.id}
                       clip={clip}
                       isActive={activeClipId === clip.id}
-                      onSelect={() => setActiveClipId(id => id === clip.id ? null : clip.id)}
-                      onEdit={clip=>{videoRef.current?.pause();setIsPlaying(false);setEditingClip(clip)}}
+                      onSelect={toggleActiveClip}
+                      onEdit={beginEditClip}
                       onDelete={deleteClip}
-                      onJumpTo={(ms) => { jumpToClip(ms); setActiveClipId(clip.id) }}
-                      onAddToPlaylist={(clipId) => setShowAddToPlaylist(clipId)}
+                      onJumpTo={jumpToClip}
+                      onAddToPlaylist={openAddToPlaylist}
                     />
                   ))
                 )}
               </div>
-            )}
+            </div>
+          </section>
+        </div>
 
-            {/* STATS tab — read-only box score */}
-            {panelTab === 'stats' && (
-              <div className="p-3">
-                {statsError && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 mb-2">
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
-                    <span className="text-xs text-red-300 flex-1">Failed to load stats.</span>
-                    <button onClick={() => retrySection('stats')}
-                      className="text-xs text-red-400 hover:text-red-300 font-medium underline underline-offset-2">Retry</button>
-                  </div>
-                )}
-                {/* Desktop: box score renders full-width below video; sidebar shows a pointer */}
-                <div className="hidden lg:flex flex-col items-center justify-center py-8 gap-2 text-center">
-                  <BarChart2 className="w-7 h-7 text-white/15" />
-                  <p className="text-xs text-white/40">Box score is displayed below the video on this screen.</p>
-                  <button onClick={() => setStatsFullscreen(true)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/20 transition-all">
-                    <Maximize2 className="w-3 h-3" /> Full Screen
-                  </button>
-                </div>
-                {/* Phone: compact card view directly in the panel */}
-                <div className="lg:hidden">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-white/30 font-medium">Box Score</span>
-                    <button
-                      onClick={() => setStatsFullscreen(true)}
-                      style={{ touchAction: 'manipulation' }}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-white/40 hover:text-white border border-white/8 hover:border-white/20 transition-all"
-                    >
-                      <Maximize2 className="w-3 h-3" /> Full Screen
-                    </button>
-                  </div>
-                  {statDeleteError && (
-                    <div role="alert" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 mb-2">
-                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
-                      <span className="text-xs text-red-300 flex-1">{statDeleteError}</span>
-                      <button onClick={() => setStatDeleteError(null)} aria-label="Dismiss" className="text-xs text-red-400 hover:text-red-300 font-medium">Dismiss</button>
-                    </div>
-                  )}
-                  <BoxScorePanel
-                    players={players}
-                    statEntries={statEntries}
-                    onSeek={seekAndPlay}
-                    onDeleteEntry={handleDeleteEntry}
-                  />
-                </div>
-              </div>
-            )}
+        {/* Box score tile */}
+        <section className="fr-tile col-span-12 lg:col-span-8 flex flex-col min-h-0" aria-label="Box score">
+          <header className="fr-tile-head">
+            <h2 className="fr-tile-title"><BarChart2 className="w-3.5 h-3.5" aria-hidden /> Box score <span style={{ color: 'var(--fr-ink3)' }}>· vs {game.opponent}</span></h2>
+            <div className="flex items-center gap-1.5">
+              {sessionStatEntries.length > 0 && <span className="fr-chip fr-chip-good">+{sessionStatEntries.length} this session</span>}
+              {videoLoaded && (
+                <button onClick={openStatPanel} className="fr-btn fr-btn-primary" style={{ height: 30, fontSize: 12 }}>
+                  <BarChart className="w-3.5 h-3.5" aria-hidden /> Tag stat <kbd className="fr-kbd fr-kbd-dark">T</kbd>
+                </button>
+              )}
+              <button onClick={() => setStatsFullscreen(true)} className="fr-icon-btn" style={{ height: 30, width: 30 }} aria-label="Expand box score" title="Expand">
+                <Maximize2 className="w-3.5 h-3.5" aria-hidden />
+              </button>
+            </div>
+          </header>
+          <div className="px-3 pb-3 fr-scroll overflow-x-auto">
+            {statsError && sectionError('Failed to load stats.', () => retrySection('stats'))}
+            {statDeleteError && dismissable(statDeleteError, () => setStatDeleteError(null))}
+            <BoxScorePanel players={players} statEntries={statEntries} onSeek={seekAndPlay} onDeleteEntry={handleDeleteEntry} />
+          </div>
+        </section>
 
-            {/* Full-screen box score modal (phone / explicit expand) */}
-            {statsFullscreen && (
-              <div className="fixed inset-0 z-50 bg-[#0d0f12] flex flex-col">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
-                  <div>
-                    <p className="text-[11px] text-white/30 uppercase tracking-widest mb-0.5">Box Score</p>
-                    <p className="font-bold text-white text-lg">vs {game.opponent}</p>
-                  </div>
-                  <button
-                    onClick={() => setStatsFullscreen(false)}
-                    style={{ touchAction: 'manipulation' }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-white/60 hover:text-white border border-white/10 hover:border-white/25 transition-all"
-                  >
-                    <Minimize2 className="w-3.5 h-3.5" /> Close
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-5">
-                  {statDeleteError && (
-                    <div role="alert" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 mb-3">
-                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
-                      <span className="text-xs text-red-300 flex-1">{statDeleteError}</span>
-                      <button onClick={() => setStatDeleteError(null)} aria-label="Dismiss" className="text-xs text-red-400 hover:text-red-300 font-medium">Dismiss</button>
-                    </div>
-                  )}
-                  <BoxScorePanel
-                    players={players}
-                    statEntries={statEntries}
-                    onSeek={(ms) => { setStatsFullscreen(false); seekAndPlay(ms) }}
-                    onDeleteEntry={handleDeleteEntry}
-                  />
-                </div>
-              </div>
-            )}
+        {/* Shot chart + roster column */}
+        <div className="col-span-12 lg:col-span-4 flex flex-col gap-3 min-h-0">
+          <ShotChartPanel statEntries={statEntries} players={players} onSeek={seekAndPlay} />
+          <section className="fr-tile flex-1" aria-label="Roster">
+            <header className="fr-tile-head">
+              <h2 className="fr-tile-title"><Users className="w-3.5 h-3.5" aria-hidden /> Roster <span className="fr-mono" style={{ color: 'var(--fr-ink3)' }}>{activePlayers.length}</span></h2>
+            </header>
+            <div className="px-3 pb-3">
+              {playersError && sectionError('Failed to load roster.', () => retrySection('players'))}
+              <RosterPanel
+                players={activePlayers}
+                teamId={game.team_id}
+                onPlayerAdded={p => setPlayers(prev => [...prev, p])}
+                onPlayerArchived={id => setPlayers(prev => prev.map(p =>
+                  p.id === id ? { ...p, archived_at: new Date().toISOString() } : p
+                ))}
+                onPlayerRestored={p => setPlayers(prev => prev.map(x =>
+                  x.id === p.id ? { ...x, archived_at: null } : x
+                ))}
+              />
+            </div>
+          </section>
+        </div>
+      </main>
 
-            {/* SHOT CHART tab */}
-            {panelTab === 'shot-chart' && (
-              <ShotChartPanel statEntries={statEntries} players={players} onSeek={seekAndPlay} />
-            )}
-
-            {/* ROSTER tab */}
-            {panelTab === 'roster' && (
-              <div className="p-3">
-                {playersError && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 mb-2">
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
-                    <span className="text-xs text-red-300 flex-1">Failed to load roster.</span>
-                    <button onClick={() => retrySection('players')}
-                      className="text-xs text-red-400 hover:text-red-300 font-medium underline underline-offset-2">Retry</button>
-                  </div>
-                )}
-                <RosterPanel
-                  players={activePlayers}
-                  teamId={game.team_id}
-                  onPlayerAdded={p => setPlayers(prev => [...prev, p])}
-                  onPlayerArchived={id => setPlayers(prev => prev.map(p =>
-                    p.id === id ? { ...p, archived_at: new Date().toISOString() } : p
-                  ))}
-                  onPlayerRestored={p => setPlayers(prev => prev.map(x =>
-                    x.id === p.id ? { ...x, archived_at: null } : x
-                  ))}
-                />
-              </div>
-            )}
+      {/* Full-screen box score (phone / explicit expand) */}
+      {statsFullscreen && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--fr-bg)' }}>
+          <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--fr-line)' }}>
+            <div>
+              <p className="text-[11px] font-semibold mb-0.5" style={{ color: 'var(--fr-ink3)' }}>Box score</p>
+              <p className="fr-display text-[24px] leading-none">vs {game.opponent}</p>
+            </div>
+            <button onClick={() => setStatsFullscreen(false)} className="fr-btn" style={{ touchAction: 'manipulation' }}>
+              <Minimize2 className="w-3.5 h-3.5" /> Close
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto p-5 fr-scroll">
+            {statDeleteError && dismissable(statDeleteError, () => setStatDeleteError(null))}
+            <BoxScorePanel players={players} statEntries={statEntries} onSeek={(ms) => { setStatsFullscreen(false); seekAndPlay(ms) }} onDeleteEntry={handleDeleteEntry} />
           </div>
         </div>
-      </div>
-
-            {/* Desktop full-width stats panel — appears below video when Stats tab active */}
-            {panelTab === 'stats' && !statsFullscreen && (
-              <div className="hidden lg:block mx-4 mb-4 mt-3 rounded-xl border border-white/8 bg-[#20211e] p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-white/50 uppercase tracking-wider">Box Score — vs {game.opponent}</p>
-                  {statsError && (
-                    <button onClick={() => retrySection('stats')} className="text-xs text-red-400 underline underline-offset-2">Retry</button>
-                  )}
-                  <button
-                    onClick={() => setStatsFullscreen(true)}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-white/40 hover:text-white border border-white/8 hover:border-white/20 transition-all"
-                  >
-                    <Maximize2 className="w-3 h-3" /> Expand
-                  </button>
-                </div>
-                {statDeleteError && (
-                  <div role="alert" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 mb-3">
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden />
-                    <span className="text-xs text-red-300 flex-1">{statDeleteError}</span>
-                    <button onClick={() => setStatDeleteError(null)} aria-label="Dismiss" className="text-xs text-red-400 hover:text-red-300 font-medium">Dismiss</button>
-                  </div>
-                )}
-                <BoxScorePanel
-                  players={players}
-                  statEntries={statEntries}
-                  onSeek={seekAndPlay}
-                  onDeleteEntry={handleDeleteEntry}
-                />
-              </div>
-            )}
-
+      )}
 
       {/* Modals stay descendants of the same fullscreen root. */}
-      {editingClip && <SaveClipModal existingClip={editingClip} gameId={gameId} teamId={game.team_id}
+      {editingClip && <SaveClipDialog existingClip={editingClip} gameId={gameId} teamId={game.team_id}
         startMs={editingClip.start_time_ms} endMs={editingClip.end_time_ms} players={players}
         drawingData={editingClip.drawing_data} videoDurationMs={durationMs}
-        onClose={()=>setEditingClip(null)} onSave={updated=>setClips(cs=>cs.map(c=>c.id===updated.id?updated:c))}/>}
+        onClose={()=>setEditingClip(null)} onSave={updated=>{setClips(cs=>cs.map(c=>c.id===updated.id?updated:c)); showToast(`Clip updated · ${updated.title}`)}}/>}
       {showSaveClip && markIn !== null && markOut !== null && (
-        <SaveClipModal
+        <SaveClipDialog
           gameId={gameId}
           teamId={game.team_id}
           startMs={markIn}
@@ -3343,6 +2373,8 @@ export default function GameFilmRoom() {
             setMarkOut(null)
             setDrawingActive(false)
             setDrawingData(null)
+            setActiveClipId(clip.id)
+            showToast(`Clip saved · ${clip.title}`)
           }}
         />
       )}
@@ -3356,14 +2388,13 @@ export default function GameFilmRoom() {
         />
       )}
 
-      {/* Stat Entry Panel */}
+      {/* Tag Stat modal — centred on the video frame, fixed size while open */}
       {showStatPanel && (
-        <StatEntryPanel
+        <StatTagModal
           gameId={gameId}
           players={activePlayers}
-          currentMs={currentMs}
+          currentMs={statAnchorMs}
           sessionEntries={sessionStatEntries}
-          userId={userId}
           onLog={handleLogEntry}
           onUndo={handleUndo}
           onRedo={handleRedo}
@@ -3374,6 +2405,7 @@ export default function GameFilmRoom() {
           undoError={undoError}
           redoError={redoError}
           onClose={closeStatPanel}
+          anchorRef={videoFrameRef}
         />
       )}
 
@@ -3389,13 +2421,14 @@ export default function GameFilmRoom() {
 }
 
 // ─── Shot Chart Panel ───────────────────────────────────────────────────────
-// Manual shot chart: court SVG + normalized [0,1] coordinates from stat_entries.
-// Clicking a made/miss dot seeks the video to that moment.
-// No automatic tracking claims — coaches place shots during stat entry.
+// Manual shot chart: court drawn to scale + normalized [0,1] coordinates from stat_entries.
+// Clicking a made/miss marker seeks the video to that moment. Coaches place shots while tagging;
+// nothing here is tracked automatically.
 
-const SHOT_TYPES = new Set(['2M','3M','FTM','2X','3X','FTX'])
+const ZONE_ORDER: ZoneFamily[] = ['rim', 'paint', 'mid', 'three']
+const ZONE_LABEL: Record<ZoneFamily, string> = { rim: 'Rim', paint: 'Paint', mid: 'Mid-range', three: '3PT' }
 
-function ShotChartPanel({
+const ShotChartPanel = React.memo(function ShotChartPanel({
   statEntries, players, onSeek,
 }: {
   statEntries: StatEntry[]
@@ -3404,79 +2437,74 @@ function ShotChartPanel({
 }) {
   const [playerFilter, setPlayerFilter] = useState<string>('all')
 
-  const shotEntries = statEntries.filter(
-    e => SHOT_TYPES.has(e.stat_type) &&
-    typeof (e as StatEntry & { shot_x?: number }).shot_x === 'number'
-  ) as (StatEntry & { shot_x: number; shot_y: number })[]
+  const shotEntries = useMemo(() => statEntries.filter(
+    (e): e is StatEntry & { shot_x: number; shot_y: number } =>
+      LOCATED_SHOT_TYPES.has(e.stat_type) && typeof e.shot_x === 'number' && typeof e.shot_y === 'number'
+  ), [statEntries])
 
-  const filtered = playerFilter === 'all'
-    ? shotEntries
-    : shotEntries.filter(e => e.player_id === playerFilter)
+  const filtered = useMemo(() => playerFilter === 'all' ? shotEntries : shotEntries.filter(e => e.player_id === playerFilter), [shotEntries, playerFilter])
 
-  const made  = filtered.filter(e => e.stat_type.endsWith('M'))
-  const missed = filtered.filter(e => e.stat_type.endsWith('X'))
+  const markers: CourtMarker[] = useMemo(() => filtered.map(e => ({
+    id: e.id, x: e.shot_x, y: e.shot_y, made: e.stat_type.endsWith('M'),
+    title: `${entryWho(e)} · ${statLabel(e.stat_type)} · ${shotZone({ x: e.shot_x, y: e.shot_y }).label} · ${msToDisplay(e.video_time_ms)} — click to watch`,
+    onClick: () => onSeek(e.video_time_ms),
+  })), [filtered, onSeek])
 
-  if (shotEntries.length === 0) return (
-    <div className="p-4 text-center py-10">
-      <ZoomIn className="w-7 h-7 mx-auto mb-2 text-white/15" />
-      <p className="text-xs text-white/30">No shot locations yet.</p>
-      <p className="text-xs text-white/50 mt-1">Set shot coordinates when tagging shots in the stat panel.</p>
-    </div>
-  )
+  const zones = useMemo(() => {
+    const acc: Record<ZoneFamily, { made: number; att: number }> = { rim: { made: 0, att: 0 }, paint: { made: 0, att: 0 }, mid: { made: 0, att: 0 }, three: { made: 0, att: 0 } }
+    for (const e of filtered) {
+      const z = shotZone({ x: e.shot_x, y: e.shot_y }).family
+      acc[z].att += 1
+      if (e.stat_type.endsWith('M')) acc[z].made += 1
+    }
+    return acc
+  }, [filtered])
 
-  // Half-court SVG viewBox 0 0 50 47 (standard NCAA half-court proportions)
+  const made = filtered.filter(e => e.stat_type.endsWith('M')).length
+  const att = filtered.length
+  const shooters = useMemo(() => players.filter(p => shotEntries.some(e => e.player_id === p.id)), [players, shotEntries])
+
   return (
-    <div className="p-3 space-y-3">
-      {players.length > 1 && (
-        <select value={playerFilter} onChange={e => setPlayerFilter(e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg text-xs border outline-none bg-black/20 border-white/10 text-white/70">
-          <option value="all">All players</option>
-          {players.map(p => <option key={p.id} value={p.id}>#{p.number} {p.name}</option>)}
-        </select>
-      )}
-      <svg viewBox="0 0 50 47" className="w-full rounded-lg" style={{ background: '#1a1d23', border: '1px solid rgba(255,255,255,0.08)' }}>
-        {/* Half-court outline */}
-        <rect x="1" y="1" width="48" height="45" rx="1" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
-        {/* Lane */}
-        <rect x="16" y="1" width="18" height="19" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
-        {/* Free-throw circle */}
-        <circle cx="25" cy="20" r="6" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
-        {/* Three-point arc (simplified) */}
-        <path d="M 4 1 Q 4 35 25 38 Q 46 35 46 1" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
-        {/* Basket */}
-        <circle cx="25" cy="5" r="1.2" fill="none" stroke="rgba(255,255,255,0.40)" strokeWidth="0.5" />
-
-        {/* Made shots — orange circles */}
-        {made.map(e => (
-          <circle key={e.id}
-            cx={1 + e.shot_x * 48} cy={1 + e.shot_y * 45}
-            r="1.2" fill="#c66a3e" fillOpacity="0.85" stroke="#e07a4a" strokeWidth="0.3"
-            style={{ cursor: 'pointer' }}
-            onClick={() => onSeek(e.video_time_ms)}
-            role="button" aria-label={`${e.stat_type} at ${Math.round(e.video_time_ms/1000)}s — click to seek`}
-          />
-        ))}
-        {/* Missed shots — white X marks */}
-        {missed.map(e => {
-          const cx = 1 + e.shot_x * 48
-          const cy = 1 + e.shot_y * 45
-          return (
-            <g key={e.id} style={{ cursor: 'pointer' }} onClick={() => onSeek(e.video_time_ms)}
-              role="button" aria-label={`${e.stat_type} miss at ${Math.round(e.video_time_ms/1000)}s — click to seek`}>
-              <line x1={cx-1} y1={cy-1} x2={cx+1} y2={cy+1} stroke="rgba(255,255,255,0.55)" strokeWidth="0.6" strokeLinecap="round" />
-              <line x1={cx+1} y1={cy-1} x2={cx-1} y2={cy+1} stroke="rgba(255,255,255,0.55)" strokeWidth="0.6" strokeLinecap="round" />
-            </g>
-          )
-        })}
-      </svg>
-      <div className="flex items-center gap-4 text-[10px] text-white/40">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{background:'#c66a3e'}} /> Made ({made.length})</span>
-        <span className="flex items-center gap-1">× Miss ({missed.length})</span>
-        <span className="ml-auto">Tap to seek</span>
+    <section className="fr-tile" aria-label="Shot chart">
+      <header className="fr-tile-head">
+        <h2 className="fr-tile-title"><ZoomIn className="w-3.5 h-3.5" aria-hidden /> Shot chart
+          {att > 0 && <span className="fr-mono" style={{ color: 'var(--fr-ink3)' }}>{made}/{att} · {Math.round(made / att * 100)}%</span>}
+        </h2>
+        {shooters.length > 0 && (
+          <select value={playerFilter} onChange={e => setPlayerFilter(e.target.value)} aria-label="Filter shots by player" className="fr-select" style={{ width: 'auto', minHeight: 30, padding: '4px 28px 4px 10px', fontSize: 12 }}>
+            <option value="all">Everyone</option>
+            {shooters.map(p => <option key={p.id} value={p.id}>#{p.number} {p.name.split(' ')[0]}</option>)}
+          </select>
+        )}
+      </header>
+      <div className="px-3 pb-3 space-y-2.5">
+        <Court markers={markers} ariaLabel={att ? `Shot chart with ${att} shots` : 'Shot chart'} caption={att === 0 ? 'Shots you tag land here' : null} />
+        {att === 0 ? (
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--fr-ink3)' }}>Tag a made or missed field goal and tap where it was taken. Free throws are tracked in the box score, not on the court.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-4 gap-1.5">
+              {ZONE_ORDER.map(z => {
+                const { made: m, att: a } = zones[z]
+                return (
+                  <div key={z} className="fr-cell px-2 py-1.5 text-center">
+                    <div className="text-[10.5px] font-semibold" style={{ color: 'var(--fr-ink3)' }}>{ZONE_LABEL[z]}</div>
+                    <div className="fr-display text-[17px] leading-none mt-0.5 tabular-nums" style={{ color: a ? 'var(--fr-ink)' : 'var(--fr-ink3)' }}>{a ? `${m}/${a}` : '–'}</div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex items-center gap-4 text-[11px]" style={{ color: 'var(--fr-ink3)' }}>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#d9774a', boxShadow: '0 0 0 1px rgba(238,233,223,0.9)' }} /> Made</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ border: '1.5px solid rgba(238,233,223,0.85)' }} /> Missed</span>
+              <span className="ml-auto">Tap a shot to watch it</span>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </section>
   )
-}
+})
 
 // ─── Add to Playlist Modal ────────────────────────────────────────────────────
 function AddToPlaylistModal({ clipId, onClose }: { clipId: string; onClose: () => void }) {
@@ -3577,7 +2605,7 @@ function AddToPlaylistModal({ clipId, onClose }: { clipId: string; onClose: () =
 // remain valid. A Restore button reinstates archived players to the active
 // roster without losing any history.
 
-function RosterPanel({ players, teamId, onPlayerAdded, onPlayerArchived, onPlayerRestored }: {
+const RosterPanel = React.memo(function RosterPanel({ players, teamId, onPlayerAdded, onPlayerArchived, onPlayerRestored }: {
   players: Player[] // active players only
   teamId: string
   onPlayerAdded: (p: Player) => void
@@ -3816,4 +2844,4 @@ function RosterPanel({ players, teamId, onPlayerAdded, onPlayerArchived, onPlaye
       )}
     </div>
   )
-}
+})
