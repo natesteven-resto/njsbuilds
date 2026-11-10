@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { FilmRoomPageBoundary } from './components/FilmRoomPageBoundary'
 import { Barlow_Condensed } from 'next/font/google'
+import './filmroom.css'
 
 export const metadata: Metadata = {
   title: 'Film Room — Basketball Film Study',
