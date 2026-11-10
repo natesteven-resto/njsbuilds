@@ -1968,7 +1968,7 @@ export default function GameFilmRoom() {
       fg: fga ? `${fgm}/${fga}` : '–', fgPct: pct(fgm, fga),
       tp: tpa ? `${tpm}/${tpa}` : '–', tpPct: pct(tpm, tpa),
       ft: fta ? `${ftm}/${fta}` : '–', ftPct: pct(ftm, fta),
-      reb: n('OREB') + n('DREB'), ast: n('AST'), to: n('TO'), stl: n('STL') + n('BLK'),
+      reb: n('OREB') + n('DREB'), ast: n('AST'), to: n('TO'),
     }
   }, [statEntries])
 
@@ -2324,7 +2324,7 @@ export default function GameFilmRoom() {
             {statsError && sectionError('Failed to load stats.', () => retrySection('stats'))}
             {statDeleteError && dismissable(statDeleteError, () => setStatDeleteError(null))}
             {statEntries.length > 0 && (
-              <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(84px, 1fr))' }} aria-label="Team totals">
+              <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(72px, 1fr))' }} aria-label="Team totals">
                 <div className="fr-cell px-3 py-2 col-span-2" style={{ borderColor: 'rgba(198,106,62,0.35)' }}>
                   <div className="text-[10.5px] font-semibold" style={{ color: 'var(--fr-ink3)' }}>SCORE · TAGGED</div>
                   <div className="fr-display leading-none mt-1 tabular-nums" style={{ fontSize: 30 }}>
@@ -2335,7 +2335,7 @@ export default function GameFilmRoom() {
                 </div>
                 {[
                   ['FG', teamSummary.fg, teamSummary.fgPct], ['3PT', teamSummary.tp, teamSummary.tpPct], ['FT', teamSummary.ft, teamSummary.ftPct],
-                  ['REB', String(teamSummary.reb), ''], ['AST', String(teamSummary.ast), ''], ['TO', String(teamSummary.to), ''], ['STL+BLK', String(teamSummary.stl), ''],
+                  ['REB', String(teamSummary.reb), ''], ['AST', String(teamSummary.ast), ''], ['TO', String(teamSummary.to), ''],
                 ].map(([label, value, sub]) => (
                   <div key={label} className="fr-cell px-3 py-2">
                     <div className="text-[10.5px] font-semibold" style={{ color: 'var(--fr-ink3)' }}>{label}</div>
@@ -2792,7 +2792,7 @@ const RosterPanel = React.memo(function RosterPanel({ players, teamId, onPlayerA
           {archiveError}
         </div>
       )}
-      <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+      <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(184px, 1fr))' }}>
         {players.map(p => (
           <div key={p.id} className="fr-cell flex items-center gap-2.5 pl-3 pr-1.5 py-2 group">
             <span className="fr-display text-[22px] leading-none tabular-nums w-8 shrink-0" style={{ color: 'var(--fr-accent2)' }}>{p.number ?? '?'}</span>
