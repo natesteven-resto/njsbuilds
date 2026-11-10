@@ -27,7 +27,7 @@ import { SaveClipDialog } from '@/app/filmroom/components/SaveClipDialog'
 import { ClipBuilderTile, ClipHud, ClipToast, clipPhase, MIN_CLIP_MS, type ToastMessage } from '@/app/filmroom/components/ClipBuilder'
 import { Court, shotZone, type CourtMarker, type ZoneFamily } from '@/app/filmroom/components/Court'
 import { msToTimecode, msToDisplay, formatDuration } from '@/lib/filmroom-time'
-import { STAT_DEFS, OPP_ID, LOCATED_SHOT_TYPES, rawToEntry, statLabel, entryWho, type StatEntry, type RawStatEntry, type StatType } from '@/lib/filmroom-stats'
+import { STAT_DEFS, OPP_ID, LOCATED_SHOT_TYPES, rawToEntry, statLabel, entryWho, isOpponentEntry, entryPoints, type StatEntry, type RawStatEntry, type StatType } from '@/lib/filmroom-stats'
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -1954,6 +1954,23 @@ export default function GameFilmRoom() {
   const matchingStats = useMemo(() => statEntries.filter(s=>(!eventPlayer||(eventPlayer==='opponent'?!s.player_id||s.player_id===OPP_ID:s.player_id===eventPlayer))&&(!eventType||s.stat_type===eventType)), [statEntries, eventPlayer, eventType])
   const matchingClips = useMemo(() => eventType||eventPlayer==='opponent'?[]:clips.filter(c=>!eventPlayer||c.primary_player_id===eventPlayer||c.players?.some(p=>p.id===eventPlayer)), [clips, eventType, eventPlayer])
   const reviewEvents = useMemo(() => [...matchingStats.map(s=>({id:s.id,at:s.video_time_ms,clip:null as Clip|null})),...matchingClips.map(c=>({id:c.id,at:c.start_time_ms,clip:c}))].sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id)), [matchingStats, matchingClips])
+  // Team key numbers for the box score tile (derived from the same entries as the table)
+  const teamSummary = useMemo(() => {
+    const team = statEntries.filter(e => !isOpponentEntry(e))
+    const n = (t: StatType) => team.filter(e => e.stat_type === t).length
+    const fgm = n('2M') + n('3M'), fga = fgm + n('2X') + n('3X')
+    const tpm = n('3M'), tpa = tpm + n('3X')
+    const ftm = n('FTM'), fta = ftm + n('FTX')
+    const pct = (m: number, a: number) => a ? `${Math.round(m / a * 100)}%` : '–'
+    return {
+      pts: team.reduce((s, e) => s + entryPoints(e), 0),
+      opp: statEntries.filter(isOpponentEntry).reduce((s, e) => s + entryPoints(e), 0),
+      fg: fga ? `${fgm}/${fga}` : '–', fgPct: pct(fgm, fga),
+      tp: tpa ? `${tpm}/${tpa}` : '–', tpPct: pct(tpm, tpa),
+      ft: fta ? `${ftm}/${fta}` : '–', ftPct: pct(ftm, fta),
+      reb: n('OREB') + n('DREB'), ast: n('AST'), to: n('TO'), stl: n('STL') + n('BLK'),
+    }
+  }, [statEntries])
 
   if (loading) return (
     <div className="cs min-h-screen flex items-center justify-center" style={{ background: 'var(--fr-bg)' }}>
@@ -2288,7 +2305,7 @@ export default function GameFilmRoom() {
         </div>
 
         {/* Box score tile */}
-        <section className="fr-tile col-span-12 lg:col-span-8 flex flex-col min-h-0" aria-label="Box score">
+        <section className="fr-tile col-span-12 lg:col-span-8 flex flex-col min-h-0 self-start" aria-label="Box score">
           <header className="fr-tile-head">
             <h2 className="fr-tile-title"><BarChart2 className="w-3.5 h-3.5" aria-hidden /> Box score <span style={{ color: 'var(--fr-ink3)' }}>· vs {game.opponent}</span></h2>
             <div className="flex items-center gap-1.5">
@@ -2303,17 +2320,44 @@ export default function GameFilmRoom() {
               </button>
             </div>
           </header>
-          <div className="px-3 pb-3 fr-scroll overflow-x-auto">
+          <div className="px-3 pb-3 flex flex-col gap-3">
             {statsError && sectionError('Failed to load stats.', () => retrySection('stats'))}
             {statDeleteError && dismissable(statDeleteError, () => setStatDeleteError(null))}
-            <BoxScorePanel players={players} statEntries={statEntries} onSeek={seekAndPlay} onDeleteEntry={handleDeleteEntry} />
+            {statEntries.length > 0 && (
+              <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(84px, 1fr))' }} aria-label="Team totals">
+                <div className="fr-cell px-3 py-2 col-span-2" style={{ borderColor: 'rgba(198,106,62,0.35)' }}>
+                  <div className="text-[10.5px] font-semibold" style={{ color: 'var(--fr-ink3)' }}>SCORE · TAGGED</div>
+                  <div className="fr-display leading-none mt-1 tabular-nums" style={{ fontSize: 30 }}>
+                    <span style={{ color: 'var(--fr-ink)' }}>{teamSummary.pts}</span>
+                    <span className="mx-1.5" style={{ color: 'var(--fr-ink3)' }}>–</span>
+                    <span style={{ color: 'var(--fr-ink2)' }}>{teamSummary.opp}</span>
+                  </div>
+                </div>
+                {[
+                  ['FG', teamSummary.fg, teamSummary.fgPct], ['3PT', teamSummary.tp, teamSummary.tpPct], ['FT', teamSummary.ft, teamSummary.ftPct],
+                  ['REB', String(teamSummary.reb), ''], ['AST', String(teamSummary.ast), ''], ['TO', String(teamSummary.to), ''], ['STL+BLK', String(teamSummary.stl), ''],
+                ].map(([label, value, sub]) => (
+                  <div key={label} className="fr-cell px-3 py-2">
+                    <div className="text-[10.5px] font-semibold" style={{ color: 'var(--fr-ink3)' }}>{label}</div>
+                    <div className="fr-display text-[22px] leading-none mt-1 tabular-nums" style={{ color: 'var(--fr-ink)' }}>{value}</div>
+                    <div className="text-[10.5px] tabular-nums" style={{ color: 'var(--fr-ink3)', minHeight: 14 }}>{sub}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="fr-scroll overflow-x-auto">
+              <BoxScorePanel players={players} statEntries={statEntries} onSeek={seekAndPlay} onDeleteEntry={handleDeleteEntry} />
+            </div>
           </div>
         </section>
 
-        {/* Shot chart + roster column */}
-        <div className="col-span-12 lg:col-span-4 flex flex-col gap-3 min-h-0">
+        {/* Shot chart */}
+        <div className="col-span-12 lg:col-span-4 self-start">
           <ShotChartPanel statEntries={statEntries} players={players} onSeek={seekAndPlay} />
-          <section className="fr-tile flex-1" aria-label="Roster">
+        </div>
+
+        {/* Roster — full width */}
+        <section className="fr-tile col-span-12" aria-label="Roster">
             <header className="fr-tile-head">
               <h2 className="fr-tile-title"><Users className="w-3.5 h-3.5" aria-hidden /> Roster <span className="fr-mono" style={{ color: 'var(--fr-ink3)' }}>{activePlayers.length}</span></h2>
             </header>
@@ -2331,8 +2375,7 @@ export default function GameFilmRoom() {
                 ))}
               />
             </div>
-          </section>
-        </div>
+        </section>
       </main>
 
       {/* Full-screen box score (phone / explicit expand) */}
@@ -2749,34 +2792,37 @@ const RosterPanel = React.memo(function RosterPanel({ players, teamId, onPlayerA
           {archiveError}
         </div>
       )}
-      {players.map(p => (
-        <div key={p.id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/3 border border-white/6">
-          <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-300">
-            {p.number ?? '?'}
+      <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+        {players.map(p => (
+          <div key={p.id} className="fr-cell flex items-center gap-2.5 pl-3 pr-1.5 py-2 group">
+            <span className="fr-display text-[22px] leading-none tabular-nums w-8 shrink-0" style={{ color: 'var(--fr-accent2)' }}>{p.number ?? '?'}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12.5px] font-semibold truncate" style={{ color: 'var(--fr-ink)' }}>{p.name}</p>
+              <p className="text-[10.5px]" style={{ color: 'var(--fr-ink3)' }}>{p.position || 'Player'}</p>
+            </div>
+            <button
+              onClick={() => archivePlayer(p.id, p.name)}
+              disabled={actionInFlight === p.id}
+              aria-label={`Archive ${p.name} (#${p.number ?? '?'}) — preserves stats and clips`}
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors disabled:opacity-40 hover:text-red-400"
+              style={{ color: 'var(--fr-ink3)' }}
+              title="Archive player (stats and clips are preserved)">
+              {actionInFlight === p.id
+                ? <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+                : <X className="w-3 h-3" aria-hidden />}
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-white/80 truncate">{p.name}</p>
-            {p.position && <p className="text-[10px] text-white/35">{p.position}</p>}
-          </div>
-          <button
-            onClick={() => archivePlayer(p.id, p.name)}
-            disabled={actionInFlight === p.id}
-            aria-label={`Archive ${p.name} (#${p.number ?? '?'}) — preserves stats and clips`}
-            className="p-1 rounded-lg text-white/20 hover:text-amber-400 transition-colors disabled:opacity-40"
-            title="Archive player (stats and clips are preserved)">
-            {actionInFlight === p.id
-              ? <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
-              : <X className="w-3 h-3" aria-hidden />}
-          </button>
-        </div>
-      ))}
+        ))}
+      </div>
 
       {/* Archived players section */}
-      <div className="pt-1">
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <p className="text-[11px] leading-relaxed" style={{ color: 'var(--fr-ink3)' }}>Archiving removes a player from tag choices; their stats and clips stay.</p>
         <button
           onClick={handleToggleArchived}
-          className="text-[10px] text-white/30 hover:text-white/55 underline underline-offset-2 transition-colors">
-          {showArchived ? 'Hide archived players' : 'Show archived players'}
+          className="text-[11px] shrink-0 underline underline-offset-2 transition-colors"
+          style={{ color: 'var(--fr-ink3)' }}>
+          {showArchived ? 'Hide archived' : 'Show archived'}
         </button>
       </div>
       {showArchived && (
@@ -2812,36 +2858,26 @@ const RosterPanel = React.memo(function RosterPanel({ players, teamId, onPlayerA
         </div>
       )}
 
-      {/* Divider: stats/clip note */}
-      <p className="text-[10px] text-white/20 px-1 leading-relaxed">
-        Archiving removes a player from the active roster and tag choices. Historical stats and clip tags are always preserved.
-      </p>
-
       {adding ? (
-        <form onSubmit={addPlayer} className="space-y-2 p-3 rounded-xl bg-white/3 border border-blue-500/25">
-          <div className="grid grid-cols-2 gap-1.5">
-            <input required placeholder="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="col-span-2 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
-            <input placeholder="#" type="number" min="0" value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value }))}
-              className="bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
-            <input placeholder="PG/SG/SF/PF/C" value={form.position} onChange={e => setForm(f => ({ ...f, position: e.target.value }))}
-              className="bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
-            <input placeholder="Parent email" type="email" value={form.parent_email} onChange={e => setForm(f => ({ ...f, parent_email: e.target.value }))}
-              className="col-span-2 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[rgba(198,106,62,0.60)] placeholder-white/20" />
+        <form onSubmit={addPlayer} className="fr-cell space-y-2 p-3" style={{ borderColor: 'rgba(198,106,62,0.45)' }}>
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5">
+            <input required placeholder="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="fr-input col-span-2" style={{ minHeight: 36, fontSize: 12.5 }} />
+            <input placeholder="#" type="number" min="0" value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value }))} className="fr-input" style={{ minHeight: 36, fontSize: 12.5 }} />
+            <input placeholder="Position" value={form.position} onChange={e => setForm(f => ({ ...f, position: e.target.value }))} className="fr-input" style={{ minHeight: 36, fontSize: 12.5 }} />
+            <input placeholder="Parent email" type="email" value={form.parent_email} onChange={e => setForm(f => ({ ...f, parent_email: e.target.value }))} className="fr-input col-span-2" style={{ minHeight: 36, fontSize: 12.5 }} />
           </div>
-          <div className="flex gap-1.5">
-            <button type="button" onClick={() => setAdding(false)}
-              className="flex-1 py-1.5 rounded-lg border border-white/10 text-xs text-white/50 hover:bg-white/5 transition-colors">Cancel</button>
-            <button type="submit" disabled={loading}
-              className="flex-1 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-medium transition-colors flex items-center justify-center gap-1 disabled:opacity-50">
-              {loading && <Loader2 className="w-3 h-3 animate-spin" />} Add
+          <div className="flex gap-1.5 justify-end">
+            <button type="button" onClick={() => setAdding(false)} className="fr-btn" style={{ height: 34 }}>Cancel</button>
+            <button type="submit" disabled={loading} className="fr-btn fr-btn-primary" style={{ height: 34 }}>
+              {loading && <Loader2 className="w-3 h-3 animate-spin" />} Add player
             </button>
           </div>
         </form>
       ) : (
         <button onClick={() => setAdding(true)}
-          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-white/10 hover:border-white/20 text-xs text-white/30 hover:text-white/60 transition-all">
-          <Plus className="w-3.5 h-3.5" /> Add Player
+          className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed transition-colors text-[12px] font-semibold"
+          style={{ borderColor: 'var(--fr-line2)', color: 'var(--fr-ink2)' }}>
+          <Plus className="w-3.5 h-3.5" /> Add player
         </button>
       )}
     </div>
