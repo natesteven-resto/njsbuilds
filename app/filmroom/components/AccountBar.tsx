@@ -6,7 +6,9 @@ import {getSupabaseBrowser} from '@/lib/filmroom-supabase-browser'
 import {LogoutButton} from './LogoutButton'
 export function AccountBar(){
  const [email,setEmail]=useState('');const [name,setName]=useState('');const [open,setOpen]=useState(false);const ref=useRef<HTMLDivElement>(null)
- useEffect(()=>{let active=true;getSupabaseBrowser().auth.getSession().then(({data})=>{if(active)setEmail(data.session?.user.email||'')});fetch('/api/filmroom/profile').then(r=>r.ok?r.json():null).then(d=>{if(active&&d)setName(d.name)}).catch(()=>{});return()=>{active=false}},[])
+ useEffect(()=>{let active=true;let client:ReturnType<typeof getSupabaseBrowser>|null=null;try{client=getSupabaseBrowser()}catch{client=null}
+ if(!client)return()=>{active=false} // account service not configured: render as signed out instead of crashing the page
+ client.auth.getSession().then(({data})=>{if(active)setEmail(data.session?.user.email||'')}).catch(()=>{});fetch('/api/filmroom/profile').then(r=>r.ok?r.json():null).then(d=>{if(active&&d)setName(d.name)}).catch(()=>{});return()=>{active=false}},[])
  useEffect(()=>{const refresh=()=>{fetch('/api/filmroom/profile').then(r=>r.ok?r.json():null).then(d=>{if(d)setName(d.name)}).catch(()=>{})};window.addEventListener('filmroom-profile-updated',refresh);return()=>window.removeEventListener('filmroom-profile-updated',refresh)},[])
  useEffect(()=>{if(!open)return;const click=(e:PointerEvent)=>{if(!ref.current?.contains(e.target as Node))setOpen(false)};const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){setOpen(false);ref.current?.querySelector('button')?.focus()}};document.addEventListener('pointerdown',click);document.addEventListener('keydown',key);return()=>{document.removeEventListener('pointerdown',click);document.removeEventListener('keydown',key)}},[open])
  if(!email)return null
