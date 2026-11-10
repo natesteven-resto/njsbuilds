@@ -84,9 +84,40 @@ function installMock() {
   }
 }
 
+// ?auto=stat1|stat2|stat3|clip|save drives the UI into a state for screenshots (QA only).
+function runAuto(auto: string, isCancelled: () => boolean) {
+  const key = (k: string) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
+  const byText = (text: string) => Array.from(document.querySelectorAll<HTMLElement>('button')).find(el => el.textContent?.trim() === text)
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+  const waitFor = async (fn: () => boolean, ms = 8000) => { const t0 = Date.now(); while (!fn()) { if (isCancelled() || Date.now() - t0 > ms) throw new Error('timeout'); await sleep(100) } }
+  return (async () => {
+    await waitFor(() => !!document.querySelector('video'))
+    const video = document.querySelector('video')!
+    await waitFor(() => video.readyState >= 1)
+    await sleep(300)
+    if (auto.startsWith('stat')) {
+      key('t'); await sleep(350)
+      if (auto === 'stat2' || auto === 'stat3') { byText('3PT Made')?.click(); await sleep(300) }
+      if (auto === 'stat3') { document.querySelector<HTMLElement>('button[aria-label="#23 Ace Carter"]')?.click(); await sleep(300) }
+    } else if (auto === 'clip' || auto === 'save') {
+      video.currentTime = 0.8; await sleep(250); key('i'); await sleep(250)
+      video.currentTime = 3.4; await sleep(250); key('o'); await sleep(250)
+      if (auto === 'save') { key('s'); await sleep(300) }
+    }
+  })()
+}
+
 export default function PreviewGame() {
   const [ready, setReady] = useState(false)
   useEffect(() => { installMock(); const t = setTimeout(() => setReady(true), 0); return () => clearTimeout(t) }, [])
+  useEffect(() => {
+    if (!ready) return
+    const auto = new URLSearchParams(location.search).get('auto')
+    if (!auto) return
+    let cancelled = false
+    runAuto(auto, () => cancelled).catch(() => {})
+    return () => { cancelled = true }
+  }, [ready])
   if (!ready) return null
   return (
     <>
