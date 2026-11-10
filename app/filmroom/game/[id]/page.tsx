@@ -2307,7 +2307,7 @@ export default function GameFilmRoom() {
         {/* Box score tile */}
         <section className="fr-tile col-span-12 lg:col-span-8 flex flex-col min-h-0 self-start" aria-label="Box score">
           <header className="fr-tile-head">
-            <h2 className="fr-tile-title"><BarChart2 className="w-3.5 h-3.5" aria-hidden /> Box score <span style={{ color: 'var(--fr-ink3)' }}>· vs {game.opponent}</span></h2>
+            <h2 className="fr-tile-title whitespace-nowrap"><BarChart2 className="w-3.5 h-3.5" aria-hidden /> Box score <span className="hidden sm:inline" style={{ color: 'var(--fr-ink3)' }}>· vs {game.opponent}</span></h2>
             <div className="flex items-center gap-1.5">
               {sessionStatEntries.length > 0 && <span className="fr-chip fr-chip-good">+{sessionStatEntries.length} this session</span>}
               {videoLoaded && (
