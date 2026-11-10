@@ -1181,8 +1181,8 @@ function BookmarkBar({
                 onClick={() => onSeek(bm.position_ms)}
                 title={`${bm.label} — ${msToDisplay(bm.position_ms)}`}
                 aria-label={`Seek to bookmark: ${bm.label}`}
-                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-4 rounded-sm bg-yellow-400/80 hover:bg-yellow-300 transition-colors z-10"
-                style={{ left: `${pct}%` }}
+                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-4 rounded-sm transition-colors z-10"
+                style={{ left: `${pct}%`, background: 'var(--fr-accent)' }}
               />
             )
           })}
@@ -1192,21 +1192,23 @@ function BookmarkBar({
       {/* Bookmark chips */}
       <div className="flex flex-wrap items-center gap-1.5">
         {bookmarks.map(bm => (
-          <div key={bm.id}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/20 group">
+          <div key={bm.id} className="fr-chip gap-0 pr-0" style={{ height: 28 }}>
+            <Bookmark className="w-3 h-3 mr-1.5 shrink-0" style={{ color: 'var(--fr-accent)' }} aria-hidden />
             <button
               onClick={() => onSeek(bm.position_ms)}
-              className="text-[11px] text-yellow-300/90 hover:text-yellow-200 font-medium"
+              className="text-[11.5px] font-semibold"
+              style={{ color: 'var(--fr-ink)' }}
               aria-label={`Jump to ${bm.label} at ${msToDisplay(bm.position_ms)}`}
             >
-              {bm.period && <span className="text-yellow-500/70 mr-0.5">{bm.period}</span>}
-              {bm.clock && <span className="font-mono mr-0.5">{bm.clock}</span>}
+              {bm.period && <span className="mr-1" style={{ color: 'var(--fr-ink3)' }}>{bm.period}</span>}
+              {bm.clock && <span className="fr-mono mr-1" style={{ color: 'var(--fr-ink2)' }}>{bm.clock}</span>}
               {bm.label}
             </button>
             <button
               onClick={() => onDelete(bm.id)}
               aria-label={`Delete bookmark: ${bm.label}`}
-              className="min-h-9 min-w-9 text-yellow-500/70 hover:text-red-400 transition-all"
+              className="min-h-7 min-w-7 ml-0.5 flex items-center justify-center rounded-full transition-colors hover:text-red-400"
+              style={{ color: 'var(--fr-ink3)' }}
             >
               <X className="w-2.5 h-2.5" aria-hidden />
             </button>
@@ -1219,7 +1221,8 @@ function BookmarkBar({
             <select
               value={form.period}
               onChange={e => setForm(f => ({ ...f, period: e.target.value as typeof PERIODS[number] }))}
-              className="bg-black/40 border border-white/10 rounded text-[11px] px-1.5 py-1 text-white/70 outline-none focus:border-yellow-500/40"
+              className="fr-select"
+              style={{ width: 'auto', minHeight: 30, padding: '2px 26px 2px 8px', fontSize: 11.5 }}
               aria-label="Period"
             >
               {PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
@@ -1229,7 +1232,8 @@ function BookmarkBar({
               onChange={e => setForm(f => ({ ...f, clock: e.target.value }))}
               placeholder="4:32"
               aria-label="Game clock (optional)"
-              className="w-14 bg-black/40 border border-white/10 rounded text-[11px] px-1.5 py-1 text-white/70 placeholder-white/20 outline-none focus:border-yellow-500/40 font-mono"
+              className="fr-input fr-mono"
+              style={{ width: 64, minHeight: 30, padding: '2px 8px', fontSize: 11.5 }}
             />
             <input
               value={form.label}
@@ -1237,13 +1241,11 @@ function BookmarkBar({
               onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setAdding(false) }}
               placeholder="Note (optional)"
               aria-label="Bookmark label" maxLength={120}
-              className="w-28 bg-black/40 border border-white/10 rounded text-[11px] px-1.5 py-1 text-white/70 placeholder-white/20 outline-none focus:border-yellow-500/40"
+              className="fr-input"
+              style={{ width: 150, minHeight: 30, padding: '2px 8px', fontSize: 11.5 }}
             />
-            <button onClick={commit}
-              className="px-2 py-1 rounded text-[11px] font-semibold"
-              style={{ background: '#c66a3e', color: '#181917' }}>Save</button>
-            <button onClick={() => setAdding(false)}
-              className="px-2 py-1 rounded text-[11px] text-white/40 hover:text-white/70 border border-white/8">Cancel</button>
+            <button onClick={commit} className="fr-btn fr-btn-primary" style={{ height: 30, fontSize: 11.5 }}>Save</button>
+            <button onClick={() => setAdding(false)} className="fr-btn fr-btn-ghost" style={{ height: 30, fontSize: 11.5 }}>Cancel</button>
           </div>
         )}
       </div>

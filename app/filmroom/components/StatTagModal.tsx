@@ -346,7 +346,8 @@ export function StatTagModal({
 
           {step === 2 && stat && (
             <div key="s2" className="fr-pane filmroom-scroll-area absolute inset-0 overflow-y-auto overscroll-contain p-3 sm:p-4">
-              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? 84 : 100}px, 1fr))` }}>
+              {/* Rows stretch to fill the card for small rosters and scroll for big ones; the card itself never changes. */}
+              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? 84 : 104}px, 1fr))`, gridAutoRows: `minmax(${compact ? 84 : 96}px, 1fr)`, minHeight: '100%' }}>
                 {allPlayers.map(p => {
                   const isOpp = p.id === OPP_ID
                   const num = String(p.number ?? '')
@@ -359,7 +360,7 @@ export function StatTagModal({
                       aria-label={isOpp ? 'Opponent' : `#${p.number ?? '?'} ${p.name}`}
                       className="fr-tilebtn flex flex-col items-center justify-center gap-0.5 px-1"
                       style={{
-                        minHeight: compact ? 84 : 98, touchAction: 'manipulation',
+                        touchAction: 'manipulation',
                         borderColor: typedMatch ? 'var(--fr-accent)' : undefined,
                         background: isOpp ? 'var(--fr-tile2)' : undefined,
                       }}
@@ -368,7 +369,7 @@ export function StatTagModal({
                         {isOpp ? 'OPP' : (p.number ?? '?')}
                       </span>
                       <span className="text-[12px] leading-tight text-center truncate w-full" style={{ color: 'var(--fr-ink2)' }}>{isOpp ? 'Opponent' : p.name.split(' ')[0]}</span>
-                      {!isOpp && <span className="text-[10px] tabular-nums" style={{ color: 'var(--fr-ink3)' }}>{sessionPts(p.id)} pts today</span>}
+                      {!isOpp && <span className="text-[10.5px] tabular-nums" style={{ color: 'var(--fr-accent2)', minHeight: 14 }}>{sessionPts(p.id) > 0 ? `${sessionPts(p.id)} pts tagged` : ''}</span>}
                     </button>
                   )
                 })}
