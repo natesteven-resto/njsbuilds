@@ -175,7 +175,7 @@
 .fr-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
 .fr-table th { position: sticky; top: 0; background: var(--fr-tile); color: var(--fr-ink3); font-weight: 600; font-size: 11px; text-align: center; padding: 6px 6px 8px; border-bottom: 1px solid var(--fr-line2); white-space: nowrap; z-index: 1; }
 .fr-table th:first-child, .fr-table td:first-child { text-align: left; position: sticky; left: 0; background: var(--fr-tile); z-index: 2; }
-.fr-table td { text-align: center; padding: 7px 6px; border-bottom: 1px solid var(--fr-line); color: var(--fr-ink); font-variant-numeric: tabular-nums; }
+.fr-table td { text-align: center; padding: 7px 6px; border-bottom: 1px solid var(--fr-line); color: var(--fr-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fr-table tr.is-total td { border-top: 1px solid var(--fr-line2); font-weight: 700; }
 .fr-table tr.is-dim td { color: var(--fr-ink3); }
 .fr-table tr.clickable { cursor: pointer; }
