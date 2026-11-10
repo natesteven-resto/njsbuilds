@@ -137,6 +137,9 @@
 .fr-seg button { height: 32px; padding: 0 12px; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: var(--fr-ink2); border: 1px solid transparent; }
 .fr-seg button[aria-pressed="true"] { background: var(--fr-tile2); color: var(--fr-ink); border-color: var(--fr-line2); }
 
+/* Court: no default focus ring; a hairline accent ring only for keyboard focus */
+.fr-court:focus-visible { box-shadow: 0 0 0 2px rgba(198,106,62,0.7); }
+
 /* Panes inside fixed-size cards: fade/slide in without changing the card */
 .fr-pane { container-type: size; animation: fr-pane-in 160ms ease both; }
 @keyframes fr-pane-in {

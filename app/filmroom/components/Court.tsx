@@ -123,9 +123,9 @@ export const Court = React.memo(function Court({
       onPointerMove={handleMove}
       onPointerLeave={handleLeave}
       onKeyDown={onKeyDown}
-      className={className}
+      className={`fr-court ${className}`}
       style={{
-        display: 'block', width: '100%', height: 'auto', borderRadius: 14, overflow: 'hidden',
+        display: 'block', width: '100%', height: 'auto', borderRadius: 14, overflow: 'hidden', outline: 'none',
         cursor: interactive ? 'crosshair' : 'default', touchAction: 'manipulation',
         opacity: dimmed ? 0.65 : 1, transition: 'opacity 160ms ease', ...style,
       }}
