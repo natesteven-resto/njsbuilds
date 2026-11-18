@@ -1,0 +1,24 @@
+use tauri::Manager;
+
+#[tauri::command]
+fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_http::init())
+        .invoke_handler(tauri::generate_handler![get_app_version])
+        .setup(|app| {
+            let window = app.get_webview_window("main").unwrap();
+            // Start maximized for a full film-room experience
+            window.maximize().unwrap_or(());
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running Film Room");
+}
